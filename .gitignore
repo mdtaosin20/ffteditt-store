@@ -2,3 +2,4 @@ ffteditt_data/
 *.sqlite
 *.sqlite-*
 .DS_Store
+__pycache__/
