@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FFTEdit Store — Coming Soon</title>
+<meta name="description" content="FFTEdit Store — browser games, coming soon.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0b14;
+    --ink: #f4f1ff;
+    --muted: #a9a3c9;
+    --pink: #ff3d9a;
+    --gold: #ffc23d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", system-ui, sans-serif;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    padding: 16px;
+  }
+  .glow {
+    position: fixed; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(40vmax 40vmax at 15% 20%, rgba(255,61,154,.22), transparent 60%),
+      radial-gradient(40vmax 40vmax at 85% 80%, rgba(255,194,61,.18), transparent 60%);
+  }
+  .ball {
+    position: fixed; width: 56px; height: 56px; border-radius: 50%;
+    animation: bounce 3.2s ease-in-out infinite;
+  }
+  .ball.pink { background: radial-gradient(circle at 35% 30%, #ff9cc9, var(--pink) 60%); left: 12%; top: 18%; box-shadow: 0 0 30px var(--pink); }
+  .ball.gold { background: radial-gradient(circle at 35% 30%, #ffe7a3, var(--gold) 60%); right: 12%; bottom: 18%; box-shadow: 0 0 30px var(--gold); animation-delay: -1.6s; }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-40px); }
+  }
+  main { position: relative; text-align: center; max-width: 560px; }
+  .tag {
+    display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--gold);
+    border: 1px solid rgba(255,194,61,.4); border-radius: 999px; padding: 6px 14px; margin-bottom: 22px;
+  }
+  h1 {
+    font-family: "Russo One", sans-serif;
+    font-size: clamp(40px, 11vw, 84px); line-height: 1;
+    background: linear-gradient(90deg, var(--pink), var(--gold));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  p { margin-top: 18px; color: var(--muted); font-size: clamp(16px, 4vw, 19px); line-height: 1.6; }
+  footer { margin-top: 36px; font-size: 13px; color: var(--muted); opacity: .7; }
+  @media (prefers-reduced-motion: reduce) { .ball { animation: none; } }
+</style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="ball pink"></div>
+  <div class="ball gold"></div>
+  <main>
+    <span class="tag">Coming Soon</span>
+    <h1>FFTEdit Store</h1>
+    <p>Fun browser games are on the way. Check back soon!</p>
+    <footer>&copy; 2026 ffteditt.store</footer>
+  </main>
+</body>
+</html>

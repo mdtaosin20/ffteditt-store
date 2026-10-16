@@ -1,0 +1,8 @@
+---
+# cPanel deployment: copies website files into the ffteditt.store folder.
+# DEPLOYPATH must match the Document Root of ffteditt.store in cPanel → Domains.
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/creaexbh/ffteditt.store/
+    - /bin/mkdir -p $DEPLOYPATH
+    - /bin/cp index.html $DEPLOYPATH
