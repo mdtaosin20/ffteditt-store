@@ -1,0 +1,4 @@
+ffteditt_data/
+*.sqlite
+*.sqlite-*
+.DS_Store

@@ -1,8 +1,16 @@
 ---
-# cPanel deployment: copies website files into the ffteditt.store folder.
-# DEPLOYPATH must match the Document Root of ffteditt.store in cPanel → Domains.
+# cPanel deployment for ffteditt.store
+#   public/  -> website folder (Document Root of ffteditt.store)
+#   app/     -> private PHP code, NOT reachable from the web
+#   worker/  -> VPS worker files, served at https://ffteditt.store/worker/
+#   data     -> private database folder (never overwritten by deploys)
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/creaexbh/ffteditt.store/
-    - /bin/mkdir -p $DEPLOYPATH
-    - /bin/cp index.html $DEPLOYPATH
+    - export DOCROOT=/home/creaexbh/ffteditt.store
+    - export APPDIR=/home/creaexbh/ffteditt_app
+    - export DATADIR=/home/creaexbh/ffteditt_data
+    - /bin/mkdir -p $DOCROOT/worker $APPDIR $DATADIR
+    - /bin/chmod 700 $DATADIR $APPDIR
+    - /bin/cp -R public/. $DOCROOT/
+    - /bin/cp -R app/. $APPDIR/
+    - /bin/cp worker/agent.py worker/install.sh $DOCROOT/worker/
