@@ -6,8 +6,8 @@ import { RoomEnvironment } from './vendor/RoomEnvironment.js';
 const DEFAULTS = {
   target: 20,
   players: [
-    { name: 'MESSI',   team: 'PINK TEAM', color: '#ff2f9e', number: '10', photo: '', ball: '' },
-    { name: 'RONALDO', team: 'GOLD TEAM', color: '#ffd21a', number: '7',  photo: '', ball: '' },
+    { name: 'MESSI',   team: 'PINK TEAM', color: '#ff2f9e', number: '10', photo: 'img/p1-hero.jpg', face: 'img/p1-face.jpg', ball: '' },
+    { name: 'RONALDO', team: 'GOLD TEAM', color: '#ffd21a', number: '7',  photo: 'img/p2-hero.jpg', face: 'img/p2-face.jpg', ball: '' },
   ],
 };
 
@@ -23,7 +23,9 @@ async function loadConfig() {
   if (!c) return { ...DEFAULTS, rev: '', reset: '' };
   const players = DEFAULTS.players.map((p, i) => {
     const q = { ...p };
-    Object.entries((c.players || [])[i] || {}).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) q[k] = v; });
+    const up = (c.players || [])[i] || {};
+    Object.entries(up).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) q[k] = v; });
+    if (up.photo) q.face = up.photo; // an uploaded photo replaces the built-in pictures everywhere
     return q;
   });
   return { ...DEFAULTS, ...c, players };
@@ -270,7 +272,7 @@ function ballTexture(p, img) {
     c.save(); c.beginPath(); c.arc(cx, 256, 150, 0, Math.PI * 2); c.clip();
     if (img) {
       const s = Math.max(300 / img.width, 300 / img.height);
-      c.globalAlpha = 0.9; c.globalCompositeOperation = 'multiply';
+      c.globalAlpha = 1;
       c.drawImage(img, cx - (img.width * s) / 2, 256 - (img.height * s) / 2, img.width * s, img.height * s);
     } else {
       c.fillStyle = 'rgba(0,0,0,.55)';
@@ -421,7 +423,7 @@ async function main() {
   P.forEach((p, i) => {
     const n = i + 1;
     const hero = p.photo || placeholderPhoto(p.color, p.number, true);
-    const av = p.photo || placeholderPhoto(p.color, p.number, false);
+    const av = p.face || p.photo || placeholderPhoto(p.color, p.number, false);
     $(`p${n}-hero`).src = hero; $(`p${n}-avatar`).src = av;
     $(`p${n}-name`).textContent = p.name; $(`p${n}-team`).textContent = p.team;
     $(`p${n}-title`).textContent = p.name; $(`p${n}-foot`).textContent = p.name;
@@ -536,7 +538,7 @@ async function main() {
     env.dispose(); pm.dispose(); br.dispose(); br.forceContextLoss();
   };
 
-  const imgs = await Promise.all(P.map((p) => loadImage(p.ball || p.photo)));
+  const imgs = await Promise.all(P.map((p) => loadImage(p.ball || p.face || p.photo)));
   balls = P.map((p, i) => new Ball(scene, i, p, imgs[i]));
   balls.forEach((b) => b.hide());
 
@@ -562,7 +564,7 @@ async function main() {
   };
   const showWinner = (i) => {
     const w = $('winner'); w.className = 'winner p' + (i + 1); w.hidden = false;
-    $('winner-photo').src = P[i].photo || placeholderPhoto(P[i].color, P[i].number, false);
+    $('winner-photo').src = P[i].face || P[i].photo || placeholderPhoto(P[i].color, P[i].number, false);
     $('winner-name').textContent = P[i].name;
     $('winner-score').textContent = `${score[i]} – ${score[1 - i]}`;
   };

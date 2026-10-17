@@ -26,16 +26,16 @@ html, body { width: 100%; height: 100%; background: #05030a; overflow: hidden; }
 
 /* ---------- hero ---------- */
 .hero { position: absolute; left: 0; top: 0; width: 1080px; height: 700px; }
-.hero-photo { position: absolute; top: 0; width: 600px; height: 700px; }
-.hero-photo.left { left: -40px; }
-.hero-photo.right { right: -40px; }
+.hero-photo { position: absolute; top: 0; width: 470px; height: 640px; }
+.hero-photo.left { left: -88px; }
+.hero-photo.right { right: -56px; }
 .hero-photo img {
   width: 100%; height: 100%; object-fit: cover; object-position: center top;
   -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 98%);
           mask-image: linear-gradient(to bottom, #000 62%, transparent 98%);
 }
-.hero-photo.left img  { -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 98%), linear-gradient(to left, transparent 0%, #000 30%); -webkit-mask-composite: source-in; mask-composite: intersect; }
-.hero-photo.right img { -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 98%), linear-gradient(to right, transparent 0%, #000 30%); -webkit-mask-composite: source-in; mask-composite: intersect; }
+.hero-photo.left img  { -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 99%), linear-gradient(to left, transparent 0%, #000 14%); -webkit-mask-composite: source-in; mask-composite: intersect; }
+.hero-photo.right img { -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 99%), linear-gradient(to right, transparent 0%, #000 8%); -webkit-mask-composite: source-in; mask-composite: intersect; }
 
 .title { position: absolute; left: 0; right: 0; top: 40px; display: flex; flex-direction: column; align-items: center; }
 .title h1 { transform-origin: 50% 50%; }

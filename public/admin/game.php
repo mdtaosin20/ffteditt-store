@@ -108,7 +108,7 @@ page_start('Game', 'game', $admin);
         </label>
       </div>
 
-      <?php foreach (['photo' => ['Photo', 'Big picture at the top, score card and winner screen. A portrait works best.'],
+      <?php foreach (['photo' => ['Photo', 'Replaces the built-in picture in the header, score card, ball and winner screen. A portrait works best.'],
                       'ball'  => ['Ball picture (optional)', 'Printed on the ball. If empty, the photo is used.']] as $kind => [$label, $help]): ?>
       <div class="upload">
         <div class="thumb">
