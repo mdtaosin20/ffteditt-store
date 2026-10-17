@@ -17,7 +17,7 @@ fi
 echo "==> 1/4 Installing programs (ffmpeg, virtual screen, Chrome)…"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -y -q ffmpeg xvfb python3 curl ca-certificates fonts-liberation fonts-noto-color-emoji >/dev/null
+apt-get install -y -q ffmpeg xvfb python3 python3-venv curl ca-certificates fonts-liberation fonts-noto-color-emoji pulseaudio pulseaudio-utils >/dev/null
 if ! command -v google-chrome >/dev/null 2>&1; then
   curl -fsSL -o /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
   apt-get install -y -q /tmp/chrome.deb >/dev/null

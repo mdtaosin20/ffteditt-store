@@ -212,3 +212,13 @@ input[type=file] { color: var(--soft); font-family: inherit; font-size: 14px; ma
 .form-inline { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .form-inline .field { flex: 0 1 260px; }
 .check.small { font-size: 14px; min-height: 36px; }
+
+/* voice */
+.voice-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+@media (max-width: 380px) { .voice-list { grid-template-columns: 1fr; } }
+.voice-line { display: flex; flex-direction: column; gap: 10px; padding: 18px; }
+.voice-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+textarea { width: 100%; min-height: 64px; background: var(--field); border: 1px solid var(--field-line); border-radius: 10px; color: var(--ink); font-family: inherit; font-size: 15px; padding: 10px 12px; resize: vertical; }
+textarea:focus { outline: 2px solid var(--gold); outline-offset: 2px; }
+.voice-line audio { width: 100%; height: 40px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

@@ -84,7 +84,7 @@ function save_upload(array $f): string
 
 function delete_upload(string $name): void
 {
-    if (preg_match('/^[a-f0-9]{24}\.(jpg|png|webp)$/', $name)) {
+    if (preg_match('/^[a-f0-9]{24}\.(jpg|png|webp|mp3|wav|ogg|m4a)$/', $name)) {
         @unlink(upload_dir() . '/' . $name);
     }
 }

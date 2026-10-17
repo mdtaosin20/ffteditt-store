@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     fail(405, 'POST only');
 }
 
-$raw = file_get_contents('php://input', false, null, 0, 256 * 1024);
+$raw = file_get_contents('php://input', false, null, 0, 8 * 1024 * 1024);
 $in  = json_decode((string) $raw, true);
 if (!is_array($in)) {
     fail(400, 'bad json');
@@ -119,6 +119,24 @@ foreach ((array) ($in['command_results'] ?? []) as $r) {
     ]);
 }
 
+// 2c) Automatic commentator voices made on the VPS.
+foreach ((array) ($in['voice_results'] ?? []) as $r) {
+    if (!is_array($r)) continue;
+    $mp3 = base64_decode((string) ($r['mp3'] ?? ''), true);
+    if ($mp3 !== false) {
+        save_auto_voice((string) ($r['id'] ?? ''), (string) ($r['hash'] ?? ''), $mp3);
+    }
+}
+if (!empty($in['voice_error'])) {
+    $vs = voice_state();
+    $err = substr((string) $in['voice_error'], 0, 300);
+    if ($vs['error'] !== $err) {
+        $vs['error'] = $err;
+        voice_save($vs);
+        log_activity("Voice maker on {$server['name']}: {$err}");
+    }
+}
+
 // 3) Tell the worker what should be running.
 $q   = qualities();
 $out = [];
@@ -158,4 +176,9 @@ $st = db()->prepare('SELECT MAX(created_at) FROM commands WHERE server_id = ?');
 $st->execute([$sid]);
 $poll = ((int) $st->fetchColumn() > $now - 600) ? 2 : 5;
 
-echo json_encode(['ok' => true, 'poll_seconds' => $poll, 'run' => $out, 'commands' => $cmds]);
+$voiceJobs = array_slice(voice_missing(voice_state(), game_config()), 0, 4);
+if ($voiceJobs) {
+    $poll = min($poll, 3);
+}
+
+echo json_encode(['ok' => true, 'poll_seconds' => $poll, 'run' => $out, 'commands' => $cmds, 'voice_jobs' => $voiceJobs]);

@@ -11,4 +11,5 @@ foreach ($c['players'] as &$p) {
     $p['ball']  = upload_url($p['ball']);
 }
 unset($p);
+$c['voice'] = voice_public(game_config());
 echo json_encode($c);

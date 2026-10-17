@@ -13,7 +13,11 @@ Config: /etc/ffteditt-worker.json  {"panel": "https://ffteditt.store", "token": 
 Logs:   journalctl -u ffteditt-worker -f
 """
 
+import base64
 import json
+import shutil
+import tempfile
+import wave
 import os
 import re
 import signal
@@ -24,11 +28,18 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
 X264_PRESET = os.environ.get("FFT_X264_PRESET", "veryfast")
+
+
+PULSE_DIR = "/run/fft-pulse"
+PULSE_SOCK = PULSE_DIR + "/native"
+TTS_DIR = "/opt/ffteditt-worker/tts"
+VOICE_MODEL = "en_US-ryan-high"
+VOICE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/high/" + VOICE_MODEL
 
 
 def log(msg):
@@ -38,6 +49,182 @@ def log(msg):
 def redact(text):
     # Never print stream keys: hide anything after rtmp(s)://host/app/
     return re.sub(r"(rtmps?://[^\s/]+/[^\s/]+/)\S+", r"\1****", text)
+
+
+def run(cmd, timeout=120, env=None, input=None):
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env, input=input)
+
+
+def apt_install(*pkgs):
+    env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
+    r = run(["apt-get", "install", "-y", "-q"] + list(pkgs), timeout=900, env=env)
+    if r.returncode != 0:
+        run(["apt-get", "update", "-q"], timeout=600, env=env)
+        r = run(["apt-get", "install", "-y", "-q"] + list(pkgs), timeout=900, env=env)
+    return r.returncode == 0
+
+
+# ---------------------------------------------------------------- stream sound
+# One private PulseAudio sound server; every stream gets its own silent "speaker"
+# (null sink). Chrome plays into it and FFmpeg records it.
+_pulse_lock = threading.Lock()
+_pulse_proc = None
+
+
+def pulse_env():
+    return dict(os.environ, PULSE_SERVER="unix:" + PULSE_SOCK, HOME=PULSE_DIR, XDG_RUNTIME_DIR=PULSE_DIR)
+
+
+def ensure_pulse():
+    global _pulse_proc
+    with _pulse_lock:
+        try:
+            if not shutil.which("pulseaudio") or not shutil.which("pactl"):
+                log("[sound] installing PulseAudio")
+                if not apt_install("pulseaudio", "pulseaudio-utils"):
+                    return False
+            env = pulse_env()
+            if run(["pactl", "info"], timeout=10, env=env).returncode == 0:
+                return True
+            os.makedirs(PULSE_DIR, mode=0o700, exist_ok=True)
+            _pulse_proc = subprocess.Popen(
+                ["pulseaudio", "--daemonize=no", "--exit-idle-time=-1", "--disallow-exit", "-n",
+                 "--use-pid-file=no", "--log-target=stderr",
+                 "--load=module-native-protocol-unix socket=%s auth-anonymous=1" % PULSE_SOCK,
+                 "--load=module-null-sink sink_name=fft_idle"],
+                env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+            )
+            for _ in range(40):
+                if run(["pactl", "info"], timeout=10, env=env).returncode == 0:
+                    log("[sound] PulseAudio ready")
+                    return True
+                time.sleep(0.25)
+            log("[sound] PulseAudio did not start - streams will be silent")
+            return False
+        except Exception as ex:
+            log("[sound] not available: %s" % ex)
+            return False
+
+
+# ------------------------------------------------------------ commentator voice
+SAY_PY = r"""
+import json, sys, wave
+from piper import PiperVoice
+model, outdir = sys.argv[1], sys.argv[2]
+jobs = json.load(sys.stdin)
+v = PiperVoice.load(model)
+for j in jobs:
+    path = outdir + "/" + j["id"] + ".wav"
+    with wave.open(path, "wb") as w:
+        if hasattr(v, "synthesize_wav"):
+            try:
+                from piper import SynthesisConfig
+                v.synthesize_wav(j["text"], w, syn_config=SynthesisConfig(length_scale=0.9))
+            except ImportError:
+                v.synthesize_wav(j["text"], w)
+        else:
+            v.synthesize(j["text"], w, length_scale=0.9)
+    print(j["id"], flush=True)
+"""
+
+
+class VoiceMaker:
+    """Makes the English commentator lines with Piper (free, offline AI voice)."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.busy = False
+        self.results = []
+        self.error = None
+        self.error_sent = None
+        self.pause_until = 0
+
+    def submit(self, jobs):
+        if not jobs or self.busy or time.time() < self.pause_until:
+            return
+        self.busy = True
+        threading.Thread(target=self._work, args=(jobs,), daemon=True).start()
+
+    def take(self):
+        with self.lock:
+            r, self.results = self.results, []
+        err = None
+        if self.error and self.error != self.error_sent:
+            err = self.error_sent = self.error
+        return r, err
+
+    def put_back(self, results):
+        with self.lock:
+            self.results = results + self.results
+
+    def _setup(self):
+        py = TTS_DIR + "/bin/python"
+        if not os.path.exists(py):
+            log("[voice] creating the voice program folder")
+            if run(["python3", "-m", "venv", TTS_DIR], timeout=300).returncode != 0:
+                apt_install("python3-venv")
+                shutil.rmtree(TTS_DIR, ignore_errors=True)
+                r = run(["python3", "-m", "venv", TTS_DIR], timeout=300)
+                if r.returncode != 0:
+                    raise RuntimeError("could not create Python environment: " + (r.stderr or "")[-200:])
+        if run([py, "-c", "import piper"], timeout=60).returncode != 0:
+            log("[voice] installing Piper voice (one time, a few minutes)")
+            run([py, "-m", "pip", "install", "-q", "--upgrade", "pip"], timeout=600)
+            r = run([py, "-m", "pip", "install", "-q", "piper-tts"], timeout=1200)
+            if r.returncode != 0:
+                raise RuntimeError("could not install Piper: " + (r.stderr or r.stdout or "")[-200:])
+        mdir = TTS_DIR + "/models"
+        os.makedirs(mdir, exist_ok=True)
+        model = mdir + "/" + VOICE_MODEL + ".onnx"
+        for ext in (".onnx", ".onnx.json"):
+            dest = mdir + "/" + VOICE_MODEL + ext
+            if not os.path.exists(dest) or os.path.getsize(dest) < 100:
+                log("[voice] downloading voice model %s" % ext)
+                tmp = dest + ".part"
+                req = urllib.request.Request(VOICE_URL + ext + "?download=true", headers={"User-Agent": "ffteditt-worker"})
+                with urllib.request.urlopen(req, timeout=300) as r, open(tmp, "wb") as f:
+                    shutil.copyfileobj(r, f)
+                os.replace(tmp, dest)
+        say = TTS_DIR + "/say.py"
+        with open(say, "w") as f:
+            f.write(SAY_PY)
+        return py, say, model
+
+    def _work(self, jobs):
+        try:
+            py, say, model = self._setup()
+            out = tempfile.mkdtemp(prefix="fftvoice-")
+            try:
+                r = run([py, say, model, out], timeout=900, input=json.dumps([{"id": j["id"], "text": j["text"]} for j in jobs]))
+                if r.returncode != 0:
+                    raise RuntimeError("voice program failed: " + (r.stderr or "")[-200:])
+                made = []
+                for j in jobs:
+                    wav = os.path.join(out, j["id"] + ".wav")
+                    if not os.path.exists(wav):
+                        continue
+                    with wave.open(wav) as w:
+                        rate = w.getframerate()
+                    mp3 = wav[:-4] + ".mp3"
+                    # a little higher and faster = more excited commentator
+                    fx = "asetrate=%d,aresample=44100,atempo=1.03,loudnorm=I=-15:TP=-1.5:LRA=9" % int(rate * 1.05)
+                    c = run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", wav, "-af", fx,
+                             "-ac", "1", "-b:a", "96k", mp3], timeout=120)
+                    if c.returncode == 0 and os.path.exists(mp3):
+                        with open(mp3, "rb") as f:
+                            made.append({"id": j["id"], "hash": j["hash"], "mp3": base64.b64encode(f.read()).decode()})
+                with self.lock:
+                    self.results.extend(made)
+                self.error = None
+                log("[voice] made %d line(s)" % len(made))
+            finally:
+                shutil.rmtree(out, ignore_errors=True)
+        except Exception as ex:
+            self.error = str(ex)[:280]
+            self.pause_until = time.time() + 300
+            log("[voice] problem: %s" % self.error)
+        finally:
+            self.busy = False
 
 
 class Stream:
@@ -58,6 +245,8 @@ class Stream:
         self.stopping = False
         self.thread = None
         self.last_err_line = ""
+        self.sink = None
+        self.sink_module = None
 
     # ---- lifecycle -------------------------------------------------------
     def start(self):
@@ -138,14 +327,26 @@ class Stream:
             if xvfb.poll() is not None or not os.path.exists(sock):
                 return self._fail("Could not start the virtual screen (Xvfb)")
 
-            # 2) Chrome showing the game page
+            # 2) sound: a private "speaker" for this stream
+            chrome_env = dict(env)
+            if ensure_pulse():
+                penv = pulse_env()
+                sink = "fft_s%d" % self.id
+                r = run(["pactl", "load-module", "module-null-sink", "sink_name=" + sink, "rate=44100", "channels=2"], timeout=15, env=penv)
+                if r.returncode == 0:
+                    self.sink, self.sink_module = sink, r.stdout.strip()
+                    chrome_env.update(PULSE_SERVER=penv["PULSE_SERVER"], PULSE_SINK=sink)
+            if not self.sink:
+                log("[stream %d] no sound (silent stream)" % self.id)
+
+            # 3) Chrome showing the game page
             profile = os.path.join(STATE_DIR, "chrome-%d" % self.id)
             os.makedirs(profile, exist_ok=True)
             self._spawn(
                 [
                     CHROME, "--no-sandbox", "--kiosk", "--no-first-run", "--no-default-browser-check",
                     "--disable-infobars", "--disable-dev-shm-usage", "--disable-features=Translate",
-                    "--disable-session-crashed-bubble", "--hide-scrollbars", "--mute-audio",
+                    "--disable-session-crashed-bubble", "--hide-scrollbars",
                     "--autoplay-policy=no-user-gesture-required", "--force-device-scale-factor=1",
                     # 3D (WebGL) without a graphics card: draw with the CPU
                     "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist",
@@ -153,28 +354,34 @@ class Stream:
                     "--disable-backgrounding-occluded-windows",
                     "--user-data-dir=" + profile, "--window-position=0,0", "--window-size=%d,%d" % (w, h),
                     c["page_url"],
-                ],
-                env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                ] + ([] if self.sink else ["--mute-audio"]),
+                env=chrome_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
             if not self._sleep(8):
                 return
 
-            # 3) FFmpeg → YouTube
+            # 4) FFmpeg → YouTube
             gop = str(fps * 2)
+            if self.sink:
+                audio_in = ["-thread_queue_size", "1024", "-f", "pulse", "-sample_rate", "44100", "-channels", "2",
+                            "-i", self.sink + ".monitor"]
+            else:
+                audio_in = ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
             cmd = [
                 "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1",
                 "-thread_queue_size", "512",
                 "-f", "x11grab", "-draw_mouse", "0", "-video_size", "%dx%d" % (w, h),
                 "-framerate", str(fps), "-i", self.display + ".0",
-                "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+            ] + audio_in + [
                 "-c:v", "libx264", "-preset", X264_PRESET, "-tune", "zerolatency", "-pix_fmt", "yuv420p",
                 "-b:v", "%dk" % kbps, "-maxrate", "%dk" % kbps, "-bufsize", "%dk" % (kbps * 2),
                 "-g", gop, "-keyint_min", gop, "-sc_threshold", "0",
-                "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                "-af", "aresample=async=1000", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
                 "-f", "flv", c["rtmp"],
             ]
             self.ffmpeg = self._spawn(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                      stdin=subprocess.DEVNULL, text=True, bufsize=1)
+                                      stdin=subprocess.DEVNULL, text=True, bufsize=1,
+                                      env=pulse_env() if self.sink else None)
             threading.Thread(target=self._read_stderr, daemon=True).start()
 
             frames = 0
@@ -213,6 +420,12 @@ class Stream:
             self.fps = None
             self.speed = None
             self._kill_all()
+            if self.sink_module:
+                try:
+                    run(["pactl", "unload-module", self.sink_module], timeout=10, env=pulse_env())
+                except Exception:
+                    pass
+                self.sink = self.sink_module = None
             if self.stopping:
                 self.status = "stopped"
 
@@ -327,9 +540,10 @@ class CommandRunner:
                 self.active.discard(i)
 
 
-def call_panel(panel, token, reports, cmd_results=None):
+def call_panel(panel, token, reports, cmd_results=None, voice_results=None, voice_error=None):
     body = json.dumps({"token": token, "info": machine_info(), "streams": reports,
-                       "command_results": cmd_results or []}).encode()
+                       "command_results": cmd_results or [], "voice_results": voice_results or [],
+                       "voice_error": voice_error}).encode()
     req = urllib.request.Request(
         panel.rstrip("/") + "/api/worker.php",
         data=body,
@@ -354,6 +568,7 @@ def main():
     running = {"on": True}
     wake = threading.Event()
     runner = CommandRunner(wake)
+    voices = VoiceMaker()
 
     def shutdown(*_):
         running["on"] = False
@@ -366,19 +581,23 @@ def main():
         wake.clear()
         reports = [s.report() for s in streams.values()]
         results = runner.take_results()
+        vres, verr = voices.take()
         try:
-            resp = call_panel(panel, token, reports, results)
+            resp = call_panel(panel, token, reports, results, vres, verr)
             runner.done([r["id"] for r in results])
+            voices.submit(resp.get("voice_jobs") or [])
             poll = max(1, min(30, int(resp.get("poll_seconds", 5))))
             wanted = {int(c["id"]): c for c in resp.get("run", [])}
             for c in resp.get("commands", []):
                 runner.submit(int(c["id"]), str(c["cmd"]))
         except urllib.error.HTTPError as ex:
             runner.put_back(results)
+            voices.put_back(vres)
             log("Panel said HTTP %s - %s" % (ex.code, "token wrong or server removed?" if ex.code == 401 else ""))
             wanted = None
         except Exception as ex:
             runner.put_back(results)
+            voices.put_back(vres)
             log("Panel not reachable (%s) - keeping current streams running" % ex)
             wanted = None
 

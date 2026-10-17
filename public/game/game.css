@@ -129,3 +129,28 @@ h1 {
 .winner-wins { font-family: var(--display); font-weight: 700; font-size: 90px; color: #fff; }
 .winner-score { font-family: var(--display); font-size: 80px; color: #fff; margin-top: 20px; }
 .winner-next { font-family: var(--ui); font-size: 40px; color: #cfc9ea; margin-top: 30px; letter-spacing: 3px; }
+
+/* ---------- tubes, caption, sound ---------- */
+#fx { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; pointer-events: none; }
+.caption {
+  position: absolute; left: 50px; right: 50px; bottom: 116px; min-height: 140px;
+  display: flex; align-items: center; gap: 26px; padding: 22px 34px;
+  background: rgba(8, 6, 16, .88); border: 5px solid #5a8cff; border-radius: 34px;
+  box-shadow: 0 0 30px rgba(90, 140, 255, .55);
+  animation: capin .35s ease-out;
+}
+.caption[hidden] { display: none; }
+@keyframes capin { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+.mic { flex: 0 0 auto; width: 92px; height: 92px; border-radius: 50%; background: #5a8cff; color: #fff; display: flex; align-items: center; justify-content: center; }
+.mic svg { width: 58px; height: 58px; }
+.caption.talking .mic { animation: talk .5s ease-in-out infinite alternate; }
+@keyframes talk { from { box-shadow: 0 0 0 0 rgba(90,140,255,.7); } to { box-shadow: 0 0 0 18px rgba(90,140,255,0); } }
+.caption-text { font-family: var(--display); font-weight: 600; font-size: 42px; line-height: 1.12; color: #fff; text-transform: uppercase; }
+.caption-text b { color: var(--gold); font-weight: 700; }
+.sound-btn {
+  position: absolute; right: 30px; top: 30px; display: flex; align-items: center; gap: 14px;
+  padding: 18px 28px; border-radius: 999px; border: 3px solid #fff; background: rgba(0,0,0,.6); color: #fff;
+  font-family: var(--ui); font-weight: 700; font-size: 34px; letter-spacing: 2px; cursor: pointer;
+}
+.sound-btn svg { width: 44px; height: 44px; }
+.sound-btn[hidden] { display: none; }

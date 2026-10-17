@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Messi vs Ronaldo · Ball Drop Game</title>
-<link rel="stylesheet" href="/game/game.css?v=3">
+<link rel="stylesheet" href="/game/game.css?v=5">
 <script type="importmap">{ "imports": { "three": "/game/vendor/three.module.js" } }</script>
 </head>
 <body>
@@ -46,6 +46,17 @@
   <!-- the 3D bowl -->
   <img id="bowl-img" alt="">
   <canvas id="three" aria-label="Ball drop bowl"></canvas>
+  <canvas id="fx" aria-hidden="true"></canvas>
+
+  <div class="caption" id="caption" hidden>
+    <div class="mic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
+    <div class="caption-text" id="caption-text"></div>
+  </div>
+
+  <button class="sound-btn" id="sound-btn" type="button" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    TAP FOR SOUND
+  </button>
 
   <div class="popup" id="popup" hidden><div class="popup-in"><span id="popup-name">MESSI</span> SCORES!<small>+1 POINT</small></div></div>
 
@@ -61,6 +72,6 @@
     </div>
   </div>
 </div>
-<script type="module" src="/game/game.js?v=3"></script>
+<script type="module" src="/game/game.js?v=5"></script>
 </body>
 </html>

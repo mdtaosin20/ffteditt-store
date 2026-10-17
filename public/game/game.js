@@ -313,7 +313,9 @@ class Ball {
     this.state = 'hidden'; this.t = 0;
   }
 
-  drop(angle, delay) {
+  drop(angle, delay, height = 6) {
+    this.dropH = height;
+    this.landed = false;
     const r = RIM_R - 0.55;
     this.pos.set(Math.cos(angle) * r, Math.sin(angle) * r);
     // speed close to a circular orbit, with a little randomness so every round is different
@@ -326,19 +328,23 @@ class Ball {
     this.mesh.scale.setScalar(1);
   }
 
+  emit(type, strength) { if (this.onEvent) this.onEvent(type, strength, this); }
+
   hide() { this.state = 'hidden'; this.mesh.visible = this.halo.visible = false; this.trail.forEach((s) => (s.visible = false)); }
 
   step(dt) {
     if (this.state === 'dropping') {
       this.t += dt;
       const r = this.pos.length(), ground = surfaceY(r) + BALL_R;
-      if (this.t < 0) { this.y = ground + 6; this.mesh.visible = this.halo.visible = false; return; }
+      const H = this.dropH || 6;
+      if (this.t < 0) { this.y = ground + H; this.mesh.visible = this.halo.visible = false; return; }
       this.mesh.visible = this.halo.visible = true;
-      const T = 0.7; // fall + one bounce
+      const T = 0.25 + 0.075 * H; // fall + one bounce
       if (this.t < T) {
         const k = this.t / T;
-        this.y = ground + 6 * (1 - k) * (1 - k);
+        this.y = ground + H * (1 - k) * (1 - k);
       } else if (this.t < T + 0.35) {
+        if (!this.landed) { this.landed = true; this.emit('land', 1); }
         const k = (this.t - T) / 0.35;
         this.y = ground + 0.7 * Math.sin(Math.PI * k);
       } else { this.y = ground; this.state = 'rolling'; }
@@ -357,11 +363,11 @@ class Ball {
       if (nr > RIM_R - BALL_R) { // bounce off the lip
         const n = this.pos.clone().divideScalar(nr);
         const vn = this.vel.dot(n);
-        if (vn > 0) this.vel.addScaledVector(n, -1.6 * vn);
+        if (vn > 0) { this.vel.addScaledVector(n, -1.6 * vn); if (vn > 0.6) this.emit('rim', Math.min(1, vn / 4)); }
         this.pos.copy(n.multiplyScalar(RIM_R - BALL_R));
       }
       this.y = surfaceY(this.pos.length()) + BALL_R;
-      if (this.pos.length() < HOLE_R - 0.12) { this.state = 'falling'; this.t = 0; }
+      if (this.pos.length() < HOLE_R - 0.12) { this.state = 'falling'; this.t = 0; this.emit('fall', 1); }
       return;
     }
     if (this.state === 'falling') {
@@ -398,6 +404,25 @@ class Ball {
   }
 }
 
+// Draws a shiny ball with a face, used by the 2D mode and by the tubes.
+function paintBall(ctx, x, y, R, hex, img) {
+  const c0 = new THREE.Color(hex);
+  const bg = ctx.createRadialGradient(x - R * 0.35, y - R * 0.4, R * 0.1, x, y, R);
+  bg.addColorStop(0, '#' + c0.clone().lerp(new THREE.Color('#ffffff'), 0.6).getHexString());
+  bg.addColorStop(0.55, hex);
+  bg.addColorStop(1, '#' + c0.clone().multiplyScalar(0.45).getHexString());
+  ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+  if (img) {
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, R * 0.68, 0, Math.PI * 2); ctx.clip();
+    const s = Math.max((R * 1.36) / img.width, (R * 1.36) / img.height);
+    ctx.drawImage(img, x - (img.width * s) / 2, y - (img.height * s) / 2, img.width * s, img.height * s);
+    ctx.restore();
+  }
+  const sh = ctx.createRadialGradient(x - R * 0.4, y - R * 0.45, 0, x - R * 0.4, y - R * 0.45, R * 0.6);
+  sh.addColorStop(0, 'rgba(255,255,255,.75)'); sh.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+}
+
 function collide(a, b) {
   if (a.state !== 'rolling' || b.state !== 'rolling') return;
   const d = b.pos.clone().sub(a.pos), dist = d.length(), min = BALL_R * 2;
@@ -409,6 +434,237 @@ function collide(a, b) {
   if (rel < 0) {
     const j = -(1 + 0.85) * rel / 2;
     a.vel.addScaledVector(n, -j); b.vel.addScaledVector(n, j);
+    if (-rel > 0.4) a.emit('clack', Math.min(1, -rel / 4));
+  }
+}
+
+
+/* ------------------------------------------------------------------- sounds */
+// All sound effects are made in code (no files needed).
+class Sfx {
+  constructor() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    this.ok = !!AC;
+    if (!this.ok) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain(); this.master.gain.value = 0.9;
+    const comp = this.ctx.createDynamicsCompressor();
+    this.master.connect(comp); comp.connect(this.ctx.destination);
+    const len = this.ctx.sampleRate * 2;
+    this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = this.noise.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    // continuous layers: rolling balls + soft crowd
+    this.rollGain = this.loop(400, 0.8, 0, 'bandpass');
+    this.crowdGain = this.loop(700, 0.5, 0.035, 'bandpass', 0.25);
+    this.last = {};
+  }
+  get running() { return this.ok && this.ctx.state === 'running'; }
+  resume() { if (this.ok && this.ctx.state !== 'running') this.ctx.resume(); }
+  loop(freq, q, gain, type, lfoRate) {
+    const src = this.ctx.createBufferSource(); src.buffer = this.noise; src.loop = true;
+    const f = this.ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = this.ctx.createGain(); g.gain.value = gain;
+    src.connect(f); f.connect(g); g.connect(this.master); src.start();
+    if (lfoRate) {
+      const lfo = this.ctx.createOscillator(); lfo.frequency.value = lfoRate;
+      const lg = this.ctx.createGain(); lg.gain.value = gain * 0.5;
+      lfo.connect(lg); lg.connect(g.gain); lfo.start();
+    }
+    return g;
+  }
+  limit(name, ms) { const now = performance.now(); if (now - (this.last[name] || 0) < ms) return false; this.last[name] = now; return true; }
+  burst({ freq = 1000, q = 1, type = 'bandpass', dur = 0.1, vol = 0.5, sweepTo = 0, delay = 0 }) {
+    const t = this.ctx.currentTime + delay;
+    const src = this.ctx.createBufferSource(); src.buffer = this.noise;
+    const f = this.ctx.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, t + dur);
+    const g = this.ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f); f.connect(g); g.connect(this.master); src.start(t, Math.random()); src.stop(t + dur + 0.05);
+  }
+  tone({ freq = 440, to = 0, type = 'sine', dur = 0.2, vol = 0.3, delay = 0, attack = 0.005 }) {
+    const t = this.ctx.currentTime + delay;
+    const o = this.ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    const g = this.ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+  }
+  release() { if (!this.running) return; this.tone({ freq: 1500, to: 900, type: 'square', dur: 0.05, vol: 0.08 }); this.burst({ freq: 3000, q: 2, dur: 0.05, vol: 0.25 }); }
+  land(s = 1) { if (!this.running || !this.limit('land', 60)) return; this.tone({ freq: 140, to: 55, dur: 0.18, vol: 0.5 * s }); this.burst({ freq: 900, q: 1, dur: 0.08, vol: 0.3 * s }); }
+  rim(s = 1) { if (!this.running || !this.limit('rim', 90)) return; this.tone({ freq: 220, to: 120, dur: 0.12, vol: 0.25 * s, type: 'triangle' }); this.burst({ freq: 1600, q: 2, dur: 0.06, vol: 0.25 * s }); }
+  clack(s = 1) { if (!this.running || !this.limit('clack', 80)) return; this.burst({ freq: 2600, q: 4, dur: 0.06, vol: 0.6 * s }); this.tone({ freq: 950, type: 'triangle', dur: 0.07, vol: 0.2 * s }); }
+  fall() { if (!this.running) return; this.burst({ freq: 2200, sweepTo: 250, q: 1.5, dur: 0.6, vol: 0.45 }); this.tone({ freq: 600, to: 120, dur: 0.5, vol: 0.18, type: 'sine' }); }
+  goal() {
+    if (!this.running) return;
+    // whistle + cheering crowd + short horn chord
+    this.tone({ freq: 2900, dur: 0.18, vol: 0.12, type: 'sine' }); this.tone({ freq: 2900, dur: 0.35, vol: 0.12, type: 'sine', delay: 0.22 });
+    for (let i = 0; i < 6; i++) this.burst({ freq: 700 + Math.random() * 900, q: 0.8, dur: 2.2, vol: 0.22, delay: 0.05 * i });
+    [523, 659, 784].forEach((f) => this.tone({ freq: f, type: 'sawtooth', dur: 0.6, vol: 0.07, delay: 0.1, attack: 0.02 }));
+  }
+  win() {
+    if (!this.running) return;
+    [523, 659, 784, 1047].forEach((f, i) => { this.tone({ freq: f, type: 'triangle', dur: 0.5, vol: 0.25, delay: i * 0.16 }); this.tone({ freq: f / 2, type: 'sawtooth', dur: 0.5, vol: 0.06, delay: i * 0.16 }); });
+    [523, 659, 784, 1047].forEach((f) => this.tone({ freq: f, type: 'triangle', dur: 1.6, vol: 0.16, delay: 0.7, attack: 0.03 }));
+    for (let i = 0; i < 10; i++) this.burst({ freq: 600 + Math.random() * 1200, q: 0.7, dur: 3.2, vol: 0.2, delay: 0.1 * i });
+  }
+  setRoll(speed) { if (this.ok) this.rollGain.gain.setTargetAtTime(Math.min(0.22, speed * 0.05), this.ctx.currentTime, 0.08); }
+  duck(on) { if (this.ok) this.crowdGain.gain.setTargetAtTime(on ? 0.012 : 0.035, this.ctx.currentTime, 0.3); }
+}
+
+/* -------------------------------------------------------------- commentator */
+// Plays English voice lines with an on-screen caption. Lines and audio come from the admin panel.
+class Commentator {
+  constructor(voice, sfx) {
+    this.enabled = !!(voice && voice.enabled);
+    this.volume = voice && voice.volume != null ? voice.volume : 0.95;
+    this.sfx = sfx;
+    this.byCat = {};
+    this.queue = [];
+    this.busy = false;
+    this.lastId = '';
+    this.audio = {};
+    Object.entries((voice && voice.lines) || {}).forEach(([id, l]) => {
+      const cat = id.replace(/_\d+$/, '');
+      (this.byCat[cat] = this.byCat[cat] || []).push({ id, text: l.text, url: l.url });
+      if (l.url) { const a = new Audio(l.url); a.preload = 'auto'; this.audio[id] = a; }
+    });
+    this.box = $('caption'); this.textEl = $('caption-text');
+  }
+  say(cat, { urgent = false, chance = 1 } = {}) {
+    if (!this.enabled || Math.random() > chance) return;
+    const list = (this.byCat[cat] || []).filter((l) => l.id !== this.lastId);
+    const pool = list.length ? list : this.byCat[cat] || [];
+    if (!pool.length) return;
+    const line = pool[Math.floor(Math.random() * pool.length)];
+    if (urgent) this.queue = [line]; else if (this.queue.length < 2) this.queue.push(line); else return;
+    if (urgent && this.current) this.stopCurrent();
+    this.next();
+  }
+  get idle() { return !this.busy && !this.queue.length; }
+  stopCurrent() { if (this.current) { this.current.pause(); this.current = null; } this.busy = false; }
+  next() {
+    if (this.busy || !this.queue.length) return;
+    const line = this.queue.shift();
+    this.lastId = line.id; this.busy = true;
+    this.textEl.textContent = line.text;
+    this.box.hidden = false; this.box.classList.add('talking');
+    this.sfx.duck(true);
+    const shownAt = performance.now();
+    const minShow = Math.max(3200, line.text.length * 55);
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      const left = minShow - (performance.now() - shownAt);
+      if (left > 0) { clearTimeout(this.timer); this.timer = setTimeout(done, left); this.box.classList.remove('talking'); this.sfx.duck(false); return; }
+      finished = true;
+      clearTimeout(this.timer);
+      this.box.classList.remove('talking');
+      this.sfx.duck(false);
+      this.current = null;
+      setTimeout(() => { this.busy = false; if (this.queue.length) this.next(); else this.box.hidden = true; }, 900);
+    };
+    const a = this.audio[line.id];
+    const canPlay = a && this.sfx.running;
+    if (canPlay) {
+      this.current = a; a.currentTime = 0; a.volume = Math.max(0, Math.min(1, this.volume));
+      a.onended = done; a.onerror = done;
+      a.play().catch(() => { this.timer = setTimeout(done, 4000); });
+      this.timer = setTimeout(done, 15000); // safety
+    } else {
+      this.timer = setTimeout(done, Math.max(3000, line.text.length * 65));
+    }
+  }
+}
+
+/* ------------------------------------------------------------------- tubes */
+// Two glass tubes above the bowl. Each round the lowest ball rolls out and drops in.
+class Tubes {
+  constructor(canvas, camera, players, imgs) {
+    this.cv = canvas; this.ctx = canvas.getContext('2d');
+    this.P = players; this.imgs = imgs;
+    this.DROP_H = 0.9;
+    const v = new THREE.Vector3();
+    const proj = (x, y, z) => { v.set(x, y, z).project(camera); return [((v.x + 1) / 2) * 1080, 960 + ((1 - v.y) / 2) * 860]; };
+    const r = RIM_R - 0.55;
+    const point = (a) => proj(r * Math.cos(a), surfaceY(r) + BALL_R + this.DROP_H, r * Math.sin(a));
+    const findAngle = (tx, ty) => {
+      let best = 0, bd = 1e9;
+      for (let a = Math.PI * 0.85; a < Math.PI * 2.15; a += 0.004) { const [x, y] = point(a); const d = (x - tx) ** 2 + (y - ty) ** 2; if (d < bd) { bd = d; best = a; } }
+      return best;
+    };
+    const tops = [[34, 958], [1046, 958]];
+    const aims = [[330, 1150], [750, 1150]];
+    this.t = players.map((p, i) => {
+      const angle = findAngle(...aims[i]);
+      const mouth = point(angle);
+      const [ex] = proj(r * Math.cos(angle) + BALL_R, surfaceY(r) + BALL_R + this.DROP_H, r * Math.sin(angle));
+      const R = Math.abs(ex - mouth[0]) * 1.02;
+      const top = tops[i];
+      const dx = mouth[0] - top[0], dy = mouth[1] - top[1], len = Math.hypot(dx, dy);
+      const u = [dx / len, dy / len];
+      const n = Math.max(3, Math.min(6, Math.floor((len - R * 0.3) / (R * 2.1))));
+      return { angle, mouth, top, u, R, n, start: -1, color: p.color };
+    });
+    this.dirty = true;
+  }
+  slot(tb, k) { // k = 0 is the ball next to the mouth; -1 is just outside
+    const d = tb.R * 1.05 + k * tb.R * 2.1;
+    return [tb.mouth[0] - tb.u[0] * d, tb.mouth[1] - tb.u[1] * d];
+  }
+  release(i, delay, now) { this.t[i].start = now + delay; this.dirty = true; }
+  resize() {
+    const r = this.cv.getBoundingClientRect();
+    const dpr = Math.min(devicePixelRatio || 1, 1.5);
+    this.cv.width = Math.max(1, Math.round(r.width * dpr));
+    this.cv.height = Math.max(1, Math.round(r.height * dpr));
+    this.k = this.cv.width / 1080;
+    this.dirty = true;
+  }
+  glass(c, tb, front) {
+    const [x0, y0] = tb.top, [x1, y1] = [tb.mouth[0] + tb.u[0] * tb.R * 0.2, tb.mouth[1] + tb.u[1] * tb.R * 0.2];
+    const w = tb.R * 2.35, nx = -tb.u[1], ny = tb.u[0];
+    if (!front) {
+      c.save(); c.lineCap = 'round';
+      c.shadowColor = tb.color; c.shadowBlur = 40; c.strokeStyle = tb.color; c.globalAlpha = 0.35; c.lineWidth = w + 10;
+      c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+      c.shadowBlur = 0; c.globalAlpha = 1; c.strokeStyle = 'rgba(20,14,34,.55)'; c.lineWidth = w;
+      c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+      c.restore();
+      return;
+    }
+    c.save(); c.lineCap = 'round';
+    const edge = (off, a, lw) => { c.strokeStyle = `rgba(255,255,255,${a})`; c.lineWidth = lw; c.beginPath(); c.moveTo(x0 + nx * off, y0 + ny * off); c.lineTo(x1 + nx * off, y1 + ny * off); c.stroke(); };
+    edge(w / 2, 0.75, 5); edge(-w / 2, 0.5, 5); edge(w / 2 - 14, 0.35, 4); edge(-w / 2 + 10, 0.12, 8);
+    c.strokeStyle = 'rgba(255,255,255,.08)'; c.lineWidth = w; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    const ring = (x, y) => {
+      c.save(); c.translate(x, y); c.rotate(Math.atan2(tb.u[1], tb.u[0]));
+      c.strokeStyle = tb.color; c.shadowColor = tb.color; c.shadowBlur = 22; c.lineWidth = 9;
+      c.beginPath(); c.ellipse(0, 0, 12, w / 2 + 6, 0, 0, Math.PI * 2); c.stroke(); c.restore();
+    };
+    ring(x0, y0); ring(x1, y1);
+    c.restore();
+  }
+  draw(now) {
+    const busy = this.t.some((tb) => tb.start >= 0 && now - tb.start < 0.6);
+    if (!this.dirty && !busy) return;
+    this.dirty = busy;
+    const c = this.ctx;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, this.cv.width, this.cv.height);
+    c.setTransform(this.k, 0, 0, this.k, 0, 0);
+    this.t.forEach((tb, i) => {
+      this.glass(c, tb, false);
+      const p = tb.start < 0 ? 1 : Math.max(0, Math.min(1, (now - tb.start) / 0.45));
+      const moving = tb.start >= 0 && now >= tb.start && p < 1;
+      const shift = moving ? p : (tb.start >= 0 && now < tb.start ? 0 : 0);
+      for (let k = 0; k < tb.n; k++) {
+        if (k === 0 && moving && p > 0.55) continue; // handed over to the bowl
+        const [x, y] = this.slot(tb, k - shift);
+        c.globalAlpha = k === tb.n - 1 && moving ? p : 1;
+        paintBall(c, x, y, tb.R, tb.color, this.imgs[i]);
+      }
+      c.globalAlpha = 1;
+      this.glass(c, tb, true);
+    });
   }
 }
 
@@ -677,22 +933,7 @@ async function main() {
       ctx.save();
       if (b.state === 'falling' && holePath) { pathOf(ctx, holePath); ctx.clip(); }
       glow(x, y, R * 2.4, hex, 0.55);
-      const bg = ctx.createRadialGradient(x - R * 0.35, y - R * 0.4, R * 0.1, x, y, R);
-      const c0 = new THREE.Color(hex);
-      bg.addColorStop(0, '#' + c0.clone().lerp(new THREE.Color('#ffffff'), 0.6).getHexString());
-      bg.addColorStop(0.55, hex);
-      bg.addColorStop(1, '#' + c0.clone().multiplyScalar(0.45).getHexString());
-      ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
-      const img = imgs[b.idx];
-      if (img) {
-        ctx.save(); ctx.beginPath(); ctx.arc(x, y, R * 0.68, 0, Math.PI * 2); ctx.clip();
-        const s = Math.max((R * 1.36) / img.width, (R * 1.36) / img.height);
-        ctx.drawImage(img, x - (img.width * s) / 2, y - (img.height * s) / 2, img.width * s, img.height * s);
-        ctx.restore();
-      }
-      const sh = ctx.createRadialGradient(x - R * 0.4, y - R * 0.45, 0, x - R * 0.4, y - R * 0.45, R * 0.6);
-      sh.addColorStop(0, 'rgba(255,255,255,.75)'); sh.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+      paintBall(ctx, x, y, R, hex, imgs[b.idx]);
       ctx.restore();
     };
 
@@ -717,14 +958,47 @@ async function main() {
 
   addEventListener('resize', () => gfx.resize());
 
+  // sounds, commentator, tubes
+  const sfx = new Sfx();
+  const voice = new Commentator(cfg.voice, sfx);
+  const tubes = new Tubes($('fx'), camera, P, imgs);
+  tubes.resize(); addEventListener('resize', () => tubes.resize());
+  balls.forEach((b) => (b.onEvent = (type, s) => {
+    if (type === 'land') sfx.land(s); else if (type === 'rim') sfx.rim(s);
+    else if (type === 'clack') sfx.clack(s); else if (type === 'fall') sfx.fall();
+  }));
+  // Browsers block sound until the visitor taps. The stream browser allows it automatically.
+  const soundBtn = $('sound-btn');
+  const unlock = () => { sfx.resume(); soundBtn.hidden = true; };
+  soundBtn.addEventListener('click', unlock);
+  addEventListener('pointerdown', unlock);
+  sfx.resume();
+  setTimeout(() => { if (sfx.ok && !sfx.running) soundBtn.hidden = false; }, 1500);
+
   // game flow
-  let phase = 'start', phaseT = 0, roundWinner = -1;
+  let phase = 'start', phaseT = 0, roundWinner = -1, gameT = 0;
+  let nextCall = 25 + Math.random() * 15, nextSub = 200 + Math.random() * 100;
+  const leader = () => (score[0] > score[1] ? 0 : score[1] > score[0] ? 1 : -1);
   const newRound = () => {
-    const a = Math.random() * Math.PI * 2;
-    balls[0].drop(a, 0);
-    balls[1].drop(a + Math.PI * (0.7 + Math.random() * 0.6), 0.35);
+    balls[0].drop(tubes.t[0].angle, 0.25, tubes.DROP_H);
+    balls[1].drop(tubes.t[1].angle, 0.6, tubes.DROP_H);
+    tubes.release(0, 0, gameT); tubes.release(1, 0.35, gameT);
+    sfx.release(); setTimeout(() => sfx.release(), 350);
     phase = 'play'; phaseT = 0; roundWinner = -1;
+    voice.say('drop', { chance: 0.2 });
   };
+  const onGoal = (w) => {
+    const before = leader();
+    score[w]++; saveScore(); showScore(w); popup(w);
+    sfx.goal();
+    if (score[w] >= cfg.target) return; // the winner line plays on the winner screen
+    voice.say('goal_p' + (w + 1), { chance: 0.8 });
+    const after = leader();
+    if (score[w] === cfg.target - 1) voice.say('close');
+    else if (after === -1) voice.say('tie', { chance: 0.7 });
+    else if (after === w && before !== w) voice.say('lead_p' + (w + 1));
+  };
+  setTimeout(() => voice.say('intro'), 2500);
   const popup = (i) => {
     const p = $('popup'); $('popup-name').textContent = P[i].name;
     p.className = 'popup p' + (i + 1); p.hidden = false;
@@ -735,6 +1009,8 @@ async function main() {
     $('winner-photo').src = P[i].face || P[i].photo || placeholderPhoto(P[i].color, P[i].number, false);
     $('winner-name').textContent = P[i].name;
     $('winner-score').textContent = `${score[i]} – ${score[1 - i]}`;
+    sfx.win();
+    voice.say('win_p' + (i + 1), { urgent: true });
   };
 
   const clock = new THREE.Clock();
@@ -742,7 +1018,7 @@ async function main() {
   const FIXED = 1 / 120;
   function frame() {
     const dt = Math.min(0.1, clock.getDelta());
-    phaseT += dt;
+    phaseT += dt; gameT += dt;
     if (phase === 'start' && phaseT > 0.8) newRound();
     if (phase === 'play') {
       acc += dt;
@@ -752,9 +1028,7 @@ async function main() {
         acc -= FIXED;
         if (roundWinner < 0) {
           const w = balls.findIndex((b) => b.state === 'falling' || b.state === 'scored');
-          if (w >= 0) {
-            roundWinner = w; score[w]++; saveScore(); showScore(w); popup(w);
-          }
+          if (w >= 0) { roundWinner = w; onGoal(w); }
         }
       }
       // keep the round from lasting forever: after 45 s give both balls a nudge inward
@@ -769,12 +1043,18 @@ async function main() {
       }
     } else if (phase === 'winner' && phaseT > 8) {
       $('winner').hidden = true; score = [0, 0]; saveScore(); showScore(); newRound();
+      voice.say('new_game', { urgent: true });
     }
+    // invite comments now and then
+    if (phase === 'play' && voice.idle && gameT > nextCall) { voice.say('call'); nextCall = gameT + 30 + Math.random() * 25; }
+    if (phase === 'play' && voice.idle && gameT > nextSub) { voice.say('sub'); nextSub = gameT + 240 + Math.random() * 120; }
+    sfx.setRoll(balls.reduce((s, b) => s + (b.state === 'rolling' ? b.vel.length() : 0), 0));
     gfx.draw(dt);
+    tubes.draw(gameT);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__fft = { balls, score: () => score, mode: gfx.mode }; // for testing
+  window.__fft = { balls, score: () => score, mode: gfx.mode, sfx, voice, tubes }; // for testing
 }
 
 main();

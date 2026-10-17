@@ -39,6 +39,14 @@ Admin → **Game** sets names, colours, shirt numbers, photos (stored privately,
 and can reset scores. Open games pick up changes within ~20 s. The bowl is rendered once and only the balls are drawn
 each frame, so it streams smoothly on CPU-only servers (the worker starts Chrome with SwiftShader WebGL).
 
+## Tubes, sounds and commentator
+
+Two glass tubes hold the balls; each round one ball rolls out of each tube into the bowl. Sound effects are made in
+code (Web Audio). An English commentator (Admin → **Voice**) reads lines like "Who wins this round? Comment now!":
+the VPS worker makes the voices automatically with Piper (free offline AI voice, installed on first use) and uploads
+them; any line can be replaced with your own MP3. Captions show on screen. Each stream gets its own PulseAudio sink,
+so the game sound goes into the YouTube stream.
+
 ## Web terminal
 
 Admin → **Terminal** runs commands on a VPS from any phone or computer, through the worker (no SSH needed after the first install).
