@@ -128,7 +128,8 @@ async function main() {
   let gapA = Math.random() * TAU, ringDir = 1, gapNow = 0, size = 40, winner = null, lastOut = null;
   let nextCall = 28 + Math.random() * 15, nextSub = 200 + Math.random() * 100;
 
-  const targetSize = (n) => clamp(Math.sqrt((0.40 * Math.PI * RIN * RIN) / (Math.max(1, n) * 0.75)), 38, 104);
+  const FLAG_W = 42; // every flag keeps the same size for the whole round
+  const targetSize = () => FLAG_W;
   const speed = () => 360 * (cfg.speed / 100) * (1 + 0.3 * clamp((30 - alive) / 30, 0, 1));
   const gapTarget = () => {
     const r = size * 0.47;
@@ -270,7 +271,6 @@ async function main() {
     gapA += ringDir * 0.6 * (cfg.ring / 100) * dt;
     const want = phase === 'spawn' ? 0 : gapTarget();
     gapNow += (want - gapNow) * Math.min(1, dt * 2.5);
-    size += (targetSize(alive) - size) * Math.min(1, dt * 1.2);
     const passMargin = Math.asin(Math.min(1, (r * 0.85) / RIN));
 
     for (const f of flags) {
