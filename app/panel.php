@@ -47,7 +47,7 @@ function games_list(): array
         'ball'  => ['id' => 1, 'key' => 'ball',  'name' => 'Ball Drop',      'url' => '/ball/',  'settings' => 'game.php',
                     'title' => ucwords(strtolower($ball['players'][0]['name'])) . ' vs ' . ucwords(strtolower($ball['players'][1]['name'])), 'category' => 'football',
                     'tags' => ['football', 'battle', 'arcade'], 'thumb' => '/assets/site/ball.jpg',
-                    'desc' => 'Two balls drop into the bowl — first into the hole scores. ' . intdiv((int) $ball['round_secs'], 60) . '-minute rounds, best of ' . (int) $ball['rounds'] . '!',
+                    'desc' => 'Two balls drop into the bowl — first into the hole scores. ' . ball_rules_text($ball),
                     'autoplay' => (bool) $ball['autoplay'],  'pace' => (string) $ball['pace'],
                     'detail' => $ball['players'][0]['name'] . ' vs ' . $ball['players'][1]['name']],
         'flags' => ['id' => 2, 'key' => 'flags', 'name' => 'Flag Battle', 'url' => '/flags/', 'settings' => 'flags.php',
@@ -57,6 +57,17 @@ function games_list(): array
                     'autoplay' => (bool) $flags['autoplay'], 'pace' => (string) $flags['pace'],
                     'detail' => '195 countries · final of ' . (int) $flags['target']],
     ];
+}
+
+/** "2-minute rounds, best of 3!" — or the no-timer text. */
+function ball_rules_text(array $b): string
+{
+    if (empty($b['timer_on'])) {
+        return 'Goals keep counting — pick your side!';
+    }
+    $t = (int) $b['round_secs'];
+    $len = $t % 60 ? $t . '-second' : ($t % 3600 ? intdiv($t, 60) . '-minute' : intdiv($t, 3600) . '-hour');
+    return $len . ' rounds' . ((int) $b['rounds'] > 1 ? ', best of ' . (int) $b['rounds'] : '') . '!';
 }
 
 function game_of_url(string $url): string

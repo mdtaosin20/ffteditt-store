@@ -8,6 +8,7 @@ function game_defaults(): array
 {
     return [
         'target'   => 20,        // (old "first to N" rule, no longer used)
+        'timer_on'   => true,    // false = no clock: goals just keep counting
         'round_secs' => 120,     // length of one round
         'rounds'     => 3,       // best of N rounds
         'ball_style' => 'football', // football | face

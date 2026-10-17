@@ -81,6 +81,7 @@ h1 {
 .mid-k { font-family: var(--ui); font-weight: 700; font-size: 26px; letter-spacing: 2px; color: #dfe8ff; }
 .mid-t { font-family: var(--display); font-weight: 700; font-size: 74px; line-height: 1; color: #fff; text-shadow: 0 0 18px rgba(90, 150, 255, .9); font-variant-numeric: tabular-nums; }
 .mid-t.hurry { color: #ff6b6b; text-shadow: 0 0 18px rgba(255, 80, 80, .9); }
+.mid-t.long { font-size: 56px; }
 .mid-t.golden { font-size: 50px; color: var(--gold); text-shadow: 0 0 18px rgba(255, 210, 26, .9); }
 .mid-r { font-family: var(--ui); font-weight: 700; font-size: 26px; letter-spacing: 2px; color: #8fb4ff; margin-top: 4px; }
 .card-top { display: flex; align-items: center; gap: 12px; height: 116px; padding: 12px 26px 0 26px; }

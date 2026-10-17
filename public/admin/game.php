@@ -18,10 +18,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $new = $cfg;
-    $rs = (int) ($_POST['round_secs'] ?? 0);
-    if ($rs < 30 || $rs > 1800) {
-        $errors[] = 'Round length must be between 30 and 1800 seconds.';
-    } else {
+    $new['timer_on'] = !empty($_POST['timer_on']);
+    $rs = max(0, (int) ($_POST['rt_h'] ?? 0)) * 3600 + max(0, (int) ($_POST['rt_m'] ?? 0)) * 60 + max(0, (int) ($_POST['rt_s'] ?? 0));
+    if ($new['timer_on'] && ($rs < 30 || $rs > 86400)) {
+        $errors[] = 'Round time must be between 30 seconds and 24 hours.';
+    } elseif ($rs >= 30 && $rs <= 86400) {
         $new['round_secs'] = $rs;
     }
     $rn = (int) ($_POST['rounds'] ?? 3);
@@ -144,9 +145,20 @@ page_start('Game', 'game', $admin);
   </div>
 
   <section class="card form-inline">
-    <label class="field"><span>Round length (seconds)</span>
-      <input name="round_secs" type="number" min="30" max="1800" required value="<?= (int) $cfg['round_secs'] ?>">
-    </label>
+    <?php $rs = (int) $cfg['round_secs']; ?>
+    <label class="check"><input type="checkbox" name="timer_on" value="1" id="timer_on" <?= $cfg['timer_on'] ? 'checked' : '' ?>> Round timer on</label>
+    <fieldset class="field timefield" id="timefield">
+      <span>Round time</span>
+      <div class="hms">
+        <label><input name="rt_h" type="number" min="0" max="24" value="<?= intdiv($rs, 3600) ?>"><small>hours</small></label>
+        <label><input name="rt_m" type="number" min="0" max="59" value="<?= intdiv($rs % 3600, 60) ?>"><small>minutes</small></label>
+        <label><input name="rt_s" type="number" min="0" max="59" value="<?= $rs % 60 ?>"><small>seconds</small></label>
+      </div>
+      <small class="muted">Timer off = no clock and no rounds: goals just keep counting.</small>
+    </fieldset>
+    <script>(function () { var c = document.getElementById('timer_on'), f = document.getElementById('timefield');
+      var u = function () { f.style.opacity = c.checked ? 1 : .45; f.querySelectorAll('input').forEach(function (i) { i.disabled = !c.checked; }); };
+      c.addEventListener('change', u); u(); })();</script>
     <label class="field"><span>Match</span>
       <select name="rounds">
         <?php foreach ([1 => 'Just 1 round', 3 => 'Best of 3 rounds', 5 => 'Best of 5 rounds'] as $k => $l): ?>

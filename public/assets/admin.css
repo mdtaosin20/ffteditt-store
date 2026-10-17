@@ -481,3 +481,9 @@ input[type=file] { color: var(--soft); font-family: inherit; font-size: 14px; ma
 .logo.big { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--ink); font-size: 26px; }
 .logo.big span { white-space: nowrap; } .logo.big b { color: var(--blue-t); }
 .login-ic { width: 40px; height: 40px; fill: var(--blue); stroke: #fff; stroke-width: 1.6; }
+
+.timefield { border: 0; padding: 0; margin: 0; min-width: 0; }
+.hms { display: flex; gap: 8px; }
+.hms label { display: flex; flex-direction: column; gap: 3px; flex: 1 1 0; min-width: 0; }
+.hms input { min-width: 0; }
+.hms small { color: var(--muted); font-size: 12px; }

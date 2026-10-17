@@ -597,6 +597,7 @@ async function main() {
   const report = reporter('ball');
   const P = cfg.players;
   BALL_STYLE = cfg.ball_style === 'face' ? 'face' : 'football';
+  const TIMER_ON = cfg.timer_on !== false;
   const ROUND_SECS = Math.max(20, Number(cfg.round_secs) || 120);
   const ROUNDS = [1, 3, 5].includes(Number(cfg.rounds)) ? Number(cfg.rounds) : 3;
   const NEED = Math.ceil(ROUNDS / 2); // rounds needed to win the match
@@ -665,16 +666,22 @@ async function main() {
     }
     if (c.rev !== cfg.rev) location.reload();
   }, 20000);
-  const fmt = (t) => { t = Math.max(0, Math.ceil(t)); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+  const fmt = (t) => {
+    t = Math.max(0, Math.ceil(t));
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), x = t % 60, p2 = (n) => String(n).padStart(2, '0');
+    return h ? `${h}:${p2(m)}:${p2(x)}` : `${p2(m)}:${p2(x)}`;
+  };
   const showClock = () => {
     const el = $('mid-t');
+    if (!TIMER_ON) { $('mid-k').textContent = 'MATCH'; el.textContent = 'LIVE'; el.className = 'mid-t'; $('mid-r').textContent = 'NO TIME LIMIT'; return; }
     if (golden) { $('mid-k').textContent = 'DRAW!'; el.textContent = 'GOLDEN GOAL'; el.className = 'mid-t golden'; }
-    else { $('mid-k').textContent = 'TIME LEFT'; el.textContent = fmt(timeLeft); el.className = 'mid-t' + (timeLeft <= 10 ? ' hurry' : ''); }
+    else { $('mid-k').textContent = 'TIME LEFT'; el.textContent = fmt(timeLeft); el.className = 'mid-t' + (timeLeft <= 10 ? ' hurry' : '') + (timeLeft >= 3600 ? ' long' : ''); }
     $('mid-r').textContent = `ROUND ${roundNo}/${ROUNDS}`;
   };
   const showScore = (bump) => {
     showClock();
     $('match-score').textContent = `${won[0]} – ${won[1]}`;
+    $('target').hidden = !TIMER_ON;
     $('target').lastElementChild.previousSibling.textContent = ` · BEST OF ${ROUNDS} `;
     $('p1-score').textContent = score[0]; $('p2-score').textContent = score[1];
     $('p1-crown').classList.toggle('on', score[0] > score[1]);
@@ -1076,7 +1083,7 @@ async function main() {
       balls.forEach((b) => b.step(dt));
       if (phaseT > 2.0) {
         balls.forEach((b) => b.hide());
-        if (timeLeft <= 0 || golden) endRound(); else newRound();
+        if (TIMER_ON && (timeLeft <= 0 || golden)) endRound(); else newRound();
       }
     } else if (phase === 'roundend' && phaseT > 4.5) {
       if (won[0] >= NEED || won[1] >= NEED) { showWinner(won[0] >= NEED ? 0 : 1); phase = 'winner'; phaseT = 0; }
@@ -1087,7 +1094,7 @@ async function main() {
       voice.say('new_game', { urgent: true });
     }
     // the round clock runs while balls are dropping
-    if (!golden && timeLeft > 0 && (phase === 'play' || phase === 'after' || phase === 'start')) {
+    if (TIMER_ON && !golden && timeLeft > 0 && (phase === 'play' || phase === 'after' || phase === 'start')) {
       const was = timeLeft;
       timeLeft = Math.max(0, timeLeft - dt);
       if (was > 10 && timeLeft <= 10) voice.say('close', { urgent: true });
