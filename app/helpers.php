@@ -178,7 +178,7 @@ function page_end(string $script = ''): void
     ?>
 </main>
 <script src="/assets/admin.js?v=3"></script>
-<?php if ($script && $script !== 'admin.js'): ?><script src="/assets/<?= e($script) ?>?v=3"></script><?php endif; ?>
+<?php if ($script && $script !== 'admin.js'): ?><script src="/assets/<?= e($script) ?>?v=<?= (int) @filemtime(rtrim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), '/') . '/assets/' . basename($script)) ?>"></script><?php endif; ?>
 </body>
 </html>
 <?php
