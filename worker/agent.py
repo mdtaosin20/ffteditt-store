@@ -28,7 +28,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
@@ -348,8 +348,9 @@ class Stream:
                     "--disable-infobars", "--disable-dev-shm-usage", "--disable-features=Translate",
                     "--disable-session-crashed-bubble", "--hide-scrollbars",
                     "--autoplay-policy=no-user-gesture-required", "--force-device-scale-factor=1",
-                    # 3D (WebGL) without a graphics card: draw with the CPU
-                    "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist",
+                    # No graphics card on a VPS: plain software drawing is many times faster than
+                    # emulating a GPU (SwiftShader). The games switch to their light 2D drawing.
+                    "--disable-gpu", "--disable-gpu-compositing",
                     "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
                     "--disable-backgrounding-occluded-windows",
                     "--user-data-dir=" + profile, "--window-position=0,0", "--window-size=%d,%d" % (w, h),

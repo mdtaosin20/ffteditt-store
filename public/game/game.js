@@ -611,7 +611,21 @@ async function main() {
   const imgs = await Promise.all(P.map((p) => loadImage(p.ball || p.face || p.photo)));
   let balls = [];
   let gfx = null;
-  const force2D = new URLSearchParams(location.search).get('mode') === '2d';
+  // Servers without a graphics card (like the streaming VPS) draw 3D with the CPU, which is far too slow:
+  // use the light 2D drawing there. ?mode=3d forces 3D, ?mode=2d forces 2D.
+  const modeParam = new URLSearchParams(location.search).get('mode');
+  const softwareGL = () => {
+    try {
+      const gl = document.createElement('canvas').getContext('webgl');
+      if (!gl) return true;
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      return /swiftshader|llvmpipe|software|softpipe/i.test(name);
+    } catch (e) { return true; }
+  };
+  const lowPower = modeParam !== '3d' && (modeParam === '2d' || softwareGL());
+  const force2D = lowPower;
   if (!force2D) {
     try { gfx = make3D(); } catch (e) { console.warn('3D not available, using 2D drawing:', e && e.message); gfx = null; }
   }
@@ -882,6 +896,7 @@ async function main() {
   const clock = new THREE.Clock();
   let acc = 0;
   const FIXED = 1 / 120;
+  let drawDt = 0, lastDraw = 0;
   function frame() {
     const dt = Math.min(0.1, clock.getDelta()) * pace;
     phaseT += dt; gameT += dt;
@@ -915,8 +930,14 @@ async function main() {
     if (phase === 'play' && voice.idle && gameT > nextCall) { voice.say('call'); nextCall = gameT + 30 + Math.random() * 25; }
     if (phase === 'play' && voice.idle && gameT > nextSub) { voice.say('sub'); nextSub = gameT + 240 + Math.random() * 120; }
     sfx.setRoll(balls.reduce((s, b) => s + (b.state === 'rolling' ? b.vel.length() : 0), 0));
-    gfx.draw(dt);
-    tubes.draw(gameT);
+    // on a server, ~30 drawings a second are plenty (the stream sends 20-30) and leave CPU for the video encoder
+    drawDt += dt;
+    const nowMs = performance.now();
+    if (!lowPower || nowMs - lastDraw >= 32) {
+      lastDraw = nowMs;
+      gfx.draw(drawDt); drawDt = 0;
+      tubes.draw(gameT);
+    }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
