@@ -83,8 +83,8 @@ h1 {
 .mid-t.hurry { color: #ff6b6b; text-shadow: 0 0 18px rgba(255, 80, 80, .9); }
 .mid-t.golden { font-size: 50px; color: var(--gold); text-shadow: 0 0 18px rgba(255, 210, 26, .9); }
 .mid-r { font-family: var(--ui); font-weight: 700; font-size: 26px; letter-spacing: 2px; color: #8fb4ff; margin-top: 4px; }
-.card-top { display: flex; align-items: center; gap: 12px; height: 112px; padding: 14px 28px 0 30px; }
-.avatar { width: 92px; height: 92px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.card-top { display: flex; align-items: center; gap: 12px; height: 116px; padding: 12px 26px 0 26px; }
+.avatar { width: 104px; height: 104px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
 .c1 .avatar { border: 5px solid var(--pink); box-shadow: 0 0 16px var(--pink); }
 .c2 .avatar { border: 5px solid var(--gold); box-shadow: 0 0 16px var(--gold); }
 .cflag { width: 56px; height: 42px; flex: 0 0 auto; border-radius: 4px; background-image: url("/flags/flags.png"); background-repeat: no-repeat; box-shadow: 0 0 0 2px rgba(255, 255, 255, .35); }

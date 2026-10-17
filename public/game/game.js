@@ -815,12 +815,29 @@ async function main() {
       const bc = document.createElement('canvas'); bc.width = W; bc.height = H;
       const c = bc.getContext('2d');
       const S = H / 860; // pixels per stage pixel
-      // base band (front side)
+      // coloured light on the floor under the bowl (pink left, gold right)
+      const [fx, fy] = proj(0, -1.75, 0.6);
+      [[P[0].color, -1], [P[1].color, 1]].forEach(([hex, side]) => {
+        const gx = fx + side * 230 * S;
+        c.save(); c.translate(gx, fy); c.scale(1, 0.28);
+        const fg = c.createRadialGradient(0, 0, 0, 0, 0, 480 * S);
+        fg.addColorStop(0, col(hex, 0.4)); fg.addColorStop(1, col(hex, 0));
+        c.fillStyle = fg; c.fillRect(-480 * S, -480 * S, 960 * S, 960 * S);
+        c.restore();
+      });
+      // base band (front side): dark glossy with a light stripe near the top
       const topF = ring(5.4, 0.0, 0, Math.PI, 90), botF = ring(5.25, -1.7, Math.PI, 0, 90);
-      const g = c.createLinearGradient(0, proj(0, 0, 5.4)[1], 0, proj(0, -1.7, 5.25)[1]);
-      g.addColorStop(0, '#221c30'); g.addColorStop(1, '#09070f');
+      const y0 = proj(0, 0, 5.4)[1], y1 = proj(0, -1.7, 5.25)[1];
+      const g = c.createLinearGradient(0, y0, 0, y1);
+      g.addColorStop(0, '#3a2c52'); g.addColorStop(0.12, '#1d1530'); g.addColorStop(0.55, '#130e20'); g.addColorStop(1, '#07050c');
       c.fillStyle = g; pathOf(c, topF.concat(botF)); c.fill();
+      c.save(); pathOf(c, topF.concat(botF)); c.clip();
+      const gl = c.createLinearGradient(0, y0, 0, y0 + (y1 - y0) * 0.35);
+      gl.addColorStop(0, 'rgba(255,255,255,.18)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = gl; c.fillRect(0, y0 - 40 * S, W, (y1 - y0) * 0.45);
+      c.restore();
       neonHalves(c, 5.27, -1.7, 7 * S);
+      neonHalves(c, 5.41, -0.06, 4 * S);
       // team panels and football on the band
       const panel = (ang, hex, text) => {
         const [x, y] = proj(5.35 * Math.cos(ang), -0.85, 5.35 * Math.sin(ang));
@@ -855,37 +872,60 @@ async function main() {
       c.fillStyle = '#0c0a14'; c.strokeStyle = '#8fa8ff'; c.lineWidth = 4 * S;
       c.beginPath(); c.ellipse(ex, ey, 46 * S, 36 * S, 0, 0, Math.PI * 2); c.fill(); c.stroke();
       drawFootball(c, ex, ey, 26 * S);
-      // outer lip
-      c.fillStyle = '#d9d7e2'; pathOf(c, ring(5.42, 0.2)); c.fill();
-      // funnel: rings from the rim down to the hole, getting darker with depth
-      const N = 48;
+      // outer lip: a thick, glossy white edge
+      const lipOut = ring(5.42, 0.2), lipY = lipOut.map((q) => q[1]);
+      const lg0 = c.createLinearGradient(0, Math.min(...lipY), 0, Math.max(...lipY));
+      lg0.addColorStop(0, '#f4f2fa'); lg0.addColorStop(0.5, '#ffffff'); lg0.addColorStop(1, '#c9c6d6');
+      c.fillStyle = lg0; pathOf(c, lipOut); c.fill();
+      // funnel: pearl white, pink reflections on the left and gold on the right, darker towards the hole
+      const N = 60;
+      const tintL = [255, 214, 236], tintR = [255, 238, 196];
       for (let k = 0; k <= N; k++) {
-        const t = k / N, r = RIM_R + 0.6 * (1 - t) * 0 + (HOLE_R - RIM_R) * t + (k === 0 ? 0.6 : 0);
+        const t = k / N, r = RIM_R + (HOLE_R - RIM_R) * t + (k === 0 ? 0.5 : 0);
         const y = surfaceY(Math.min(RIM_R, r));
         const pts = ring(r, y);
         const xs = pts.map((q) => q[0]);
         const lg = c.createLinearGradient(Math.min(...xs), 0, Math.max(...xs), 0);
-        const shade = 0.96 - 0.32 * Math.pow(t, 1.4);
-        const base = Math.round(255 * shade);
-        lg.addColorStop(0, `rgb(${base},${Math.round(base * 0.9)},${Math.round(base * 0.95)})`);
-        lg.addColorStop(0.5, `rgb(${base},${base},${Math.min(255, base + 6)})`);
-        lg.addColorStop(1, `rgb(${base},${Math.round(base * 0.97)},${Math.round(base * 0.85)})`);
+        const sh = 1 - 0.38 * Math.pow(t, 1.6);
+        const mix = (a, b, m) => Math.round((a * m + b * (1 - m)) * sh);
+        const tw = 0.55 * (1 - t * 0.6);
+        lg.addColorStop(0, `rgb(${mix(tintL[0], 250, tw)},${mix(tintL[1], 250, tw)},${mix(tintL[2], 252, tw)})`);
+        lg.addColorStop(0.35, `rgb(${Math.round(248 * sh)},${Math.round(247 * sh)},${Math.round(252 * sh)})`);
+        lg.addColorStop(0.65, `rgb(${Math.round(250 * sh)},${Math.round(249 * sh)},${Math.round(250 * sh)})`);
+        lg.addColorStop(1, `rgb(${mix(tintR[0], 250, tw)},${mix(tintR[1], 250, tw)},${mix(tintR[2], 250, tw)})`);
         c.fillStyle = lg; pathOf(c, pts); c.fill();
+        if (k % 6 === 3 && k < N - 3) { // fine grooves give the surface some detail
+          c.lineWidth = 1.2 * S; c.strokeStyle = 'rgba(80,60,110,.08)'; pathOf(c, pts); c.stroke();
+        }
       }
-      // soft shine on the back wall
-      const [sx, sy] = proj(0, -0.4, -2.2);
-      const sg = c.createRadialGradient(sx, sy, 0, sx, sy, 260 * S);
-      sg.addColorStop(0, 'rgba(255,255,255,.55)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+      // big soft shine on the back wall + a glare line along the front
+      const [sx, sy] = proj(0, -0.3, -2.4);
+      const sg = c.createRadialGradient(sx, sy, 0, sx, sy, 330 * S);
+      sg.addColorStop(0, 'rgba(255,255,255,.75)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
       c.fillStyle = sg; pathOf(c, ring(RIM_R, surfaceY(RIM_R))); c.fill();
+      c.lineCap = 'round';
+      c.strokeStyle = 'rgba(255,255,255,.65)'; c.lineWidth = 5 * S;
+      pathOf(c, ring(RIM_R - 0.45, surfaceY(RIM_R - 0.45) + 0.02, Math.PI * 0.62, Math.PI * 0.88, 40), false); c.stroke();
+      c.strokeStyle = 'rgba(255,255,255,.4)'; c.lineWidth = 3 * S;
+      pathOf(c, ring(RIM_R - 0.9, surfaceY(RIM_R - 0.9) + 0.02, Math.PI * 0.18, Math.PI * 0.34, 30), false); c.stroke();
       // rim neon
       neonHalves(c, 5.36, 0.22, 6 * S);
-      // hole
+      // shadow around the hole, then the hole itself with a lit inner edge
       const hy = surfaceY(HOLE_R);
       const hole = ring(HOLE_R, hy);
       const [hx, hcy] = proj(0, hy, 0);
-      const hg = c.createRadialGradient(hx, hcy, 0, hx, hcy, 70 * S);
-      hg.addColorStop(0, '#000'); hg.addColorStop(0.8, '#120f1c'); hg.addColorStop(1, '#2b2540');
+      const around = ring(HOLE_R + 0.9, surfaceY(HOLE_R + 0.9));
+      const [, ay] = proj(0, hy, HOLE_R + 0.9);
+      const ag = c.createRadialGradient(hx, hcy, 0, hx, hcy, Math.max(30, ay - hcy) * 2.1);
+      ag.addColorStop(0.45, 'rgba(40,20,70,.16)'); ag.addColorStop(1, 'rgba(40,20,70,0)');
+      c.fillStyle = ag; pathOf(c, around); c.fill();
+      const hg = c.createRadialGradient(hx, hcy + 10 * S, 0, hx, hcy, 80 * S);
+      hg.addColorStop(0, '#000'); hg.addColorStop(0.7, '#0b0814'); hg.addColorStop(1, '#2a2340');
       c.fillStyle = hg; pathOf(c, hole); c.fill();
+      c.save(); pathOf(c, hole); c.clip();
+      c.strokeStyle = 'rgba(255,255,255,.18)'; c.lineWidth = 6 * S;
+      pathOf(c, ring(HOLE_R - 0.06, hy - 0.25, Math.PI * 1.05, Math.PI * 1.95, 40), false); c.stroke();
+      c.restore();
       neonHalves(c, HOLE_R + 0.12, hy + 0.04, 5 * S);
       $('bowl-img').src = bc.toDataURL('image/png');
       holePath = hole;
