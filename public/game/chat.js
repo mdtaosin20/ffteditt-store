@@ -11,6 +11,8 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const cleanName = (n) => String(n || '').replace(/^@+/, '').replace(/[-_.]+(?=[a-z0-9]*\d)[a-z0-9]{2,6}$/i, '').trim().slice(0, 18) || 'FRIEND';
 
+const GIRL_SVG = `<svg viewBox="0 0 200 220" aria-hidden="true"> <defs> <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2216"/><stop offset="1" stop-color="#1c0f0a"/></linearGradient> <linearGradient id="hairHi" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7a4a2e" stop-opacity=".9"/><stop offset="1" stop-color="#3a2216" stop-opacity="0"/></linearGradient> <radialGradient id="skin" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#ffe3cf"/><stop offset="1" stop-color="#f3c3a3"/></radialGradient> <linearGradient id="top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff4fa3"/><stop offset="1" stop-color="#c0267a"/></linearGradient> <radialGradient id="iris" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#8fd9ff"/><stop offset=".55" stop-color="#2f7fd6"/><stop offset="1" stop-color="#173f8a"/></radialGradient> </defs> <!-- back hair --> <path d="M38 92 C30 40 70 14 102 14 C138 14 172 40 164 96 C170 140 176 176 160 206 L42 206 C26 176 32 140 38 92 Z" fill="url(#hair)"/> <!-- shoulders / top --> <path d="M30 220 C34 186 60 172 100 172 C140 172 166 186 170 220 Z" fill="url(#top)"/> <path d="M78 174 C88 186 112 186 122 174 L118 170 L82 170 Z" fill="#ffd9c4"/> <!-- neck --> <path d="M86 140 L86 172 C94 180 106 180 114 172 L114 140 Z" fill="#f0bd9c"/> <!-- face --> <path d="M56 92 C56 58 76 40 100 40 C124 40 144 58 144 92 C144 124 126 150 100 154 C74 150 56 124 56 92 Z" fill="url(#skin)"/> <!-- ears + earrings --> <ellipse cx="56" cy="98" rx="7" ry="11" fill="#f3c3a3"/><ellipse cx="144" cy="98" rx="7" ry="11" fill="#f3c3a3"/> <circle cx="55" cy="114" r="3.5" fill="#ffd54a"/><circle cx="145" cy="114" r="3.5" fill="#ffd54a"/> <!-- blush --> <ellipse cx="76" cy="118" rx="11" ry="6" fill="#ff8fa8" opacity=".45"/><ellipse cx="124" cy="118" rx="11" ry="6" fill="#ff8fa8" opacity=".45"/> <!-- eyes --> <g class="gl-eyes"> <ellipse cx="80" cy="100" rx="10" ry="11.5" fill="#fff"/><ellipse cx="120" cy="100" rx="10" ry="11.5" fill="#fff"/> <circle cx="81" cy="102" r="8" fill="url(#iris)"/><circle cx="119" cy="102" r="8" fill="url(#iris)"/> <circle cx="81" cy="103" r="4" fill="#0b1a33"/><circle cx="119" cy="103" r="4" fill="#0b1a33"/> <circle cx="84" cy="98" r="2.6" fill="#fff"/><circle cx="122" cy="98" r="2.6" fill="#fff"/> <path d="M67 92 Q80 82 93 92" stroke="#1c0f0a" stroke-width="3.2" fill="none" stroke-linecap="round"/> <path d="M107 92 Q120 82 133 92" stroke="#1c0f0a" stroke-width="3.2" fill="none" stroke-linecap="round"/> <path d="M67 92 L62 88 M133 92 L138 88" stroke="#1c0f0a" stroke-width="2.4" stroke-linecap="round"/> </g> <!-- brows --> <path d="M69 84 Q80 78 91 83" stroke="#4a2c1c" stroke-width="2.4" fill="none" stroke-linecap="round"/> <path d="M109 83 Q120 78 131 84" stroke="#4a2c1c" stroke-width="2.4" fill="none" stroke-linecap="round"/> <!-- nose --> <path d="M100 108 Q98 116 101 119" stroke="#d99a7c" stroke-width="2" fill="none" stroke-linecap="round"/> <!-- mouth (smile; opens while talking) --> <path d="M86 126 Q100 144 114 126 Q100 130 86 126 Z" fill="#a8173f"/> <path d="M88 127 Q100 131 112 127 L111 130 Q100 133 89 130 Z" fill="#fff"/> <ellipse class="gl-mouth" cx="100" cy="131" rx="8" ry="4.5" fill="#7a0f2c"/><path d="M92 135 Q100 141 108 135 Q100 137 92 135 Z" fill="#ff7f9c"/> <!-- front hair / bangs --> <path d="M54 98 C46 50 76 30 102 30 C130 30 156 50 147 98 C144 86 140 76 134 70 C132 72 128 74 122 76 C122 70 118 64 112 60 C108 68 100 72 88 74 C92 70 92 64 90 60 C82 68 72 72 62 76 C58 84 56 92 54 98 Z" fill="url(#hair)"/> <path d="M74 44 C88 34 114 33 130 42" stroke="url(#hairHi)" stroke-width="6" fill="none" stroke-linecap="round"/> <!-- headset --> <path d="M48 98 C38 12 162 12 152 98" stroke="#e8eef8" stroke-width="7" fill="none" stroke-linecap="round"/> <rect x="42" y="86" width="14" height="26" rx="6" fill="#ff4fa3" stroke="#e8eef8" stroke-width="3"/> <rect x="144" y="86" width="14" height="26" rx="6" fill="#ff4fa3" stroke="#e8eef8" stroke-width="3"/> <path d="M48 110 C50 132 66 140 84 138" stroke="#e8eef8" stroke-width="3.5" fill="none" stroke-linecap="round"/> <circle cx="86" cy="138" r="4.5" fill="#2b2b33" stroke="#e8eef8" stroke-width="2"/> </svg> `;
+
 const ROBOT_SVG = `<svg viewBox="0 0 120 140" aria-hidden="true">
   <line x1="60" y1="6" x2="60" y2="26" stroke="#9ff5c8" stroke-width="5"/><circle cx="60" cy="8" r="7" fill="#46e39a" class="rb-led"/>
   <rect x="10" y="26" width="100" height="78" rx="26" fill="#dfe8f2" stroke="#46e39a" stroke-width="5"/>
@@ -92,13 +94,16 @@ export function liveChat(o) {
 
   box.append(el('div', 'lc-box-h', 'LIVE CHAT'));
   const rows = el('div', 'lc-rows'); box.append(rows);
-  const rbFace = el('div', 'lc-rb-face'); rbFace.innerHTML = ROBOT_SVG;
-  const rbName = el('div', 'lc-rb-name', 'ROBO HOST');
+  const rbFace = el('div', 'lc-rb-face'); rbFace.innerHTML = GIRL_SVG;
+  const rbName = el('div', 'lc-rb-name', 'LUNA');
+  const rbWho = el('span', '', 'LUNA'), rbBars = el('i', 'lc-bars'); rbBars.innerHTML = '<b></b><b></b><b></b><b></b><b></b>';
+  rbName.replaceChildren(rbWho, document.createTextNode(' · LIVE HOST '), rbBars);
+  let look = '';
   const rbText = el('div', 'lc-rb-text');
   const rbBody = el('div', 'lc-rb-body'); rbBody.append(rbName, rbText);
   robot.append(rbFace, rbBody);
 
-  let cfg = { enabled: true, robot: true, name: 'ROBO HOST', box: true, subs: true, idle: true };
+  let cfg = { enabled: true, robot: true, name: 'LUNA', look: 'girl', box: true, subs: true, idle: true };
   const seen = new Set();          // authors already welcomed (this session)
   const counts = new Map();        // fan key -> number of comments
   const lastSaid = new Map();      // author -> time of the last robot answer to them
@@ -188,7 +193,9 @@ export function liveChat(o) {
   };
   const stopAudio = () => { if (audio) { audio.onended = audio.onerror = null; audio.pause(); audio = null; o.duck && o.duck(false); } };
   const show = (line) => {
-    rbName.textContent = cfg.name || 'ROBO HOST';
+    const wantLook = cfg.look === 'robot' ? 'robot' : 'girl';
+    if (wantLook !== look) { look = wantLook; rbFace.innerHTML = look === 'robot' ? ROBOT_SVG : GIRL_SVG; robot.classList.toggle('girl', look === 'girl'); }
+    rbWho.textContent = cfg.name || 'LUNA';
     rbText.replaceChildren();
     let len = 0;
     for (const p of line.parts) {

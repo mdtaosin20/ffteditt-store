@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
 import { Sfx, Commentator, holdScreen, PACE, reporter } from './audio.js?v=12';
-import { liveChat } from './chat.js?v=2';
+import { liveChat } from './chat.js?v=3';
 
 /* ------------------------------------------------------------------ config */
 const DEFAULTS = {

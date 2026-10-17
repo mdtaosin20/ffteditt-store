@@ -27,11 +27,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'enabled'    => isset($_POST['enabled']),
             'robot'      => isset($_POST['robot']),
             'voice'      => isset($_POST['voice']),
-            'host_voice' => isset(robot_voices()[$_POST['host_voice'] ?? '']) ? $_POST['host_voice'] : 'lessac',
+            'host_voice' => isset(robot_voices()[$_POST['host_voice'] ?? '']) ? $_POST['host_voice'] : 'jenny',
+            'look'       => ($_POST['look'] ?? '') === 'robot' ? 'robot' : 'girl',
             'box'        => isset($_POST['box']),
             'subs'       => isset($_POST['subs']),
             'idle'       => isset($_POST['idle']),
-            'robot_name' => mb_substr($name !== '' ? $name : 'ROBO HOST', 0, 20),
+            'robot_name' => mb_substr($name !== '' ? $name : 'LUNA', 0, 20),
         ]);
         log_activity('Live chat & robot settings saved', 'ok');
         flash('Saved. The game pages pick it up within a few seconds.');
@@ -99,7 +100,10 @@ page_start('YouTube Manager', 'youtube', $admin);
       <label class="check"><input type="checkbox" name="box" <?= $chat['box'] ? 'checked' : '' ?>> Show the chat box</label>
       <label class="check"><input type="checkbox" name="subs" <?= $chat['subs'] ? 'checked' : '' ?>> New subscriber banner</label>
       <label class="check"><input type="checkbox" name="idle" <?= $chat['idle'] ? 'checked' : '' ?>> Robot asks for likes, subscribes &amp; comments</label>
-      <label class="field"><span>Robot name</span><input name="robot_name" maxlength="20" value="<?= e($chat['robot_name']) ?>"></label>
+      <label class="field"><span>Host name</span><input name="robot_name" maxlength="20" value="<?= e($chat['robot_name']) ?>"></label>
+      <label class="field"><span>Host look</span><select name="look">
+        <option value="girl" <?= $chat['look'] === 'girl' ? 'selected' : '' ?>>Girl host (LUNA)</option>
+        <option value="robot" <?= $chat['look'] === 'robot' ? 'selected' : '' ?>>Robot</option></select></label>
     </div>
     <div class="field"><span>Host voice — press ▶ Listen, choose one, then Save</span>
       <div class="vp-list">

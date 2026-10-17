@@ -70,6 +70,25 @@
 .lc-rb-name { font-weight: 700; font-size: 28px; letter-spacing: 4px; color: #46e39a; }
 .lc-rb-text { font-family: var(--display, "Oswald"), var(--lc-font); font-weight: 700; font-size: 44px; line-height: 1.12; color: #fff; text-transform: uppercase; overflow-wrap: anywhere; }
 .lc-rb-text.long { font-size: 36px; }
+.lc-bars { display: inline-flex; gap: 4px; align-items: flex-end; height: 22px; vertical-align: -2px; margin-left: 6px; }
+.lc-bars b { width: 5px; height: 6px; border-radius: 3px; background: currentColor; }
+.lc-robot.talk .lc-bars b { animation: lc-bar .5s ease-in-out infinite alternate; }
+.lc-robot.talk .lc-bars b:nth-child(2) { animation-delay: .15s; } .lc-robot.talk .lc-bars b:nth-child(3) { animation-delay: .3s; }
+.lc-robot.talk .lc-bars b:nth-child(4) { animation-delay: .08s; } .lc-robot.talk .lc-bars b:nth-child(5) { animation-delay: .22s; }
+@keyframes lc-bar { from { height: 6px; } to { height: 22px; } }
+
+/* the girl host "LUNA" (default look) */
+.lc-robot.girl { border-color: #ff5fb0; box-shadow: 0 0 46px rgba(255, 80, 170, .6); background: linear-gradient(90deg, #2a0620, #0c0618);
+  overflow: visible; min-height: 250px; padding-left: 300px; }
+.lc-robot.girl .lc-rb-face { position: absolute; left: 4px; bottom: -5px; width: 300px; }
+.lc-robot.girl .lc-rb-face svg { animation: lc-sway 4s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes lc-sway { 25% { transform: rotate(-1.2deg); } 75% { transform: rotate(1.2deg); } }
+.lc-robot.girl .lc-rb-name { color: #ff8fcb; }
+.lc-robot.girl .lc-rb-text em { color: #ffd166; }
+.gl-mouth { transform-box: fill-box; transform-origin: center; transform: scaleY(.15); }
+.lc-robot.talk .gl-mouth { animation: lc-gtalk .16s ease-in-out infinite alternate; }
+@keyframes lc-gtalk { from { transform: scaleY(.2); } to { transform: scaleY(1.25); } }
+.gl-eyes { transform-box: fill-box; transform-origin: center; animation: lc-blink 4.5s infinite; }
 .lc-rb-text em { font-style: normal; color: #ffc93a; }
 .lc-rb-text .flag { margin: 0 6px; vertical-align: -4px; }
 

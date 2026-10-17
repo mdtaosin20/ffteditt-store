@@ -12,8 +12,9 @@ function chat_defaults(): array
         'enabled' => true,          // read the live chat
         'robot'   => true,          // robot host answers on screen
         'voice'   => true,          // robot speaks out loud (replaces the old commentator voice)
-        'robot_name' => 'ROBO HOST',
-        'host_voice' => 'lessac',   // see robot_voices()
+        'robot_name' => 'LUNA',
+        'host_voice' => 'jenny',    // see robot_voices()
+        'look'       => 'girl',     // girl (LUNA) or robot
         'box'     => true,          // show the chat box
         'subs'    => true,          // new subscriber banner
         'idle'    => true,          // robot asks people to comment when the chat is quiet
@@ -26,6 +27,14 @@ function chat_cfg(): array
     if ($c === null) {
         $saved = json_decode((string) (setting_get('chat_cfg') ?? ''), true);
         $c = array_merge(chat_defaults(), is_array($saved) ? $saved : []);
+        // one time: switch to the girl host LUNA with the Jenny voice (chosen by the owner)
+        if (setting_get('mig_host_luna') === null) {
+            $c['host_voice'] = 'jenny';
+            $c['look'] = 'girl';
+            if (in_array(strtoupper((string) $c['robot_name']), ['ROBO HOST', 'ROBO TASIN', ''], true)) $c['robot_name'] = 'LUNA';
+            setting_set('chat_cfg', json_encode($c));
+            setting_set('mig_host_luna', '1');
+        }
     }
     return $c;
 }
@@ -104,7 +113,7 @@ function chat_feed(int $sid, int $after): array
 {
     $cfg = chat_cfg();
     $out = ['cfg' => [
-        'enabled' => $cfg['enabled'], 'robot' => $cfg['robot'], 'voice' => $cfg['robot'] && $cfg['voice'], 'name' => $cfg['robot_name'],
+        'enabled' => $cfg['enabled'], 'robot' => $cfg['robot'], 'voice' => $cfg['robot'] && $cfg['voice'], 'name' => $cfg['robot_name'], 'look' => $cfg['look'],
         'box' => $cfg['box'], 'subs' => $cfg['subs'], 'idle' => $cfg['idle'],
     ], 'events' => [], 'last' => $after];
     if (!$cfg['enabled']) return $out;
