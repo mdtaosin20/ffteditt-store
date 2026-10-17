@@ -1,7 +1,7 @@
 // FFTEdit · Ball Drop Game (3D). Runs by itself, made for 24/7 vertical live streams.
 import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
-import { Sfx, Commentator, holdScreen, PACE, reporter } from './audio.js?v=8';
+import { Sfx, Commentator, holdScreen, PACE, reporter } from './audio.js?v=9';
 
 /* ------------------------------------------------------------------ config */
 const DEFAULTS = {

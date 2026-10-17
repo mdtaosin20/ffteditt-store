@@ -15,9 +15,9 @@ export class Sfx {
     this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    // continuous layers: rolling balls + soft crowd
-    this.rollGain = this.loop(400, 0.8, 0, 'bandpass');
-    this.crowdGain = this.loop(700, 0.5, 0.035, 'bandpass', 0.25);
+    // continuous layer
+    // only a soft low rumble while balls roll (no always-on background hiss)
+    this.rollGain = this.loop(160, 0.7, 0, 'lowpass');
     this.last = {};
   }
   get running() { return this.ok && this.ctx.state === 'running'; }
@@ -68,8 +68,8 @@ export class Sfx {
     [523, 659, 784, 1047].forEach((f) => this.tone({ freq: f, type: 'triangle', dur: 1.6, vol: 0.16, delay: 0.7, attack: 0.03 }));
     for (let i = 0; i < 10; i++) this.burst({ freq: 600 + Math.random() * 1200, q: 0.7, dur: 3.2, vol: 0.2, delay: 0.1 * i });
   }
-  setRoll(speed) { if (this.ok) this.rollGain.gain.setTargetAtTime(Math.min(0.22, speed * 0.05), this.ctx.currentTime, 0.08); }
-  duck(on) { if (this.ok) this.crowdGain.gain.setTargetAtTime(on ? 0.012 : 0.035, this.ctx.currentTime, 0.3); }
+  setRoll(speed) { if (this.ok) this.rollGain.gain.setTargetAtTime(speed > 0.3 ? Math.min(0.12, speed * 0.03) : 0, this.ctx.currentTime, 0.08); }
+  duck(on) { if (this.ok) this.master.gain.setTargetAtTime(on ? 0.6 : 0.9, this.ctx.currentTime, 0.3); } // sound effects step back while the commentator talks
 }
 
 /* -------------------------------------------------------------- commentator */
