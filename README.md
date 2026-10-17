@@ -39,10 +39,19 @@ Admin → **Game** sets names, colours, shirt numbers, photos (stored privately,
 and can reset scores. Open games pick up changes within ~20 s. The bowl is rendered once and only the balls are drawn
 each frame, so it streams smoothly on CPU-only servers (the worker starts Chrome with SwiftShader WebGL).
 
+## Country Flag Battle
+
+`https://ffteditt.store/flags/` is the second game (files in `public/flags/`, light 2D canvas). 195 country flags bounce
+inside a turning ring with a gap; a flag that slips out is eliminated and the last flag left qualifies for the final.
+When the final is full (70 by default) the final round crowns the champion, then a new tournament starts. Progress is
+kept in the stream browser, so a restart continues the tournament. Admin → **Flag Battle** sets the title, final size,
+ring speed, flag speed and gap size, and can restart the tournament. To stream it, pick **Country Flag Battle** under
+*Page to stream* when editing a stream. Flags come from flag-icons (MIT, see `public/flags/FLAG-ICONS-LICENSE.txt`).
+
 ## Tubes, sounds and commentator
 
 Two glass tubes hold the balls; each round one ball rolls out of each tube into the bowl. Sound effects are made in
-code (Web Audio). An English commentator (Admin → **Voice**) reads lines like "Who wins this round? Comment now!":
+code (Web Audio). An English commentator (Admin → **Voice**, lines for both games; shared code in `public/game/audio.js`) reads lines like "Who wins this round? Comment now!":
 the VPS worker makes the voices automatically with Piper (free offline AI voice, installed on first use) and uploads
 them; any line can be replaced with your own MP3. Captions show on screen. Each stream gets its own PulseAudio sink,
 so the game sound goes into the YouTube stream.

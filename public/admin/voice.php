@@ -58,6 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // live games reload within ~20 s
     $game['rev'] = bin2hex(random_bytes(4));
     game_save($game);
+    $fl = flags_config();
+    $fl['rev'] = bin2hex(random_bytes(4));
+    flags_save($fl);
     log_activity('Commentator voice settings saved');
     if (!$errors) {
         flash('Saved. Changed lines get a new automatic voice in a few minutes; live games update within about 20 seconds.');
@@ -77,7 +80,7 @@ page_start('Voice', 'voice', $admin);
 <div class="page-head">
   <div>
     <h1>Commentator voice</h1>
-    <p class="muted">An English commentator talks during the game and asks viewers to comment. Each line gets an automatic voice made on your VPS. You can upload your own recording for any line (for example from an AI voice website) to replace it.</p>
+    <p class="muted">An English commentator talks during the games and asks viewers to comment. Each line gets an automatic voice made on your VPS. You can upload your own recording for any line (for example from an AI voice website) to replace it.</p>
   </div>
 </div>
 
@@ -108,10 +111,14 @@ page_start('Voice', 'voice', $admin);
     <button class="btn btn-pink" type="submit">Save</button>
   </section>
 
-  <p class="muted small">In the text you can write <code>{P1}</code> and <code>{P2}</code> for the player names (from the Game page) and <code>{L1}</code> <code>{L2}</code> for their first letters. Leave a box empty to go back to the original line.</p>
+  <p class="muted small">In the text you can write <code>{P1}</code> and <code>{P2}</code> for the player names (from the Game page) and <code>{L1}</code> <code>{L2}</code> for their first letters. In Flag Battle lines, <code>{Q}</code> is the number of countries in the final. Leave a box empty to go back to the original line.</p>
 
   <div class="voice-list">
-  <?php foreach ($texts as $id => $l):
+  <?php $group = ''; foreach ($texts as $id => $l):
+      $g = voice_is_flag($id) ? 'Country Flag Battle' : 'Ball Drop game';
+      if ($g !== $group): $group = $g; ?>
+    <h2 class="voice-group"><?= e($g) ?></h2>
+  <?php endif;
       $up   = (string) ($state['upload'][$id] ?? '');
       $auto = $state['auto'][$id] ?? null;
       $autoOk = $auto && ($auto['hash'] ?? '') === voice_hash($l['text']);

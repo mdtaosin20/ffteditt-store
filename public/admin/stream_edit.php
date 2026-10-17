@@ -132,8 +132,14 @@ page_start($stream ? 'Edit stream' : 'Add stream', 'streams', $admin);
   </label>
 
   <label class="field"><span>Page to stream</span>
-    <input name="page_url" type="url" required value="<?= e($v['page_url']) ?>">
-    <small class="muted">The game page the server opens and sends to YouTube.</small>
+    <input name="page_url" id="page_url" type="url" required value="<?= e($v['page_url']) ?>">
+    <span class="pick-row">
+      <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/">Ball Drop</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/?mode=2d">Ball Drop (2D, light)</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/flags/">Country Flag Battle</button>
+    </span>
+    <small class="muted">The game page the server opens and sends to YouTube. Tap a game to fill it in.</small>
+    <script>document.querySelectorAll('[data-page]').forEach(function (b) { b.addEventListener('click', function () { document.getElementById('page_url').value = b.dataset.page; }); });</script>
   </label>
 
   <div class="row2">

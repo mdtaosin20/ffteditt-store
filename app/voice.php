@@ -1,7 +1,8 @@
 <?php
 /**
  * Commentator voice lines.
- * Text can use {P1} {P2} (player names) and {L1} {L2} (first letters).
+ * Text can use {P1} {P2} (player names), {L1} {L2} (first letters) and {Q} (flag battle final spots).
+ * Ids starting with "flag_" belong to the Country Flag Battle game, the rest to Ball Drop.
  * Each line gets an "auto" voice made on the VPS; an uploaded recording replaces it.
  */
 declare(strict_types=1);
@@ -39,6 +40,27 @@ function voice_default_lines(): array
         'win_p1_1'   => ['Player 1 wins', "It's over! {P1} wins the game! {P1} fans, celebrate in the chat!"],
         'win_p2_1'   => ['Player 2 wins', "It's over! {P2} wins the game! {P2} fans, let's hear you!"],
         'new_game_1' => ['New game', "Brand new game starting now! Scores back to zero. Pick your side in the comments!"],
+
+        'flag_intro_1'  => ['Welcome', "Welcome to the Country Flag Battle! One hundred and ninety five countries, only one champion! Comment your country now!"],
+        'flag_intro_2'  => ['Welcome', "Welcome back to the Country Flag Battle! Which country becomes the champion today? Tell us in the comments!"],
+        'flag_call_1'   => ['Ask for comments', "Which flag wins this round? Comment your country!"],
+        'flag_call_2'   => ['Ask for comments', "Where are you watching from? Drop your country in the chat!"],
+        'flag_call_3'   => ['Ask for comments', "Is your country still in the battle? Tell us in the comments!"],
+        'flag_call_4'   => ['Ask for comments', "Type your country in the chat and cheer for your flag!"],
+        'flag_sub_1'    => ['Subscribe', "Like and subscribe to see if your country becomes the champion!"],
+        'flag_sub_2'    => ['Subscribe', "New here? Subscribe and turn on notifications. The flag battle never stops!"],
+        'flag_start_1'  => ['New round', "New round! All flags are in. The last flag standing goes to the final!"],
+        'flag_start_2'  => ['New round', "Here we go, next round! Only one flag can survive!"],
+        'flag_out_1'    => ['Flag knocked out', "And another one is out!"],
+        'flag_out_2'    => ['Flag knocked out', "Gone! Straight through the gap!"],
+        'flag_out_3'    => ['Flag knocked out', "Eliminated! Bye bye!"],
+        'flag_five_1'   => ['Five flags left', "Only five flags left! This is getting tense!"],
+        'flag_two_1'    => ['Last two flags', "Final two! Who survives? Comment now!"],
+        'flag_win_1'    => ['Round winner', "We have a round winner! Straight into the final!"],
+        'flag_win_2'    => ['Round winner', "What a survivor! That flag qualifies for the final!"],
+        'flag_final_1'  => ['Grand final', "It's the grand final! {Q} flags, only one champion! Comment your favourite now!"],
+        'flag_champ_1'  => ['Champion', "We have a champion! Congratulations! Comment if that is your country!"],
+        'flag_newcup_1' => ['New tournament', "A brand new tournament starts now! Every country is back in the battle!"],
     ];
 }
 
@@ -72,7 +94,8 @@ function voice_texts(array $state, array $game): array
 {
     $p1 = voice_name($game['players'][0]['name']);
     $p2 = voice_name($game['players'][1]['name']);
-    $rep = ['{P1}' => $p1, '{P2}' => $p2, '{L1}' => substr($p1, 0, 1), '{L2}' => substr($p2, 0, 1)];
+    $rep = ['{P1}' => $p1, '{P2}' => $p2, '{L1}' => substr($p1, 0, 1), '{L2}' => substr($p2, 0, 1),
+            '{Q}' => (string) flags_config()['target']];
     $out = [];
     foreach (voice_default_lines() as $id => [$label, $text]) {
         $raw = trim((string) ($state['texts'][$id] ?? '')) ?: $text;
@@ -105,12 +128,20 @@ function voice_missing(array $state, array $game): array
     return $todo;
 }
 
-/** Public data for the game: text + audio link of each line. */
-function voice_public(array $game): array
+function voice_is_flag(string $id): bool
+{
+    return strncmp($id, 'flag_', 5) === 0;
+}
+
+/** Public data for one game ('ball' or 'flags'): text + audio link of each line. */
+function voice_public(array $game, string $which = 'ball'): array
 {
     $s = voice_state();
     $lines = [];
     foreach (voice_texts($s, $game) as $id => $l) {
+        if (voice_is_flag($id) !== ($which === 'flags')) {
+            continue;
+        }
         $file = (string) ($s['upload'][$id] ?? '');
         if ($file === '') {
             $a = $s['auto'][$id] ?? null;
