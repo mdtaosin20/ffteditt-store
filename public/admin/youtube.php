@@ -26,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         chat_save([
             'enabled'    => isset($_POST['enabled']),
             'robot'      => isset($_POST['robot']),
+            'voice'      => isset($_POST['voice']),
             'box'        => isset($_POST['box']),
             'subs'       => isset($_POST['subs']),
             'idle'       => isset($_POST['idle']),
@@ -93,9 +94,10 @@ page_start('YouTube Manager', 'youtube', $admin);
     <div class="row2">
       <label class="check"><input type="checkbox" name="enabled" <?= $chat['enabled'] ? 'checked' : '' ?>> Read the live chat</label>
       <label class="check"><input type="checkbox" name="robot" <?= $chat['robot'] ? 'checked' : '' ?>> Robot host talks on screen</label>
+ <label class="check"><input type="checkbox" name="voice" <?= $chat['voice'] ? 'checked' : '' ?>> Robot speaks out loud (replaces the old commentator voice)</label>
       <label class="check"><input type="checkbox" name="box" <?= $chat['box'] ? 'checked' : '' ?>> Show the chat box</label>
       <label class="check"><input type="checkbox" name="subs" <?= $chat['subs'] ? 'checked' : '' ?>> New subscriber banner</label>
-      <label class="check"><input type="checkbox" name="idle" <?= $chat['idle'] ? 'checked' : '' ?>> Robot asks for comments when chat is quiet</label>
+      <label class="check"><input type="checkbox" name="idle" <?= $chat['idle'] ? 'checked' : '' ?>> Robot asks for likes, subscribes &amp; comments</label>
       <label class="field"><span>Robot name</span><input name="robot_name" maxlength="20" value="<?= e($chat['robot_name']) ?>"></label>
     </div>
     <div class="form-actions"><button class="btn btn-blue" type="submit">Save</button>

@@ -11,6 +11,7 @@ function chat_defaults(): array
     return [
         'enabled' => true,          // read the live chat
         'robot'   => true,          // robot host answers on screen
+        'voice'   => true,          // robot speaks out loud (replaces the old commentator voice)
         'robot_name' => 'ROBO HOST',
         'box'     => true,          // show the chat box
         'subs'    => true,          // new subscriber banner
@@ -102,7 +103,7 @@ function chat_feed(int $sid, int $after): array
 {
     $cfg = chat_cfg();
     $out = ['cfg' => [
-        'enabled' => $cfg['enabled'], 'robot' => $cfg['robot'], 'name' => $cfg['robot_name'],
+        'enabled' => $cfg['enabled'], 'robot' => $cfg['robot'], 'voice' => $cfg['robot'] && $cfg['voice'], 'name' => $cfg['robot_name'],
         'box' => $cfg['box'], 'subs' => $cfg['subs'], 'idle' => $cfg['idle'],
     ], 'events' => [], 'last' => $after];
     if (!$cfg['enabled']) return $out;

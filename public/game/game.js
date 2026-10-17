@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
 import { Sfx, Commentator, holdScreen, PACE, reporter } from './audio.js?v=12';
-import { liveChat } from './chat.js?v=1';
+import { liveChat } from './chat.js?v=2';
 
 /* ------------------------------------------------------------------ config */
 const DEFAULTS = {
@@ -1032,9 +1032,10 @@ async function main() {
     match: teamOf,
     badge: avatar,
     fansLabel: 'TEAM FANS:', fanLabel: (k) => P[k].name, fansMax: 2,
-    busy: () => !$('winner').hidden,
     sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
     onFan: cheer,
+    hints: [`TYPE ${pickHint}!`, 'DROP A LIKE IF YOU ARE ENJOYING THE MATCH!', 'WHO WINS THIS ROUND? TELL ME IN CHAT!'],
+    duck: (on) => sfx.duck(on),
     emptyHint: `Type ${pickHint.toLowerCase().replace(/ for /g, ' for ')} to cheer!`,
     idleLines: [
       [`WHO WINS THIS ROUND? TYPE ${pickHint} IN CHAT!`],
@@ -1051,7 +1052,7 @@ async function main() {
       if (k !== null) return [{ name }, ` IS BACKING ${P[k].name}! ${standing()}`];
       if (/who.*(win|lead)|score|kon|কে জিতবে/i.test(text)) return ['RIGHT NOW, ', { name }, ': ' + standing()];
       if (isGreeting(text)) return [isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'HELLO AGAIN ', { name }, `! TYPE ${pickHint}!`];
-      return Math.random() < 0.25 ? ['THANKS FOR CHATTING, ', { name }, `! ${standing()}`] : null;
+      return null;
     },
     demoTexts: ['M', 'R', 'Messi 🐐', 'Ronaldo siuuu', 'hello', 'who will win?', 'CR7', 'assalamu alaikum', 'Leo forever', 'মেসি', 'nice game', 'r'],
   });
@@ -1077,10 +1078,17 @@ async function main() {
     if (golden) return; // the round-winner line follows
     voice.say('goal_p' + (w + 1), { chance: 0.8 });
     const after = leader();
+    if (after === w && before !== w) robotEvent([`${P[w].name} TAKES THE LEAD! ${score[w]}–${score[1 - w]}! ${P[1 - w].name} FANS, CHEER LOUDER IN CHAT!`], 1);
+    else robotEvent([`GOAL FOR ${P[w].name}! ${standing()}`], 1, 0.3);
     if (after === -1) voice.say('tie', { chance: 0.7 });
     else if (after === w && before !== w) voice.say('lead_p' + (w + 1));
   };
   setTimeout(() => voice.say('intro'), 2500);
+  // the robot host replaces the old commentator voice (when its voice is on)
+  const commentatorSay = voice.say.bind(voice);
+  voice.say = (...a) => (chat.active && chat.voiceOn() ? undefined : commentatorSay(...a));
+  const robotEvent = (parts, prio = 2, chance = 1) => { if (chat.active && chat.voiceOn() && Math.random() < chance) chat.say(parts, prio); };
+  setTimeout(() => robotEvent([`WELCOME TO THE BALL DROP BATTLE! ${P[0].name} AGAINST ${P[1].name}. PICK YOUR SIDE: TYPE ${pickHint}!`], 1), 4000);
   const popup = (i, what = 'SCORES!', sub = '+1 GOAL') => {
     const p = $('popup'); $('popup-name').textContent = P[i].name; $('popup-what').textContent = what; $('popup-sub').textContent = sub;
     p.firstElementChild.classList.toggle('long', what.length > 9);
@@ -1094,11 +1102,12 @@ async function main() {
     $('winner-score').textContent = `${won[i]} – ${won[1 - i]} IN ROUNDS`;
     sfx.win();
     voice.say('win_p' + (i + 1), { urgent: true });
+    robotEvent([`${P[i].name} WINS THE MATCH ${won[i]}–${won[1 - i]}! CONGRATULATIONS TO ALL ${P[i].name} FANS! A NEW MATCH STARTS SOON!`], 3);
   };
 
   const endRound = () => {
     if (score[0] === score[1]) { // draw: next goal wins the round
-      if (!golden) { golden = true; saveScore(); showScore(); voice.say('golden', { urgent: true }); }
+      if (!golden) { golden = true; saveScore(); showScore(); voice.say('golden', { urgent: true }); robotEvent(["IT'S A DRAW! GOLDEN GOAL — THE NEXT GOAL WINS THE ROUND!"], 3); }
       newRound(); return;
     }
     const w = score[0] > score[1] ? 0 : 1;
@@ -1107,7 +1116,7 @@ async function main() {
     report({ score, rounds: won, round: roundNo, names: names(), ...(matchOver ? { winner: w, final: won } : {}) });
     popup(w, `WINS ROUND ${roundNo}!`, `${score[w]} – ${score[1 - w]}`);
     sfx.win();
-    if (!matchOver) voice.say('round_p' + (w + 1), { urgent: true });
+    if (!matchOver) { voice.say('round_p' + (w + 1), { urgent: true }); robotEvent([`${P[w].name} WINS ROUND ${roundNo}, ${score[w]}–${score[1 - w]}!`], 2); }
     phase = 'roundend'; phaseT = 0;
   };
   const clock = new THREE.Clock();

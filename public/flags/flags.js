@@ -2,7 +2,7 @@
 // 195 flags bounce inside a turning ring with a gap. A flag that slips out is eliminated;
 // the last flag left qualifies for the final. When the final is full, the final round finds the champion.
 import { Sfx, Commentator, holdScreen, PACE, reporter } from '/game/audio.js?v=12';
-import { liveChat, countryMatcher } from '/game/chat.js?v=1';
+import { liveChat, countryMatcher } from '/game/chat.js?v=2';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -221,7 +221,7 @@ async function main() {
     else banner(`ROUND ${st.qualified.length + 1}`, `QUALIFYING · ${entrants} FLAGS`);
     sfx.spawn();
     report({ round: st.qualified.length + 1, final: isFinal, qualified: Math.min(st.qualified.length, cfg.target) });
-    if (isFinal) voice.say('flag_final', { urgent: true });
+    if (isFinal) { voice.say('flag_final', { urgent: true }); robotEvent(['THE GRAND FINAL STARTS NOW! WHICH COUNTRY TAKES THE CUP? COMMENT YOUR PICK!']); }
     else if (simT > 5) voice.say('flag_start', { chance: 0.35 });
   };
 
@@ -270,6 +270,10 @@ async function main() {
     w.hidden = false;
     if (isFinal) { sfx.win(); voice.say('flag_champ', { urgent: true, prefix: NAME(winner.i) + '!' }); }
     else { sfx.goal(); voice.say('flag_win', { urgent: true, prefix: NAME(winner.i) + '!' }); }
+    const wc = C[winner.i].code;
+    robotEvent(isFinal
+      ? ['WE HAVE A CHAMPION! ', { node: flagNode(wc) }, CN(wc) + ' WINS THE CUP! CONGRATULATIONS TO ALL ITS FANS!']
+      : [{ node: flagNode(wc) }, CN(wc) + ` WINS ROUND ${st.qualified.length} AND GOES TO THE GRAND FINAL!`]);
   };
 
   /* ---------- physics ---------- */
@@ -437,10 +441,11 @@ async function main() {
     game: 'flags',
     match: countryMatcher(C),
     badge: (code) => flagNode(code, 34),
-    busy: () => !$('win').hidden,
     sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
     onFan: (code, name) => { tags.set(byCode.get(code), { name: name.toUpperCase().slice(0, 12), until: performance.now() + 25000 }); },
     emptyHint: 'Type your country in chat — your name goes on its flag!',
+    hints: ['WRITE YOUR COUNTRY AND YOUR NAME GOES ON ITS FLAG!', 'DROP A LIKE IF YOU ARE ENJOYING THE BATTLE!', 'WHICH FLAG DO YOU THINK WINS THIS ROUND?'],
+    duck: (on) => sfx.duck(on),
     idleLines: [
       ['TYPE YOUR COUNTRY IN CHAT — I WILL PUT YOUR NAME ON ITS FLAG!'],
       ['WHERE ARE YOU WATCHING FROM? COMMENT YOUR COUNTRY NOW!'],
@@ -465,10 +470,16 @@ async function main() {
         return f ? ['MY PICK, ', { name }, ': ', { node: flagNode(f) }, CN(f) + '! BUT IN THIS RING ANYTHING CAN HAPPEN!'] : null;
       }
       if (isGreeting(text)) return [isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'HELLO AGAIN ', { name }, '! WHICH COUNTRY ARE YOU CHEERING FOR?'];
-      return Math.random() < 0.25 ? ['THANKS FOR CHATTING, ', { name }, '! WRITE YOUR COUNTRY TO PUT YOUR NAME ON ITS FLAG!'] : null;
+      return null;
     },
     demoTexts: ['Bangladesh 🇧🇩', 'India will win!', 'Brasil 🔥', 'Go Pakistan', 'hello', '🇧🇩🇧🇩', 'who will win?', 'USA', 'assalamu alaikum', 'Nepal', 'Saudi Arabia', 'Morocco ❤️', 'বাংলাদেশ', 'nice game'],
   });
+
+  // the robot host replaces the old commentator voice (when its voice is on)
+  const commentatorSay = voice.say.bind(voice);
+  voice.say = (...a) => (chat.active && chat.voiceOn() ? undefined : commentatorSay(...a));
+  const robotEvent = (parts) => { if (chat.active && chat.voiceOn()) chat.say(parts, 2); };
+  setTimeout(() => robotEvent(['WELCOME TO COUNTRY FLAG BATTLE! 195 COUNTRIES, ONLY ONE CHAMPION. COMMENT YOUR COUNTRY AND I PUT YOUR NAME ON ITS FLAG!']), 4000);
 
   /* ---------- settings from the admin panel ---------- */
   setInterval(async () => {

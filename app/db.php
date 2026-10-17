@@ -173,6 +173,14 @@ function migrate(PDO $pdo): void
         CREATE INDEX IF NOT EXISTS idx_chat ON chat_events(stream_id, id);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_msg ON chat_events(stream_id, msg_id);
 
+        CREATE TABLE IF NOT EXISTS robot_tts (
+            h       TEXT PRIMARY KEY,
+            text    TEXT NOT NULL,
+            status  TEXT NOT NULL DEFAULT 'wait',
+            created INTEGER NOT NULL,
+            sent_at INTEGER NOT NULL DEFAULT 0
+        );
+
         CREATE TABLE IF NOT EXISTS schedules (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             stream_id  INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,

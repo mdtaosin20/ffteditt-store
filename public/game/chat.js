@@ -102,7 +102,7 @@ export function liveChat(o) {
   const seen = new Set();          // authors already welcomed (this session)
   const counts = new Map();        // fan key -> number of comments
   const lastSaid = new Map();      // author -> time of the last robot answer to them
-  let lastMsg = performance.now(), lastIdle = performance.now();
+  let lastMsg = performance.now();
 
   /* ---------- chat box ---------- */
   const addRow = (name, text, key) => {
@@ -149,14 +149,44 @@ export function liveChat(o) {
   };
 
   /* ---------- robot host ---------- */
+  // Each line is shown with the robot's voice: the page asks the panel, the VPS makes the mp3 (a few seconds).
   const queue = [];
-  let speaking = null, speakUntil = 0, pauseUntil = 0;
+  let speaking = null, speakUntil = 0, pauseUntil = 0, audio = null, lastPromo = performance.now();
+  const voiceOn = () => !!(cfg.robot && cfg.voice && stream && sig);
+  const BAD = /fuck|shit|bitch|dick|pussy|nigg|cunt|whore|slut|porn|sex/i;
+  const speakName = (n) => {
+    const s = cleanName(n).replace(/[^A-Za-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    return s.replace(/[^A-Za-z]/g, '').length < 2 || BAD.test(s) ? 'friend' : s;
+  };
+  const spoken = (parts) => {
+    const t = parts.map((p) => (typeof p === 'string' ? p : p.name ? speakName(p.name) : (p.say || ''))).join('')
+      .replace(/—/g, ', ').replace(/(\d)\s*[–-]\s*(\d)/g, '$1 to $2').replace(/\s+/g, ' ').trim().toLowerCase();
+    return t.replace(/(^|[.!?]\s+)([a-z])/g, (m, a, b) => a + b.toUpperCase()).replace(/\bi\b/g, 'I');
+  };
+  const api = (q, body) => fetch('/api/robot.php' + q, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : { failed: true }));
+  const fetchVoice = async (line) => {
+    line.voice = 'wait';
+    try {
+      let j = await api('', { stream: Number(stream), sig, text: spoken(line.parts) });
+      const t0 = performance.now();
+      while (j && !j.url && !j.failed && j.h && performance.now() - t0 < 15000) {
+        await new Promise((r) => setTimeout(r, 1200));
+        j = await api(`?stream=${encodeURIComponent(stream)}&sig=${encodeURIComponent(sig)}&h=${j.h}`);
+      }
+      if (j && j.url) { line.url = j.url; line.voice = 'ready'; const a = new Audio(j.url); a.preload = 'auto'; line.audio = a; }
+      else line.voice = 'none';
+    } catch (e) { line.voice = 'none'; }
+  };
   const say = (parts, prio = 1) => {
-    if (!cfg.robot) return;
-    queue.push({ parts, prio, t: performance.now() });
+    if (!cfg.robot || !parts) return;
+    const line = { parts, prio, t: performance.now() };
+    queue.push(line);
     queue.sort((a, b) => b.prio - a.prio || a.t - b.t);
     if (queue.length > 5) queue.length = 5;          // never fall far behind the chat
+    if (voiceOn() && queue.includes(line)) fetchVoice(line);
   };
+  const stopAudio = () => { if (audio) { audio.onended = audio.onerror = null; audio.pause(); audio = null; o.duck && o.duck(false); } };
   const show = (line) => {
     rbName.textContent = cfg.name || 'ROBO HOST';
     rbText.replaceChildren();
@@ -164,30 +194,69 @@ export function liveChat(o) {
     for (const p of line.parts) {
       if (typeof p === 'string') { rbText.append(document.createTextNode(p)); len += p.length; }
       else if (p.name) { rbText.append(el('em', '', cleanName(p.name).toUpperCase())); len += 10; }
-      else if (p.node) rbText.append(p.node);
+      else if (p.node) rbText.append(p.node.cloneNode(true));
     }
     rbText.classList.toggle('long', len > 70);
     robot.hidden = false; robot.classList.remove('in'); void robot.offsetWidth; robot.classList.add('in', 'talk');
-    speaking = line; speakUntil = performance.now() + Math.min(9000, 4200 + len * 45);
+    speaking = line;
+    const minShow = Math.min(9000, 3800 + len * 40);
+    speakUntil = performance.now() + minShow;
+    if (line.audio) {
+      stopAudio();
+      audio = line.audio; audio.volume = 1;
+      o.duck && o.duck(true);
+      const started = performance.now();
+      speakUntil = started + 20000; // until the voice ends (safety limit)
+      const end = () => { robot.classList.remove('talk'); o.duck && o.duck(false); audio = null; speakUntil = Math.max(performance.now() + 900, started + Math.min(minShow, 5000)); };
+      audio.onended = end; audio.onerror = end;
+      audio.play().catch(end);
+    }
   };
   const tick = () => {
     const now = performance.now();
     if (speaking) {
-      if (o.busy && o.busy()) { robot.hidden = true; speaking = null; pauseUntil = now + 800; } // winner screen: give way
-      else if (now > speakUntil) { robot.hidden = true; robot.classList.remove('talk'); speaking = null; pauseUntil = now + 900; }
-      else if (now > speakUntil - 1500) robot.classList.remove('talk');
+      if (o.busy && o.busy()) { stopAudio(); robot.hidden = true; speaking = null; pauseUntil = now + 800; } // winner screen: give way
+      else if (now > speakUntil) { robot.hidden = true; robot.classList.remove('talk'); speaking = null; pauseUntil = now + 700; }
+      else if (!audio && now > speakUntil - 1500) robot.classList.remove('talk');
     }
     if (!speaking && queue.length && now > pauseUntil && !(o.busy && o.busy())) {
-      const line = queue.shift();
-      if (now - line.t < 45000 || line.prio >= 3) show(line);
+      const line = queue[0];
+      // wait (up to 14 s) for the robot's voice, then show it with or without sound
+      if (!(line.voice === 'wait' && now - line.t < 14000)) {
+        queue.shift();
+        if (now - line.t < 45000 || line.prio >= 3) show(line);
+      }
     }
-    // quiet chat: ask people to join in
-    if (cfg.idle && cfg.robot && !speaking && !queue.length && now - lastMsg > 70000 && now - lastIdle > 95000) {
-      lastIdle = now;
-      say(pick(o.idleLines).map((p) => p), 0);
+    // ask for likes, subscribes and comments now and then (more often when the chat is quiet)
+    const gap = now - lastMsg > 60000 ? 50000 : 80000;
+    if (cfg.idle && cfg.robot && !speaking && !queue.length && now - lastPromo > gap) {
+      lastPromo = now;
+      say(pick(o.idleLines.concat(PROMO)), 0);
     }
   };
   setInterval(tick, 250);
+  const PROMO = [
+    ['SMASH THAT LIKE BUTTON AND SUBSCRIBE — I WILL SAY YOUR NAME ON SCREEN!'],
+    ['NEW HERE? HIT SUBSCRIBE AND TURN ON THE BELL SO YOU NEVER MISS A LIVE!'],
+    ['IF YOU ARE ENJOYING THIS, PLEASE PRESS LIKE — IT HELPS THE STREAM A LOT!'],
+    ['COMMENT ANYTHING — I READ EVERY SINGLE COMMENT AND I WILL ANSWER YOU!'],
+    ['SHARE THIS LIVE WITH YOUR FRIENDS AND BRING THEM TO THE BATTLE!'],
+  ];
+
+  /* ---------- answers to any comment (the game's own answers come first) ---------- */
+  const generic = (name, text) => {
+    const t = text.toLowerCase();
+    if (/subscribed|\bsub(scribe)? ?done|subscribe kor|সাবস্ক্রাইব/.test(t)) return ['THANK YOU ', { name }, ' FOR SUBSCRIBING! YOU ARE PART OF THE FAMILY NOW!'];
+    if (/\blike(d)? ?(done|dilam|diyechi)?\b|👍|লাইক/.test(t)) return ['THANKS FOR THE LIKE, ', { name }, '! YOU ARE THE BEST!'];
+    if (/robot|\bbot\b|\bai\b|রোবট/.test(t)) return ['YES ', { name }, ', I AM YOUR ROBO HOST! I READ EVERY COMMENT LIVE!'];
+    if (/haha|lol|lmao|😂|🤣|হাহা/.test(t)) return ['HAHA, ', { name }, '! THIS GAME IS CRAZY, RIGHT?'];
+    if (/boring|slow|bekar/.test(t)) return ['STAY WITH US, ', { name }, '! THE BEST PART IS COMING!'];
+    if (/nice|good|great|wow|awesome|amazing|love|best|cool|super|valo|bhalo|ভালো|সুন্দর|অসাধারণ|🔥|❤|😍|💯/.test(t)) return ['THANK YOU ', { name }, '! SO HAPPY YOU ENJOY IT — PLEASE PRESS LIKE!'];
+    if (/where.*from|kothay|কোথা/.test(t)) return ['I LIVE INSIDE THIS STREAM, ', { name }, '! WHERE ARE YOU WATCHING FROM?'];
+    if (/bye|good ?night|gn\b|আল্লাহ হাফেজ|allah hafez/.test(t)) return ['BYE ', { name }, '! THANKS FOR WATCHING — COME BACK SOON!'];
+    if (t.includes('?')) return ['GOOD QUESTION, ', { name }, '! KEEP WATCHING AND YOU WILL SEE!'];
+    return [pick(['THANKS FOR YOUR COMMENT, ', 'I SEE YOU, ', 'GREAT TO HAVE YOU HERE, ', 'NICE ONE, ']), { name }, '! ' + pick(o.hints || ['DROP A LIKE IF YOU ARE ENJOYING THE GAME!'])];
+  };
 
   /* ---------- one chat event ---------- */
   const handle = (ev) => {
@@ -210,13 +279,13 @@ export function liveChat(o) {
     const author = name.toLowerCase();
     const first = !seen.has(author);
     seen.add(author);
-    const recent = performance.now() - (lastSaid.get(author) || -1e9) < 60000;
+    const recent = performance.now() - (lastSaid.get(author) || -1e9) < 20000;
 
     let line = null, prio = 1;
     if (ev.k === 'super') { line = ['WOW! THANK YOU ', { name }, ` FOR THE SUPER CHAT${ev.amt ? ' ' + ev.amt : ''}! YOU ARE A LEGEND!`]; prio = 3; }
     else if (ev.k === 'member') { line = ['WELCOME TO THE CLUB, ', { name }, '! THANKS FOR BECOMING A MEMBER!']; prio = 3; }
     else if (first) { line = o.welcome(name, key, text); prio = 2; }
-    else if (!recent) line = o.reply(name, key, text);
+    else if (!recent) line = o.reply(name, key, text) || generic(name, text);
     if (line) { lastSaid.set(author, performance.now()); say(line, prio); }
   };
 
@@ -254,5 +323,5 @@ export function liveChat(o) {
     setTimeout(fire, 1200);
   } else poll();
 
-  return { active: true, say, counts };
+  return { active: true, say, counts, voiceOn };
 }

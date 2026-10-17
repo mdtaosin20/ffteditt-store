@@ -131,8 +131,13 @@ foreach ($mine as $id => $row) {
     }
 }
 
-// 2a) Live chat messages read by the worker.
+// 2a) Live chat messages read by the worker, and robot voice lines it made.
 chat_ingest($mine, (array) ($in['chat'] ?? []));
+foreach (array_slice((array) ($in['robot_results'] ?? []), 0, 10) as $r) {
+    if (!is_array($r)) continue;
+    $mp3 = base64_decode((string) ($r['mp3'] ?? ''), true);
+    if ($mp3 !== false) robot_save((string) ($r['h'] ?? ''), $mp3);
+}
 
 // 2b) Save terminal command results.
 $fin = db()->prepare("UPDATE commands SET status = 'done', output = ?, exit_code = ?, duration_ms = ?, finished_at = ?
@@ -219,7 +224,15 @@ if ($voiceJobs) {
     $poll = min($poll, 3);
 }
 
-echo json_encode(['ok' => true, 'poll_seconds' => $poll, 'run' => $out, 'commands' => $cmds, 'voice_jobs' => $voiceJobs]);
+// Robot host lines to speak (only while a stream reads its chat with the robot voice on).
+$robotJobs = [];
+$cc = chat_cfg();
+if ($cc['enabled'] && $cc['robot'] && $cc['voice'] && array_filter($out, fn ($o) => !empty($o['chat']))) {
+    $robotJobs = robot_jobs();
+    $poll = min($poll, 2);
+}
+
+echo json_encode(['ok' => true, 'poll_seconds' => $poll, 'run' => $out, 'commands' => $cmds, 'voice_jobs' => $voiceJobs, 'robot_jobs' => $robotJobs]);
 
 // 5) After answering the worker: set the YouTube title/description/thumbnail on new live videos.
 if (function_exists('fastcgi_finish_request')) {

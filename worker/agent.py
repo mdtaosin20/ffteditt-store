@@ -28,7 +28,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
@@ -40,6 +40,8 @@ PULSE_SOCK = PULSE_DIR + "/native"
 TTS_DIR = "/opt/ffteditt-worker/tts"
 VOICE_MODEL = "en_US-ryan-high"
 VOICE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/high/" + VOICE_MODEL
+ROBOT_MODEL = "en_US-ryan-medium"   # lighter voice for the live robot host (made on the fly)
+ROBOT_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/medium/" + ROBOT_MODEL
 
 
 def log(msg):
@@ -225,6 +227,133 @@ class VoiceMaker:
             log("[voice] problem: %s" % self.error)
         finally:
             self.busy = False
+
+
+# ------------------------------------------------------------ robot host voice (live)
+ROBOT_PY = r"""
+import json, sys, wave
+from piper import PiperVoice
+v = PiperVoice.load(sys.argv[1])
+print("ready", flush=True)
+for line in sys.stdin:
+    try:
+        j = json.loads(line)
+        with wave.open(j["out"], "wb") as w:
+            if hasattr(v, "synthesize_wav"):
+                try:
+                    from piper import SynthesisConfig
+                    v.synthesize_wav(j["text"], w, syn_config=SynthesisConfig(length_scale=0.95))
+                except ImportError:
+                    v.synthesize_wav(j["text"], w)
+            else:
+                v.synthesize(j["text"], w, length_scale=0.95)
+        print("ok", flush=True)
+    except Exception as ex:
+        print("err " + str(ex).replace("\n", " ")[:200], flush=True)
+"""
+
+
+class RobotVoice:
+    """Speaks the robot host's lines. Keeps Piper loaded so each line takes about a second."""
+
+    def __init__(self, voices):
+        self.voices = voices          # VoiceMaker: shares the Piper install
+        self.lock = threading.Lock()
+        self.jobs = []
+        self.results = []
+        self.wake = threading.Event()
+        self.proc = None
+        self.failed_until = 0
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def submit(self, jobs):
+        if not jobs:
+            return
+        with self.lock:
+            have = {j["h"] for j in self.jobs}
+            for j in jobs:
+                if j.get("h") and j["h"] not in have:
+                    self.jobs.append(j)
+            self.jobs = self.jobs[-6:]
+        self.wake.set()
+
+    def take(self):
+        with self.lock:
+            r, self.results = self.results, []
+            return r
+
+    def put_back(self, results):
+        with self.lock:
+            self.results = results + self.results
+
+    def _start(self):
+        py, _say, _model = self.voices._setup()
+        mdir = TTS_DIR + "/models"
+        for ext in (".onnx", ".onnx.json"):
+            dest = mdir + "/" + ROBOT_MODEL + ext
+            if not os.path.exists(dest) or os.path.getsize(dest) < 100:
+                log("[robot] downloading robot voice %s" % ext)
+                tmp = dest + ".part"
+                req = urllib.request.Request(ROBOT_URL + ext + "?download=true", headers={"User-Agent": "ffteditt-worker"})
+                with urllib.request.urlopen(req, timeout=300) as r, open(tmp, "wb") as f:
+                    shutil.copyfileobj(r, f)
+                os.replace(tmp, dest)
+        script = TTS_DIR + "/robot.py"
+        with open(script, "w") as f:
+            f.write(ROBOT_PY)
+        env = dict(os.environ, OMP_NUM_THREADS="1")
+        # low priority: the live stream always comes first
+        self.proc = subprocess.Popen(["nice", "-n", "12", py, script, mdir + "/" + ROBOT_MODEL + ".onnx"],
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                     text=True, bufsize=1, env=env)
+        if self.proc.stdout.readline().strip() != "ready":
+            raise RuntimeError("robot voice did not start")
+        log("[robot] voice ready")
+
+    def _make(self, j):
+        tmp = tempfile.mkdtemp(prefix="fftrobot-")
+        try:
+            wav, mp3 = tmp + "/a.wav", tmp + "/a.mp3"
+            self.proc.stdin.write(json.dumps({"text": j["text"], "out": wav}) + "\n")
+            self.proc.stdin.flush()
+            ans = self.proc.stdout.readline().strip()
+            if ans != "ok":
+                raise RuntimeError(ans or "robot voice stopped")
+            c = run(["nice", "-n", "12", "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", wav,
+                     "-af", "loudnorm=I=-15:TP=-1.5:LRA=9", "-ar", "24000", "-ac", "1", "-b:a", "64k", mp3], timeout=60)
+            if c.returncode != 0 or not os.path.exists(mp3):
+                raise RuntimeError("mp3 failed")
+            with open(mp3, "rb") as f:
+                return {"h": j["h"], "mp3": base64.b64encode(f.read()).decode()}
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def _loop(self):
+        while True:
+            self.wake.wait(5)
+            self.wake.clear()
+            while True:
+                with self.lock:
+                    j = self.jobs.pop() if self.jobs else None   # newest first
+                if not j:
+                    break
+                if time.time() < self.failed_until:
+                    continue
+                try:
+                    if not self.proc or self.proc.poll() is not None:
+                        self._start()
+                    res = self._make(j)
+                    with self.lock:
+                        self.results.append(res)
+                except Exception as ex:
+                    log("[robot] voice problem: %s" % ex)
+                    try:
+                        if self.proc:
+                            self.proc.kill()
+                    except Exception:
+                        pass
+                    self.proc = None
+                    self.failed_until = time.time() + 60
 
 
 class Stream:
@@ -868,10 +997,10 @@ class ChatReader:
                 self.wake.clear()
 
 
-def call_panel(panel, token, reports, cmd_results=None, voice_results=None, voice_error=None, chat=None):
+def call_panel(panel, token, reports, cmd_results=None, voice_results=None, voice_error=None, chat=None, robot=None):
     body = json.dumps({"token": token, "info": machine_info(), "streams": reports,
                        "command_results": cmd_results or [], "voice_results": voice_results or [],
-                       "voice_error": voice_error, "chat": chat or []}).encode()
+                       "voice_error": voice_error, "chat": chat or [], "robot_results": robot or []}).encode()
     req = urllib.request.Request(
         panel.rstrip("/") + "/api/worker.php",
         data=body,
@@ -898,6 +1027,7 @@ def main():
     runner = CommandRunner(wake)
     voices = VoiceMaker()
     readers = {}        # id -> ChatReader
+    robot = RobotVoice(voices)
 
     def shutdown(*_):
         running["on"] = False
@@ -912,8 +1042,10 @@ def main():
         results = runner.take_results()
         vres, verr = voices.take()
         chat = [r.take() for r in readers.values()]
+        rres = robot.take()
         try:
-            resp = call_panel(panel, token, reports, results, vres, verr, chat)
+            resp = call_panel(panel, token, reports, results, vres, verr, chat, rres)
+            robot.submit(resp.get("robot_jobs") or [])
             runner.done([r["id"] for r in results])
             voices.submit(resp.get("voice_jobs") or [])
             poll = max(1, min(30, int(resp.get("poll_seconds", 5))))
@@ -921,6 +1053,7 @@ def main():
             for c in resp.get("commands", []):
                 runner.submit(int(c["id"]), str(c["cmd"]))
         except urllib.error.HTTPError as ex:
+            robot.put_back(rres)
             runner.put_back(results)
             voices.put_back(vres)
             for b in chat:
@@ -929,6 +1062,7 @@ def main():
             log("Panel said HTTP %s - %s" % (ex.code, "token wrong or server removed?" if ex.code == 401 else ""))
             wanted = None
         except Exception as ex:
+            robot.put_back(rres)
             runner.put_back(results)
             voices.put_back(vres)
             for b in chat:
