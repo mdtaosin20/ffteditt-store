@@ -46,7 +46,31 @@ export class Sfx {
     [523, 659, 784, 1047].forEach((f) => this.tone({ freq: f, type: 'triangle', dur: 1.8, vol: 0.13, delay: 0.7, attack: 0.03 }));
     [1319, 1568].forEach((f, i) => this.tone({ freq: f, dur: 0.25, vol: 0.06, delay: 1.0 + i * 0.25 }));
   }
-  setRoll() { /* no rolling noise */ }
+  // Rolling: a soft, clean low rumble (no noise). Louder and a little higher while the balls roll faster;
+  // a slow wobble makes it sound like a ball turning over on the bowl.
+  setRoll(speed) {
+    if (!this.ok) return;
+    if (!this.roll) {
+      const out = this.ctx.createGain(); out.gain.value = 0;
+      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 0.5;
+      const o1 = this.ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 85;
+      const o2 = this.ctx.createOscillator(); o2.type = 'triangle'; o2.frequency.value = 171;
+      const g2 = this.ctx.createGain(); g2.gain.value = 0.35;
+      const wob = this.ctx.createGain(); wob.gain.value = 0.7;          // wobble around 0.7
+      const lfo = this.ctx.createOscillator(); lfo.frequency.value = 6;
+      const lfoAmt = this.ctx.createGain(); lfoAmt.gain.value = 0.3;
+      lfo.connect(lfoAmt); lfoAmt.connect(wob.gain);
+      o1.connect(wob); o2.connect(g2); g2.connect(wob); wob.connect(lp); lp.connect(out); out.connect(this.master);
+      [o1, o2, lfo].forEach((o) => o.start());
+      this.roll = { out, o1, o2, lfo };
+    }
+    const t = this.ctx.currentTime, r = this.roll;
+    const k = Math.min(1, Math.max(0, (speed - 0.2) / 7));               // 0 = still, 1 = fast
+    r.out.gain.setTargetAtTime(k > 0 ? 0.04 + 0.16 * k : 0, t, 0.12);
+    r.o1.frequency.setTargetAtTime(75 + 55 * k, t, 0.15);
+    r.o2.frequency.setTargetAtTime(150 + 110 * k, t, 0.15);
+    r.lfo.frequency.setTargetAtTime(4 + 14 * k, t, 0.15);
+  }
   duck(on) { if (this.ok) this.master.gain.setTargetAtTime(on ? 0.6 : 0.9, this.ctx.currentTime, 0.3); } // effects step back while the commentator talks
 }
 

@@ -1,7 +1,7 @@
 // FFTEdit · Country Flag Battle. Runs by itself, made for 24/7 vertical live streams.
 // 195 flags bounce inside a turning ring with a gap. A flag that slips out is eliminated;
 // the last flag left qualifies for the final. When the final is full, the final round finds the champion.
-import { Sfx, Commentator, holdScreen, PACE, reporter } from '/game/audio.js?v=11';
+import { Sfx, Commentator, holdScreen, PACE, reporter } from '/game/audio.js?v=12';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
