@@ -218,26 +218,36 @@ function yt_texts(array $s): array
  * The live video this stream is sending to right now ('' if none yet). About 2 units.
  * Remembered per live session (yt_video_start = the stream's started_at).
  */
-function yt_find_video(array $s, string $tok): string
+function yt_find_video(array $s, string $tok, bool $create = false): string
 {
     // Which YouTube "stream" uses our stream key? (so the right live video is used when a channel has several)
     $boundId = '';
-    $r = yt_get($tok, 'liveStreams', ['part' => 'id,cdn', 'mine' => 'true', 'maxResults' => 50]);
+    $streamActive = false;
+    $r = yt_get($tok, 'liveStreams', ['part' => 'id,cdn,status', 'mine' => 'true', 'maxResults' => 50]);
     if ($r[0] === 200) {
         foreach ($r[1]['items'] ?? [] as $ls) {
             if (($ls['cdn']['ingestionInfo']['streamName'] ?? '') === $s['stream_key']) {
                 $boundId = (string) $ls['id'];
+                $streamActive = ($ls['status']['streamStatus'] ?? '') === 'active';
             }
         }
     }
     $video = '';
     foreach (['active', 'upcoming'] as $status) {
-        $r = yt_get($tok, 'liveBroadcasts', ['part' => 'id,contentDetails', 'broadcastStatus' => $status, 'broadcastType' => 'all', 'maxResults' => 25]);
+        $r = yt_get($tok, 'liveBroadcasts', ['part' => 'id,contentDetails,status', 'broadcastStatus' => $status, 'broadcastType' => 'all', 'maxResults' => 25]);
         if ($r[0] !== 200) throw new RuntimeException(yt_err($r));
         $items = $r[1]['items'] ?? [];
         foreach ($items as $b) {
             if ($boundId !== '' && ($b['contentDetails']['boundStreamId'] ?? '') === $boundId) {
                 $video = (string) $b['id'];
+                // waiting broadcast that will not start by itself: start it now
+                $life = $b['status']['lifeCycleStatus'] ?? '';
+                if ($status === 'upcoming' && $create && $streamActive && in_array($life, ['ready', 'testing'], true)
+                    && empty($b['contentDetails']['enableAutoStart'])) {
+                    yt_http('POST', YT_API . 'liveBroadcasts/transition?' . http_build_query(['broadcastStatus' => 'live', 'id' => $video, 'part' => 'id,status']),
+                        ['Authorization: Bearer ' . $tok, 'Content-Length: 0'], '');
+                    log_activity("YouTube: {$s['name']} — started the waiting live video", 'ok');
+                }
                 break 2;
             }
         }
@@ -246,10 +256,47 @@ function yt_find_video(array $s, string $tok): string
             break;
         }
     }
+    // Nothing on YouTube for our stream key (e.g. the last live was ended): open a new live video.
+    if ($video === '' && $create && $boundId !== '') {
+        $video = yt_create_broadcast($s, $tok, $boundId);
+    }
     if ($video !== '') {
         db()->prepare('UPDATE streams SET yt_video = ?, yt_video_start = COALESCE(started_at, 0) WHERE id = ?')->execute([$video, $s['id']]);
     }
     return $video;
+}
+
+/** Makes a new public live video on the channel and connects it to our stream key. About 100 units. */
+function yt_create_broadcast(array $s, string $tok, string $streamId): string
+{
+    $key = 'yt_created_' . (int) $s['id'];
+    $mark = (int) ($s['started_at'] ?? 0);
+    if ((string) (setting_get($key) ?? '') === (string) $mark) return '';   // once per live session
+    setting_set($key, (string) $mark);
+
+    $t = yt_texts($s);
+    $body = [
+        'snippet' => ['title' => $t['title'], 'description' => $t['desc'], 'scheduledStartTime' => gmdate('Y-m-d\TH:i:s\Z')],
+        'status' => ['privacyStatus' => 'public', 'selfDeclaredMadeForKids' => false],
+        'contentDetails' => ['enableAutoStart' => true, 'enableAutoStop' => true, 'enableDvr' => true,
+                             'latencyPreference' => 'normal', 'monitorStream' => ['enableMonitorStream' => false]],
+    ];
+    $r = yt_http('POST', YT_API . 'liveBroadcasts?part=snippet,status,contentDetails',
+        ['Authorization: Bearer ' . $tok, 'Content-Type: application/json'], json_encode($body, JSON_UNESCAPED_UNICODE));
+    if ($r[0] !== 200 || empty($r[1]['id'])) {
+        log_activity("YouTube: could not open a new live for {$s['name']}: " . yt_err($r), 'error');
+        return '';
+    }
+    $id = (string) $r[1]['id'];
+    $r = yt_http('POST', YT_API . 'liveBroadcasts/bind?' . http_build_query(['id' => $id, 'part' => 'id,contentDetails', 'streamId' => $streamId]),
+        ['Authorization: Bearer ' . $tok, 'Content-Length: 0'], '');
+    if ($r[0] !== 200) {
+        log_activity("YouTube: new live made but not connected for {$s['name']}: " . yt_err($r), 'error');
+        return '';
+    }
+    log_activity("YouTube: opened a new live video for {$s['name']}", 'ok');
+    // it starts by itself once YouTube sees the video coming in (a few seconds)
+    return $id;
 }
 
 /**
@@ -318,6 +365,20 @@ function yt_tick(int $serverId): void
 {
     if (!yt_ready()) return;
     $now = time();
+
+    // Make sure YouTube shows each live stream: find its live video, or open a new one.
+    $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_refresh != ''
+                         AND yt_video_start != COALESCE(started_at, 0) AND COALESCE(started_at, 0) > 0
+                         AND started_at < ? AND yt_find_at < ?");
+    $st->execute([$serverId, $now - 45, $now - 60]);
+    foreach ($st->fetchAll() as $s) {
+        db()->prepare('UPDATE streams SET yt_find_at = ? WHERE id = ?')->execute([$now, $s['id']]);
+        try {
+            yt_find_video($s, yt_token($s), $now - (int) $s['started_at'] > 70);
+        } catch (Throwable $e) {
+            // tried again in a minute
+        }
+    }
     $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_auto = 1 AND yt_refresh != ''
                          AND (yt_done_rev != yt_rev OR yt_done_start != COALESCE(started_at, 0))
                          AND NOT (yt_fail_start = COALESCE(started_at, 0) AND yt_fails >= 5)
@@ -332,20 +393,7 @@ function yt_tick(int $serverId): void
         }
     }
 
-    // Live chat needs the video of this live session (if the title step above did not find it already).
     if (chat_cfg()['enabled']) {
-        $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_refresh != ''
-                             AND yt_video_start != COALESCE(started_at, 0) AND COALESCE(started_at, 0) > 0
-                             AND started_at < ? AND yt_find_at < ?");
-        $st->execute([$serverId, $now - 40, $now - 120]);
-        foreach ($st->fetchAll() as $s) {
-            db()->prepare('UPDATE streams SET yt_find_at = ? WHERE id = ?')->execute([$now, $s['id']]);
-            try {
-                yt_find_video($s, yt_token($s));
-            } catch (Throwable $e) {
-                // tried again in 2 minutes
-            }
-        }
         yt_subscribers_tick($serverId);
     }
 }
