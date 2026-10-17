@@ -98,15 +98,49 @@ function migrate(PDO $pdo): void
     ");
 
     // Columns added after the first release.
-    $cols = array_column($pdo->query('PRAGMA table_info(servers)')->fetchAll(), 'name');
-    if (!in_array('terminal_enabled', $cols, true)) {
-        $pdo->exec('ALTER TABLE servers ADD COLUMN terminal_enabled INTEGER NOT NULL DEFAULT 1');
-    }
+    $add = function (string $table, string $col, string $def) use ($pdo): void {
+        $cols = array_column($pdo->query("PRAGMA table_info({$table})")->fetchAll(), 'name');
+        if (!in_array($col, $cols, true)) {
+            $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$col} {$def}");
+        }
+    };
+    $add('servers', 'terminal_enabled', 'INTEGER NOT NULL DEFAULT 1');
+    $add('streams', 'channel_name', "TEXT NOT NULL DEFAULT ''");
+    $add('streams', 'channel_url', "TEXT NOT NULL DEFAULT ''");
+    $add('activity', 'level', "TEXT NOT NULL DEFAULT 'info'");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS metrics (
+            server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+            ts        INTEGER NOT NULL,
+            cpu       REAL, ram REAL, disk REAL, up_kbps REAL, down_kbps REAL
+        );
+        CREATE INDEX IF NOT EXISTS idx_metrics ON metrics(server_id, ts);
+
+        CREATE TABLE IF NOT EXISTS bandwidth (
+            server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+            month     TEXT NOT NULL,
+            bytes     INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (server_id, month)
+        );
+
+        CREATE TABLE IF NOT EXISTS schedules (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            stream_id  INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
+            start_time TEXT NOT NULL,
+            end_time   TEXT NOT NULL,
+            days       TEXT NOT NULL DEFAULT '1234567',
+            enabled    INTEGER NOT NULL DEFAULT 1,
+            last_state TEXT NOT NULL DEFAULT 'out',
+            created_at INTEGER NOT NULL
+        );
+    ");
 }
 
-function log_activity(string $message): void
+/** $level: ok (green), info (blue), warn (orange), error (red). */
+function log_activity(string $message, string $level = 'info'): void
 {
-    db()->prepare('INSERT INTO activity (ts, message) VALUES (?, ?)')->execute([time(), $message]);
+    db()->prepare('INSERT INTO activity (ts, message, level) VALUES (?, ?, ?)')->execute([time(), $message, $level]);
     // keep the log small
     db()->exec('DELETE FROM activity WHERE id NOT IN (SELECT id FROM activity ORDER BY id DESC LIMIT 500)');
 }

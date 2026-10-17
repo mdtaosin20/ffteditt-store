@@ -26,3 +26,5 @@ require APP_DIR . '/helpers.php';
 require APP_DIR . '/game.php';
 require APP_DIR . '/flags.php';
 require APP_DIR . '/voice.php';
+require APP_DIR . '/panel.php';
+require APP_DIR . '/ui.php';

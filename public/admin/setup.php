@@ -34,7 +34,7 @@ page_start('Create admin');
 <div class="auth">
   <form method="post" class="card auth-card">
     <div class="auth-head">
-      <div class="logo big">FFTEdit</div>
+      <div class="logo big"><?= icon('gamepad', 'ic login-ic') ?><span>GameStream <b>Admin Panel</b></span></div>
       <p class="muted">First-time setup: create your admin login</p>
     </div>
     <?php if ($error): ?><div class="flash flash-error" role="alert"><?= e($error) ?></div><?php endif; ?>

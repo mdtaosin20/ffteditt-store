@@ -49,11 +49,40 @@ $clean = [
     'mem_used_mb'   => (int) ($info['mem_used_mb'] ?? 0),
     'agent_version' => substr((string) ($info['agent_version'] ?? ''), 0, 16),
 ];
+// Extra numbers for the dashboard (worker 1.4.0 and newer).
+$num = fn ($k) => isset($info[$k]) && is_numeric($info[$k]) ? (float) $info[$k] : null;
+$clean += [
+    'cpu_pct'       => $num('cpu_pct') !== null ? max(0, min(100, $num('cpu_pct'))) : null,
+    'disk_total_gb' => $num('disk_total_gb'),
+    'disk_used_gb'  => $num('disk_used_gb'),
+    'up_kbps'       => $num('up_kbps'),
+    'down_kbps'     => $num('down_kbps'),
+    'rx_bytes'      => (int) ($info['rx_bytes'] ?? 0),
+    'tx_bytes'      => (int) ($info['tx_bytes'] ?? 0),
+    'uptime_s'      => (int) ($info['uptime_s'] ?? 0),
+    'temp_c'        => $num('temp_c'),
+    'procs'         => [],
+];
+foreach (array_slice((array) ($info['procs'] ?? []), 0, 6) as $p) {
+    if (is_array($p)) {
+        $clean['procs'][] = ['name' => substr((string) ($p['name'] ?? ''), 0, 24), 'cpu' => (float) ($p['cpu'] ?? 0), 'mem_mb' => (int) ($p['mem_mb'] ?? 0)];
+    }
+}
+$prevInfo = json_decode($server['info_json'] ?: '{}', true) ?: [];
 if ((int) $server['last_seen'] < $now - SERVER_OFFLINE_AFTER) {
-    log_activity("Server online: {$server['name']}");
+    log_activity("Server online: {$server['name']}", 'ok');
+    // Auto Start off: after a reboot, streams wait for the admin instead of starting by themselves.
+    if ($clean['uptime_s'] > 0 && $clean['uptime_s'] < 600 && !panel_opts()['auto_start']) {
+        db()->prepare("UPDATE streams SET desired = 'off' WHERE server_id = ? AND desired = 'on'")->execute([$sid]);
+        log_activity("{$server['name']} restarted: streams left off (Auto Start is off)", 'warn');
+    }
 }
 db()->prepare('UPDATE servers SET last_seen = ?, info_json = ? WHERE id = ?')
     ->execute([$now, json_encode($clean), $sid]);
+if ($clean['cpu_pct'] !== null) {
+    record_metrics($sid, $prevInfo, $clean);
+}
+schedule_tick();
 
 // 2) Save what each stream on this server is doing right now.
 $mine = [];
@@ -85,9 +114,9 @@ foreach ((array) ($in['streams'] ?? []) as $r) {
     $old = $mine[$id]['status'];
     if ($old !== $status) {
         $name = $mine[$id]['name'];
-        if ($status === 'live')    log_activity("Live on YouTube: {$name}");
-        if ($status === 'error')   log_activity("Problem with {$name}: {$error}");
-        if ($status === 'stopped' && $old === 'live') log_activity("Stopped: {$name}");
+        if ($status === 'live')    log_activity("Stream '{$name}' is now LIVE", 'ok');
+        if ($status === 'error')   log_activity("Problem with {$name}: {$error}", 'error');
+        if ($status === 'stopped' && $old === 'live') log_activity("Stream '{$name}' ended", 'warn');
     }
     $mine[$id]['status'] = $status;
 }
@@ -97,7 +126,7 @@ foreach ($mine as $id => $row) {
         db()->prepare("UPDATE streams SET status = 'stopped', fps_now = NULL, speed_now = NULL, started_at = NULL WHERE id = ?")
             ->execute([$id]);
         if ($row['status'] === 'live') {
-            log_activity("Stopped: {$row['name']}");
+            log_activity("Stream '{$row['name']}' ended", 'warn');
         }
     }
 }
@@ -133,7 +162,7 @@ if (!empty($in['voice_error'])) {
     if ($vs['error'] !== $err) {
         $vs['error'] = $err;
         voice_save($vs);
-        log_activity("Voice maker on {$server['name']}: {$err}");
+        log_activity("Voice maker on {$server['name']}: {$err}", 'warn');
     }
 }
 

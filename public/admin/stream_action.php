@@ -3,7 +3,7 @@ require __DIR__ . '/../_boot.php';
 require_login();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    redirect('dashboard.php');
+    redirect('streams.php');
 }
 check_csrf();
 
@@ -47,6 +47,13 @@ switch ($do) {
         flash('Starting all streams that have a key and a server.');
         break;
 
+    case 'restart_all':
+        $n = db()->prepare("UPDATE streams SET rev = rev + 1, updated_at = ? WHERE desired = 'on'");
+        $n->execute([$now]);
+        log_activity('Restart requested: all live streams');
+        flash('Restarting all running streams. They come back in about 20 seconds.');
+        break;
+
     case 'stop_all':
         db()->prepare($stopSql)->execute([$now]);
         log_activity('Stop requested: all streams');
@@ -54,4 +61,5 @@ switch ($do) {
         break;
 }
 
-redirect('dashboard.php');
+$back = (string) ($_POST['back'] ?? '');
+redirect(in_array($back, ['dashboard.php', 'streams.php', 'youtube.php'], true) ? $back : 'streams.php');

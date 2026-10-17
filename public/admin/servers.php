@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/../_boot.php';
+require APP_DIR . '/dash.php';
 $admin = require_login();
 
 function new_token(): string
@@ -62,14 +63,30 @@ foreach (db()->query("SELECT server_id, COUNT(*) n, SUM(status = 'live') live FR
 
 $panelUrl = 'https://' . preg_replace('/[^A-Za-z0-9.:-]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'ffteditt.store'));
 
-page_start('Servers', 'servers', $admin);
+$srv  = dash_server();
+$live = dash_live_data($srv);
+
+page_start('VPS Monitor', 'servers', $admin);
 ?>
 <div class="page-head">
   <div>
-    <h1>Servers (VPS)</h1>
-    <p class="muted">Each server sends video to YouTube. Add more servers when you need more streams at the same time.</p>
+    <h1>VPS Monitor</h1>
+    <p class="muted">Live numbers from your VPS (updated every 5 seconds), and the servers connected to this panel.</p>
   </div>
+  <?php if (count($servers) > 1): ?>
+  <form class="srv-pick" method="get"><label><span class="muted small">Showing server</span>
+    <select name="server" data-autosubmit>
+      <?php foreach ($servers as $sid => $s): ?><option value="<?= (int) $sid ?>" <?= $srv && (int) $srv['id'] === $sid ? 'selected' : '' ?>><?= e($s['name']) ?></option><?php endforeach; ?>
+    </select></label></form>
+  <?php endif; ?>
 </div>
+<div class="dash" id="dash" data-server="<?= $srv ? (int) $srv['id'] : 0 ?>">
+  <section class="kcards" data-live="cards"><?= dash_cards($srv) ?></section>
+  <?= dash_monitor($srv, $live) ?>
+</div>
+<script type="application/json" id="dash-data"><?= json_encode($live) ?></script>
+
+<h2 class="sec-h">Servers</h2>
 
 <?php if ($newToken): ?>
 <section class="card token-box" aria-live="polite">
@@ -89,7 +106,7 @@ page_start('Servers', 'servers', $admin);
   <label class="field grow"><span>New server name</span>
     <input name="name" required maxlength="40" placeholder="e.g. VPS 1 – New Jersey">
   </label>
-  <button class="btn btn-pink" type="submit">+ Add server</button>
+  <button class="btn btn-blue" type="submit"><?= icon('plus') ?>Add server</button>
 </form>
 
 <?php if (!$servers): ?>
@@ -104,7 +121,7 @@ page_start('Servers', 'servers', $admin);
   <section class="card">
     <div class="stream-top">
       <h2><?= e($srv['name']) ?></h2>
-      <span class="badge <?= $online ? 'badge-live' : 'badge-muted' ?>"><?= $online ? 'Online' : 'Offline' ?></span>
+      <span class="tag <?= $online ? 'tag-green' : 'tag-gray' ?>"><?= $online ? 'Online' : 'Offline' ?></span>
     </div>
     <dl class="meta">
       <div><dt>Last check-in</dt><dd><?= e(ago((int) $srv['last_seen'])) ?></dd></div>
@@ -113,6 +130,7 @@ page_start('Servers', 'servers', $admin);
       <?php if ($info): ?>
       <div><dt>Machine</dt><dd><?= e($info['hostname'] ?? '?') ?> · <?= (int) ($info['cpus'] ?? 0) ?> CPU</dd></div>
       <div><dt>CPU load</dt><dd><?= e($info['load1'] ?? '—') ?></dd></div>
+      <div><dt>Worker</dt><dd>v<?= e($info['agent_version'] ?? '?') ?><?= version_compare((string) ($info['agent_version'] ?? '0'), '1.4.0', '<') ? ' — <a href="terminal.php?server=' . (int) $sid . '">update it</a> for live graphs' : '' ?></dd></div>
       <div><dt>Memory</dt><dd><?= (int) ($info['mem_used_mb'] ?? 0) ?> / <?= (int) ($info['mem_total_mb'] ?? 0) ?> MB</dd></div>
       <?php endif; ?>
     </dl>
@@ -137,4 +155,4 @@ page_start('Servers', 'servers', $admin);
   <?php endforeach; ?>
 </div>
 <?php endif; ?>
-<?php page_end('admin.js');
+<?php page_end();

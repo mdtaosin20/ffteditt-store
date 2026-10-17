@@ -112,38 +112,61 @@ function all_servers(): array
 function page_start(string $title, string $active = '', ?array $admin = null): void
 {
     $f = flash();
+    if ($admin) {
+        check_offline_servers();
+        $online = count(array_filter(all_servers(), 'server_online')) > 0;
+    }
     ?><!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title><?= e($title) ?> · FFTEdit Admin</title>
+<title><?= e($title) ?> · GameStream Admin Panel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/admin.css?v=5">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/admin.css?v=8">
 </head>
-<body>
+<body class="<?= $admin ? 'with-side' : 'no-side' ?>">
 <?php if ($admin): ?>
-<header class="topbar">
-  <div class="wrap topbar-in">
-    <a class="brand" href="dashboard.php"><span class="logo">FFTEdit</span><span class="pill">Admin</span></a>
-    <nav class="nav">
-      <a href="dashboard.php" class="<?= $active === 'streams' ? 'on' : '' ?>">Streams</a>
-      <a href="game.php" class="<?= $active === 'game' ? 'on' : '' ?>">Ball Drop</a>
-      <a href="flags.php" class="<?= $active === 'flags' ? 'on' : '' ?>">Flag Battle</a>
-      <a href="voice.php" class="<?= $active === 'voice' ? 'on' : '' ?>">Voice</a>
-      <a href="servers.php" class="<?= $active === 'servers' ? 'on' : '' ?>">Servers</a>
-      <a href="terminal.php" class="<?= $active === 'terminal' ? 'on' : '' ?>">Terminal</a>
-      <a href="activity.php" class="<?= $active === 'activity' ? 'on' : '' ?>">Activity</a>
-      <a href="settings.php" class="<?= $active === 'settings' ? 'on' : '' ?>">Settings</a>
-      <form method="post" action="logout.php" class="inline"><?= csrf_field() ?><button class="nav-btn" type="submit">Log out</button></form>
-    </nav>
+<header class="hdr">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open menu" aria-controls="side" aria-expanded="false"><?= icon('menu') ?></button>
+  <a class="hdr-brand" href="dashboard.php">
+    <span class="hdr-logo"><?= icon('gamepad') ?></span>
+    <span><span class="hdr-title">GameStream <b>Admin Panel</b></span>
+    <span class="hdr-sub">Manage Your Games <i>•</i> VPS <i>•</i> YouTube Live <i>•</i> All in One Place</span></span>
+  </a>
+  <div class="hdr-right">
+    <div class="sys">
+      <div class="sys-state <?= $online ? 'on' : 'off' ?>"><span class="sys-dot"></span><?= $online ? 'System Online' : 'VPS Offline' ?></div>
+      <div class="sys-time" id="clock" data-ts="<?= time() ?>"><?= e(date('h:i:s A')) ?> (BD)</div>
+    </div>
+    <?= render_bell() ?>
+    <div class="user-wrap">
+      <button class="user-btn" type="button" id="user-btn" aria-expanded="false">
+        <span class="avatar"><?= icon('user') ?></span>
+        <span class="user-txt"><b><?= e(ucfirst($admin['username'])) ?></b><small>Super Admin</small></span><?= icon('chevron', 'ic chev') ?>
+      </button>
+      <div class="dropdown user-menu" id="user-menu" hidden>
+        <a href="settings.php"><?= icon('gear') ?> Settings</a>
+        <a href="/" target="_blank" rel="noopener"><?= icon('external') ?> Open website</a>
+        <form method="post" action="logout.php"><?= csrf_field() ?><button type="submit"><?= icon('logout') ?> Log out</button></form>
+      </div>
+    </div>
   </div>
 </header>
+<aside class="side" id="side">
+  <nav class="side-nav">
+    <?php foreach (nav_items() as $key => [$label, $href, $ic]): ?>
+      <a href="<?= e($href) ?>" class="<?= $active === $key ? 'on' : '' ?>"><?= icon($ic) ?><span><?= e($label) ?></span></a>
+    <?php endforeach; ?>
+  </nav>
+  <?= sidebar_vps() ?>
+</aside>
+<div class="side-shade" id="side-shade" hidden></div>
 <?php endif; ?>
-<main class="wrap main">
+<main class="main<?= $admin ? '' : ' wrap' ?>">
 <?php if ($f): ?>
   <div class="flash flash-<?= e($f['type']) ?>" role="status"><?= e($f['msg']) ?></div>
 <?php endif; ?>
@@ -154,7 +177,8 @@ function page_end(string $script = ''): void
 {
     ?>
 </main>
-<?php if ($script): ?><script src="/assets/<?= e($script) ?>?v=2"></script><?php endif; ?>
+<script src="/assets/admin.js?v=3"></script>
+<?php if ($script && $script !== 'admin.js'): ?><script src="/assets/<?= e($script) ?>?v=3"></script><?php endif; ?>
 </body>
 </html>
 <?php

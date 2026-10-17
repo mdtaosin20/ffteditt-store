@@ -141,3 +141,25 @@ export class Commentator {
     }
   }
 }
+
+/* ------------------------------------------------------------ pause screen */
+export const PACE = { slow: 0.8, normal: 1, fast: 1.3 };
+
+// Shown instead of the game when Auto Play is off in the admin panel.
+// Checks the settings every 15 s and reloads when the game is switched back on.
+export function holdScreen(api, rev) {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2vh;' +
+    'background:radial-gradient(60% 40% at 50% 45%,#1b2a55,#05060d);color:#fff;font-family:Oswald,Impact,Arial Narrow,sans-serif;text-align:center';
+  el.innerHTML = '<div style="font-size:9vmin;font-weight:700;letter-spacing:.06em">BE RIGHT BACK</div>' +
+    '<div style="font-size:4vmin;color:#ffd21a;letter-spacing:.2em">THE GAME CONTINUES SOON</div>' +
+    '<div style="font-size:3vmin;color:#c9d4f2;margin-top:2vh">Comment your country while you wait!</div>';
+  document.body.appendChild(el);
+  setInterval(async () => {
+    try {
+      const r = await fetch(api, { cache: 'no-store' });
+      const c = r.ok ? await r.json() : null;
+      if (c && (c.autoplay !== false || c.rev !== rev)) location.reload();
+    } catch (e) { /* try again later */ }
+  }, 15000);
+}

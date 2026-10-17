@@ -14,7 +14,7 @@ if ($id) {
     $stream = $st->fetch() ?: null;
     if (!$stream) {
         flash('Stream not found.', 'error');
-        redirect('dashboard.php');
+        redirect('streams.php');
     }
 }
 
@@ -26,6 +26,8 @@ $defaults = [
     'quality'      => '480p-v',
     'fps'          => 20,
     'auto_restart' => 1,
+    'channel_name' => '',
+    'channel_url'  => '',
 ];
 $v      = $stream ?: $defaults;
 $errors = [];
@@ -37,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         db()->prepare('DELETE FROM streams WHERE id = ?')->execute([$id]);
         log_activity("Stream deleted: {$stream['name']}");
         flash("Deleted \"{$stream['name']}\".");
-        redirect('dashboard.php');
+        redirect('streams.php');
     }
 
     $v = [
@@ -48,6 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'quality'      => (string) ($_POST['quality'] ?? ''),
         'fps'          => (int) ($_POST['fps'] ?? 0),
         'auto_restart' => isset($_POST['auto_restart']) ? 1 : 0,
+        'channel_name' => trim((string) ($_POST['channel_name'] ?? '')),
+        'channel_url'  => trim((string) ($_POST['channel_url'] ?? '')),
     ];
     $newKey = preg_replace('/\s+/', '', (string) ($_POST['stream_key'] ?? ''));
 
@@ -72,6 +76,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($newKey !== '' && !preg_match('/^[A-Za-z0-9_-]{8,128}$/', $newKey)) {
         $errors[] = 'That stream key looks wrong. Copy it again from YouTube Studio.';
     }
+    if (mb_strlen($v['channel_name']) > 60) {
+        $errors[] = 'Channel name is too long (max 60 letters).';
+    }
+    if ($v['channel_url'] !== '' && !preg_match('#^https://(www\.|m\.)?youtube\.com/[^\s]+$#i', $v['channel_url'])) {
+        $errors[] = 'Channel link must be a YouTube address, like https://www.youtube.com/@yourchannel';
+    }
     if (!$stream && $newKey === '') {
         $errors[] = 'Paste the YouTube stream key.';
     }
@@ -80,21 +90,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $now = time();
         if ($stream) {
             $key = $newKey !== '' ? $newKey : $stream['stream_key'];
+            // only restart the live stream when something it uses has changed
+            $restart = $key !== $stream['stream_key'] || $v['rtmp_url'] !== $stream['rtmp_url'] || $v['page_url'] !== $stream['page_url']
+                || (int) $v['server_id'] !== (int) $stream['server_id'] || $v['quality'] !== $stream['quality']
+                || (int) $v['fps'] !== (int) $stream['fps'] || (int) $v['auto_restart'] !== (int) $stream['auto_restart'];
             db()->prepare('UPDATE streams SET name=?, stream_key=?, rtmp_url=?, page_url=?, server_id=?, quality=?,
-                           fps=?, auto_restart=?, rev = rev + 1, updated_at=? WHERE id=?')
+                           fps=?, auto_restart=?, channel_name=?, channel_url=?, rev = rev + ?, updated_at=? WHERE id=?')
                 ->execute([$v['name'], $key, $v['rtmp_url'], $v['page_url'], $v['server_id'], $v['quality'],
-                           $v['fps'], $v['auto_restart'], $now, $id]);
+                           $v['fps'], $v['auto_restart'], $v['channel_name'], $v['channel_url'], $restart ? 1 : 0, $now, $id]);
             log_activity("Stream updated: {$v['name']}" . ($newKey !== '' ? ' (new key)' : ''));
             flash('Saved. If it is live, it restarts with the new settings in a few seconds.');
         } else {
             db()->prepare('INSERT INTO streams (name, stream_key, rtmp_url, page_url, server_id, quality, fps,
-                           auto_restart, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+                           auto_restart, channel_name, channel_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
                 ->execute([$v['name'], $newKey, $v['rtmp_url'], $v['page_url'], $v['server_id'], $v['quality'],
-                           $v['fps'], $v['auto_restart'], $now, $now]);
+                           $v['fps'], $v['auto_restart'], $v['channel_name'], $v['channel_url'], $now, $now]);
             log_activity("Stream added: {$v['name']}");
             flash("Added \"{$v['name']}\". Press Start when you are ready.");
         }
-        redirect('dashboard.php');
+        redirect('streams.php');
     }
 }
 
@@ -102,7 +116,7 @@ page_start($stream ? 'Edit stream' : 'Add stream', 'streams', $admin);
 ?>
 <div class="page-head">
   <div>
-    <a class="back" href="dashboard.php">← Streams</a>
+    <a class="back" href="streams.php">← Live Stream Manager</a>
     <h1><?= $stream ? 'Edit stream' : 'Add stream' ?></h1>
   </div>
 </div>
@@ -118,6 +132,15 @@ page_start($stream ? 'Edit stream' : 'Add stream', 'streams', $admin);
   <label class="field"><span>Name</span>
     <input name="name" required maxlength="60" placeholder="e.g. Main channel – Ball race" value="<?= e($v['name']) ?>">
   </label>
+
+  <div class="row2">
+    <label class="field"><span>YouTube channel name</span>
+      <input name="channel_name" maxlength="60" placeholder="e.g. Game Zone BD" value="<?= e($v['channel_name'] ?? '') ?>">
+    </label>
+    <label class="field"><span>Channel link (for the Watch button)</span>
+      <input name="channel_url" type="url" placeholder="https://www.youtube.com/@yourchannel" value="<?= e($v['channel_url'] ?? '') ?>">
+    </label>
+  </div>
 
   <label class="field"><span>YouTube stream key</span>
     <input name="stream_key" type="password" autocomplete="off" spellcheck="false"
@@ -178,8 +201,8 @@ page_start($stream ? 'Edit stream' : 'Add stream', 'streams', $admin);
   </label>
 
   <div class="form-actions">
-    <button class="btn btn-pink" type="submit"><?= $stream ? 'Save changes' : 'Add stream' ?></button>
-    <a class="btn btn-ghost" href="dashboard.php">Cancel</a>
+    <button class="btn btn-blue" type="submit"><?= $stream ? 'Save changes' : 'Add stream' ?></button>
+    <a class="btn btn-ghost" href="streams.php">Cancel</a>
   </div>
 </form>
 

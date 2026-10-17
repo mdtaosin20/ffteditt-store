@@ -10,6 +10,8 @@ function flags_defaults(): array
         'ring'      => 100,    // ring turning speed, % of normal
         'speed'     => 100,    // flag speed, % of normal
         'gap'       => 100,    // gap size, % of normal
+        'autoplay'  => true,
+        'pace'      => 'normal',
         'rev'       => '1',
         'reset'     => '1',
     ];

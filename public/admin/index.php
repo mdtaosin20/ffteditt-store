@@ -29,8 +29,8 @@ page_start('Log in');
 <div class="auth">
   <form method="post" class="card auth-card">
     <div class="auth-head">
-      <div class="logo big">FFTEdit</div>
-      <p class="muted">Admin panel</p>
+      <div class="logo big"><?= icon('gamepad', 'ic login-ic') ?><span>GameStream <b>Admin Panel</b></span></div>
+      <p class="muted">Manage your games, VPS and YouTube live</p>
     </div>
     <?php if ($error): ?><div class="flash flash-error" role="alert"><?= e($error) ?></div><?php endif; ?>
     <?= csrf_field() ?>

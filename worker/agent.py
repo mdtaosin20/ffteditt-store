@@ -28,7 +28,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
@@ -448,6 +448,125 @@ class Stream:
         }
 
 
+class Stats:
+    """CPU, disk, network and top programs for the dashboard (all read from /proc, no extra packages)."""
+
+    def __init__(self):
+        self.cpu_prev = None
+        self.net_prev = None
+        self.proc_prev = {}
+        self.proc_time = None
+        self.page = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
+        self.hz = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
+
+    def cpu(self):
+        with open("/proc/stat") as f:
+            v = [int(x) for x in f.readline().split()[1:]]
+        idle, total = v[3] + (v[4] if len(v) > 4 else 0), sum(v[:8])
+        prev, self.cpu_prev = self.cpu_prev, (idle, total)
+        if not prev or total <= prev[1]:
+            return None
+        return round(100.0 * (1 - (idle - prev[0]) / float(total - prev[1])), 1)
+
+    def net(self):
+        rx = tx = 0
+        with open("/proc/net/dev") as f:
+            for line in f.readlines()[2:]:
+                name, data = line.split(":", 1)
+                if name.strip() == "lo":
+                    continue
+                d = data.split()
+                rx += int(d[0])
+                tx += int(d[8])
+        now = time.time()
+        prev, self.net_prev = self.net_prev, (now, rx, tx)
+        up = down = None
+        if prev and now > prev[0] and rx >= prev[1] and tx >= prev[2]:
+            down = round((rx - prev[1]) * 8 / 1000.0 / (now - prev[0]), 1)
+            up = round((tx - prev[2]) * 8 / 1000.0 / (now - prev[0]), 1)
+        return rx, tx, up, down
+
+    def procs(self):
+        now = time.time()
+        cur, mem = {}, {}
+        for pid in os.listdir("/proc"):
+            if not pid.isdigit():
+                continue
+            try:
+                with open("/proc/%s/stat" % pid) as f:
+                    raw = f.read()
+                name = raw[raw.index("(") + 1:raw.rindex(")")]
+                rest = raw[raw.rindex(")") + 2:].split()
+                ticks = int(rest[11]) + int(rest[12])
+                rss = int(rest[21]) * self.page
+            except (OSError, ValueError, IndexError):
+                continue
+            group = self.group(name)
+            cur[pid] = (group, ticks)
+            mem[group] = mem.get(group, 0) + rss
+        usage = {}
+        if self.proc_time:
+            dt = now - self.proc_time
+            for pid, (group, ticks) in cur.items():
+                old = self.proc_prev.get(pid)
+                if old and old[0] == group and ticks >= old[1]:
+                    usage[group] = usage.get(group, 0) + (ticks - old[1]) / float(self.hz) / dt * 100
+        self.proc_prev, self.proc_time = cur, now
+        ncpu = os.cpu_count() or 1
+        out = [{"name": g, "cpu": round(usage.get(g, 0) / ncpu, 1), "mem_mb": mem[g] // (1024 * 1024)} for g in mem]
+        out.sort(key=lambda p: (p["cpu"], p["mem_mb"]), reverse=True)
+        return out[:6]
+
+    @staticmethod
+    def group(name):
+        n = name.lower()
+        for key, label in (("chrome", "chrome (game)"), ("ffmpeg", "ffmpeg (stream)"), ("xvfb", "Xvfb (screen)"),
+                           ("pulseaudio", "pulseaudio (sound)"), ("python", "worker"), ("piper", "voice maker")):
+            if key in n:
+                return label
+        return "system"
+
+    def collect(self):
+        info = {}
+        try:
+            info["cpu_pct"] = self.cpu()
+        except Exception:
+            pass
+        try:
+            du = shutil.disk_usage("/")
+            info["disk_total_gb"] = round(du.total / 1024.0 ** 3, 1)
+            info["disk_used_gb"] = round(du.used / 1024.0 ** 3, 1)
+        except Exception:
+            pass
+        try:
+            info["rx_bytes"], info["tx_bytes"], info["up_kbps"], info["down_kbps"] = self.net()
+        except Exception:
+            pass
+        try:
+            with open("/proc/uptime") as f:
+                info["uptime_s"] = int(float(f.read().split()[0]))
+        except Exception:
+            pass
+        try:
+            temps = []
+            for z in os.listdir("/sys/class/thermal"):
+                if z.startswith("thermal_zone"):
+                    with open("/sys/class/thermal/%s/temp" % z) as f:
+                        temps.append(int(f.read().strip()) / 1000.0)
+            if temps:
+                info["temp_c"] = round(max(temps), 1)
+        except Exception:
+            pass
+        try:
+            info["procs"] = self.procs()
+        except Exception:
+            pass
+        return info
+
+
+STATS = Stats()
+
+
 def machine_info():
     info = {
         "hostname": socket.gethostname(),
@@ -465,6 +584,7 @@ def machine_info():
         info["mem_used_mb"] = (mem["MemTotal"] - mem.get("MemAvailable", 0)) // 1024
     except Exception:
         pass
+    info.update(STATS.collect())
     return info
 
 

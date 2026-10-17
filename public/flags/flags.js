@@ -1,7 +1,7 @@
 // FFTEdit · Country Flag Battle. Runs by itself, made for 24/7 vertical live streams.
 // 195 flags bounce inside a turning ring with a gap. A flag that slips out is eliminated;
 // the last flag left qualifies for the final. When the final is full, the final round finds the champion.
-import { Sfx, Commentator } from '/game/audio.js?v=6';
+import { Sfx, Commentator, holdScreen, PACE } from '/game/audio.js?v=7';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -64,6 +64,8 @@ async function main() {
     fetch('/flags/flags.json').then((r) => r.json()),
   ]);
   const cfg = { ...DEF, ...(remote || {}) };
+  if (cfg.autoplay === false) { holdScreen('/api/flags.php', cfg.rev); return; }
+  const pace = PACE[cfg.pace] || 1;
   const atlas = new Image();
   atlas.src = '/flags/flags.png';
   await atlas.decode().catch(() => {});
@@ -396,7 +398,7 @@ async function main() {
   startRound();
   let last = performance.now(), acc = 0, lastDraw = 0, lastTimer = 0;
   const frame = (now) => {
-    const dt = Math.min(0.1, (now - last) / 1000) * FAST; last = now;
+    const dt = Math.min(0.1, (now - last) / 1000) * FAST * pace; last = now;
     phaseT += dt; simT += dt;
     if (phase !== 'won') roundT += dt;
     acc += dt;

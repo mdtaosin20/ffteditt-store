@@ -3,6 +3,23 @@ require __DIR__ . '/../_boot.php';
 $admin = require_login();
 
 $errors = [];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['do'] ?? '') === 'vps') {
+    check_csrf();
+    $o = [
+        'provider'    => mb_substr(trim((string) ($_POST['provider'] ?? '')), 0, 30),
+        'location'    => mb_substr(trim((string) ($_POST['location'] ?? '')), 0, 40),
+        'plan'        => mb_substr(trim((string) ($_POST['plan'] ?? '')), 0, 30),
+        'bw_limit_gb' => max(1, min(1000000, (int) ($_POST['bw_limit_gb'] ?? 2000))),
+        'upgrade_url' => trim((string) ($_POST['upgrade_url'] ?? '')),
+    ];
+    if (!preg_match('#^https://[^\s]+$#', $o['upgrade_url'])) {
+        $o['upgrade_url'] = panel_defaults()['upgrade_url'];
+    }
+    panel_save($o);
+    flash('VPS info saved.');
+    redirect('settings.php');
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     check_csrf();
     $current = (string) ($_POST['current'] ?? '');
@@ -40,7 +57,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 page_start('Settings', 'settings', $admin);
 ?>
-<div class="page-head"><div><h1>Settings</h1><p class="muted">Change your login.</p></div></div>
+<div class="page-head"><div><h1>Settings</h1><p class="muted">Your VPS details and your login.</p></div></div>
+<?php $o = panel_opts(); ?>
+<form method="post" class="panel form">
+  <?= csrf_field() ?><input type="hidden" name="do" value="vps">
+  <div class="ph"><h2><?= icon('server') ?>Your VPS Info</h2></div>
+  <p class="muted small" style="margin:0">Shown in the box at the bottom of the menu. CPU, RAM and storage are read from the VPS automatically.</p>
+  <div class="row2">
+    <label class="field"><span>Provider</span><input name="provider" maxlength="30" value="<?= e($o['provider']) ?>" placeholder="InterServer"></label>
+    <label class="field"><span>Location</span><input name="location" maxlength="40" value="<?= e($o['location']) ?>" placeholder="New Jersey, USA"></label>
+    <label class="field"><span>Plan</span><input name="plan" maxlength="30" value="<?= e($o['plan']) ?>" placeholder="1 Slice"></label>
+    <label class="field"><span>Monthly bandwidth (GB)</span><input name="bw_limit_gb" type="number" min="1" value="<?= (int) $o['bw_limit_gb'] ?>"></label>
+  </div>
+  <label class="field"><span>“Upgrade Plan” button link</span><input name="upgrade_url" type="url" value="<?= e($o['upgrade_url']) ?>"></label>
+  <div class="form-actions"><button class="btn btn-blue" type="submit">Save VPS info</button></div>
+</form>
+<h2 class="sec-h">Login</h2>
 
 <?php foreach ($errors as $err): ?>
   <div class="flash flash-error" role="alert"><?= e($err) ?></div>
@@ -60,6 +92,6 @@ page_start('Settings', 'settings', $admin);
   <label class="field"><span>Current password (required to save)</span>
     <input name="current" type="password" autocomplete="current-password" required>
   </label>
-  <div class="form-actions"><button class="btn btn-pink" type="submit">Save</button></div>
+  <div class="form-actions"><button class="btn btn-blue" type="submit">Save login</button></div>
 </form>
 <?php page_end();

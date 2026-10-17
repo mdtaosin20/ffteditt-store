@@ -1,7 +1,7 @@
 // FFTEdit · Ball Drop Game (3D). Runs by itself, made for 24/7 vertical live streams.
 import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
-import { Sfx, Commentator } from './audio.js?v=6';
+import { Sfx, Commentator, holdScreen, PACE } from './audio.js?v=7';
 
 /* ------------------------------------------------------------------ config */
 const DEFAULTS = {
@@ -537,6 +537,8 @@ async function main() {
   fitStage();
   addEventListener('resize', fitStage);
   const cfg = await loadConfig();
+  if (cfg.autoplay === false) { holdScreen('/api/game.php', cfg.rev); return; }
+  const pace = PACE[cfg.pace] || 1;
   const P = cfg.players;
 
   // texts and photos
@@ -881,7 +883,7 @@ async function main() {
   let acc = 0;
   const FIXED = 1 / 120;
   function frame() {
-    const dt = Math.min(0.1, clock.getDelta());
+    const dt = Math.min(0.1, clock.getDelta()) * pace;
     phaseT += dt; gameT += dt;
     if (phase === 'start' && phaseT > 0.8) newRound();
     if (phase === 'play') {

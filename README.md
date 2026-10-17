@@ -25,6 +25,14 @@ The VPS only makes outgoing HTTPS calls, so no ports need to be opened on it.
 
 Deployment is handled by `.cpanel.yml` (cPanel → Git Version Control → Update from Remote → Deploy HEAD Commit).
 
+## GameStream Admin Panel
+
+`/admin/` opens the dashboard: VPS status, CPU / RAM / disk / network cards and live graphs (worker 1.4.0+ sends them
+every 5 s), Live Stream Overview with Start / Stop / Watch, Game Manager (auto play on/off, speed, restart), Schedule
+Manager (start and stop a stream at set times, daily or on chosen days, Bangladesh time; overnight windows work),
+YouTube Manager, Recent Logs, Start All / Stop All / Restart All, Auto Start / Auto Stop / Notification switches,
+monthly bandwidth, and a bell for warnings and problems. Shared pieces live in `app/panel.php`, `app/dash.php`, `app/ui.php`.
+
 ## First-time setup
 
 1. Deploy, then open `https://ffteditt.store/admin/` → create the admin login.

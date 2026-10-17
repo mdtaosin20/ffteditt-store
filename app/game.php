@@ -7,8 +7,10 @@ const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 function game_defaults(): array
 {
     return [
-        'target'  => 20,
-        'rev'     => '1',
+        'target'   => 20,
+        'autoplay' => true,      // false = the page shows "be right back" instead of playing
+        'pace'     => 'normal',  // slow | normal | fast
+        'rev'      => '1',
         'reset'   => '1',
         'players' => [
             ['name' => 'MESSI',   'team' => 'PINK TEAM', 'color' => '#ff2f9e', 'number' => '10', 'photo' => '', 'ball' => ''],
