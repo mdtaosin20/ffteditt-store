@@ -1,7 +1,7 @@
 // FFTEdit · Country Flag Battle. Runs by itself, made for 24/7 vertical live streams.
 // 195 flags bounce inside a turning ring with a gap. A flag that slips out is eliminated;
 // the last flag left qualifies for the final. When the final is full, the final round finds the champion.
-import { Sfx, Commentator, holdScreen, PACE, reporter } from '/game/audio.js?v=9';
+import { Sfx, Commentator, holdScreen, PACE, reporter } from '/game/audio.js?v=10';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -41,12 +41,12 @@ const FIXED = 1 / 90;
 
 /* ------------------------------------------------------------------ sounds */
 class FlagSfx extends Sfx {
-  wall(s = 1) { if (!this.running || !this.limit('wall', 85)) return; this.tone({ freq: 480 + Math.random() * 160, type: 'triangle', dur: 0.06, vol: 0.06 * s }); }
-  hit(s = 1) { if (!this.running || !this.limit('hit', 110)) return; this.burst({ freq: 2300 + Math.random() * 600, q: 3, dur: 0.04, vol: 0.14 * s }); }
+  // soft, rare knocks (with many flags they used to play non-stop and sounded like a buzz)
+  wall(s = 1) { if (!this.running || !this.limit('wall', 450)) return; this.tone({ freq: 330 + Math.random() * 80, type: 'sine', dur: 0.08, vol: 0.05 * s }); }
+  hit(s = 1) { if (!this.running || !this.limit('hit', 380)) return; this.tone({ freq: 220 + Math.random() * 60, type: 'sine', dur: 0.07, vol: 0.06 * s }); }
   out() {
-    if (!this.running || !this.limit('out', 70)) return;
-    this.tone({ freq: 880, to: 160, type: 'sine', dur: 0.38, vol: 0.16 });
-    this.burst({ freq: 1800, sweepTo: 300, q: 1.2, dur: 0.35, vol: 0.18 });
+    if (!this.running || !this.limit('out', 650)) return;
+    this.tone({ freq: 660, to: 220, type: 'sine', dur: 0.3, vol: 0.1 });
   }
   spawn() {
     if (!this.running) return;
@@ -408,8 +408,10 @@ async function main() {
     if (phase !== 'won') roundT += dt;
     acc += dt;
     while (acc >= FIXED) { step(FIXED); acc -= FIXED; }
-    if (hits) { sfx.hit(Math.min(1, hits / 3)); hits = 0; }
-    if (walls) { sfx.wall(); walls = 0; }
+    // knock sounds only when few flags are left, so the arena never turns into a constant buzz
+    if (hits && alive <= 15) sfx.hit(Math.min(1, hits / 3));
+    if (walls && alive <= 15) sfx.wall();
+    hits = 0; walls = 0;
 
     if (phase === 'spawn' && phaseT > 1.8) { phase = 'play'; phaseT = 0; }
     if (phase === 'won') {

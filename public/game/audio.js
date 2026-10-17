@@ -68,7 +68,7 @@ export class Sfx {
     [523, 659, 784, 1047].forEach((f) => this.tone({ freq: f, type: 'triangle', dur: 1.6, vol: 0.16, delay: 0.7, attack: 0.03 }));
     for (let i = 0; i < 10; i++) this.burst({ freq: 600 + Math.random() * 1200, q: 0.7, dur: 3.2, vol: 0.2, delay: 0.1 * i });
   }
-  setRoll(speed) { if (this.ok) this.rollGain.gain.setTargetAtTime(speed > 0.3 ? Math.min(0.12, speed * 0.03) : 0, this.ctx.currentTime, 0.08); }
+  setRoll(speed) { if (this.ok) this.rollGain.gain.setTargetAtTime(speed > 0.3 ? Math.min(0.05, speed * 0.015) : 0, this.ctx.currentTime, 0.08); }
   duck(on) { if (this.ok) this.master.gain.setTargetAtTime(on ? 0.6 : 0.9, this.ctx.currentTime, 0.3); } // sound effects step back while the commentator talks
 }
 
