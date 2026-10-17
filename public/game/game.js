@@ -13,6 +13,7 @@ const DEFAULTS = {
     { name: 'RONALDO', team: 'GOLD TEAM', color: '#ffd21a', number: '7',  flag: 'pt', photo: '/game/img/p2-hero.jpg', face: '/game/img/p2-face.jpg', ball: '' },
   ],
 };
+const BOWL_TOP = 820; // where the bowl picture starts on the 1080x1920 stage (matches game.css)
 let BALL_STYLE = 'football'; // 'football' (like a real ball, tinted in the team colour) or 'face' (player photo)
 
 /* country flags (same picture sheet as the Flag Battle game) */
@@ -502,7 +503,7 @@ class Tubes {
     this.P = players; this.imgs = imgs;
     this.DROP_H = 0.9;
     const v = new THREE.Vector3();
-    const proj = (x, y, z) => { v.set(x, y, z).project(camera); return [((v.x + 1) / 2) * 1080, 960 + ((1 - v.y) / 2) * 860]; };
+    const proj = (x, y, z) => { v.set(x, y, z).project(camera); return [((v.x + 1) / 2) * 1080, BOWL_TOP + ((1 - v.y) / 2) * 860]; };
     const r = RIM_R - 0.55;
     const point = (a) => proj(r * Math.cos(a), surfaceY(r) + BALL_R + this.DROP_H, r * Math.sin(a));
     const findAngle = (tx, ty) => {
@@ -510,8 +511,8 @@ class Tubes {
       for (let a = Math.PI * 0.85; a < Math.PI * 2.15; a += 0.004) { const [x, y] = point(a); const d = (x - tx) ** 2 + (y - ty) ** 2; if (d < bd) { bd = d; best = a; } }
       return best;
     };
-    const tops = [[34, 958], [1046, 958]];
-    const aims = [[330, 1150], [750, 1150]];
+    const tops = [[34, BOWL_TOP - 2], [1046, BOWL_TOP - 2]];
+    const aims = [[330, BOWL_TOP + 190], [750, BOWL_TOP + 190]];
     this.t = players.map((p, i) => {
       const angle = findAngle(...aims[i]);
       const mouth = point(angle);
@@ -633,6 +634,8 @@ async function main() {
     if (f.offsetWidth > 1020) f.style.transform = `scale(${1020 / f.offsetWidth})`;
   };
   fitAll(); document.fonts && document.fonts.ready.then(fitAll);
+  const defaultPair = P[0].name === 'MESSI' && P[1].name === 'RONALDO' && !cfg.players.some((p) => String(p.photo || '').includes('/api/'));
+  if (defaultPair) { $('hero').classList.add('art'); $('hero-art').hidden = false; }
   drawBackground(P);
 
   // scores survive a page reload (the stream browser restarting)
@@ -686,8 +689,8 @@ async function main() {
   // drawn with plain 2D canvas, so the game always runs (e.g. on servers without 3D support).
   const canvas = $('three');
   const camera = new THREE.PerspectiveCamera(30, 1080 / 860, 0.1, 100);
-  camera.position.set(0, 13.6, 19.6);
-  camera.lookAt(0, -3.0, 0);
+  camera.position.set(0, 12.0, 16.8);
+  camera.lookAt(0, -2.0, 0);
   camera.updateMatrixWorld();
   const Q = Math.min(2, Math.max(0.3, parseFloat(new URLSearchParams(location.search).get('q')) || 1));
   const DPR = Math.min(devicePixelRatio || 1, 1.5);

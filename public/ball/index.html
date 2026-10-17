@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Messi vs Ronaldo · Ball Drop Game</title>
-<link rel="stylesheet" href="/game/game.css?v=8">
+<link rel="stylesheet" href="/game/game.css?v=9">
 <script type="importmap">{ "imports": { "three": "/game/vendor/three.module.js" } }</script>
 </head>
 <body>
@@ -12,7 +12,8 @@
   <canvas id="bg" width="1080" height="1920" aria-hidden="true"></canvas>
 
   <!-- top: big player photos + title -->
-  <div class="hero">
+  <div class="hero" id="hero">
+    <img class="hero-art" id="hero-art" src="/game/img/header.jpg" alt="Messi vs Ronaldo · Ball Drop Game" hidden>
     <div class="hero-photo left"><img id="p1-hero" alt=""></div>
     <div class="hero-photo right"><img id="p2-hero" alt=""></div>
     <div class="title">
@@ -82,6 +83,6 @@
     </div>
   </div>
 </div>
-<script type="module" src="/game/game.js?v=15"></script>
+<script type="module" src="/game/game.js?v=16"></script>
 </body>
 </html>
