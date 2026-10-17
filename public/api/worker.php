@@ -211,3 +211,16 @@ if ($voiceJobs) {
 }
 
 echo json_encode(['ok' => true, 'poll_seconds' => $poll, 'run' => $out, 'commands' => $cmds, 'voice_jobs' => $voiceJobs]);
+
+// 5) After answering the worker: set the YouTube title/description/thumbnail on new live videos.
+if (function_exists('fastcgi_finish_request')) {
+    fastcgi_finish_request();
+} elseif (function_exists('litespeed_finish_request')) {
+    litespeed_finish_request();
+}
+ignore_user_abort(true);
+try {
+    yt_tick($sid);
+} catch (Throwable $e) {
+    // never break the worker check-in
+}

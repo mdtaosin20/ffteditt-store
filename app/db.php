@@ -108,6 +108,22 @@ function migrate(PDO $pdo): void
     $add('streams', 'channel_name', "TEXT NOT NULL DEFAULT ''");
     $add('streams', 'channel_url', "TEXT NOT NULL DEFAULT ''");
     $add('activity', 'level', "TEXT NOT NULL DEFAULT 'info'");
+    // YouTube connection (title, description, thumbnail) — see app/youtube.php
+    $add('streams', 'yt_refresh', "TEXT NOT NULL DEFAULT ''");
+    $add('streams', 'yt_channel', "TEXT NOT NULL DEFAULT ''");
+    $add('streams', 'yt_title', "TEXT NOT NULL DEFAULT ''");
+    $add('streams', 'yt_desc', "TEXT NOT NULL DEFAULT ''");
+    $add('streams', 'yt_thumb', "TEXT NOT NULL DEFAULT 'default'");
+    $add('streams', 'yt_auto', 'INTEGER NOT NULL DEFAULT 1');
+    $add('streams', 'yt_rev', 'INTEGER NOT NULL DEFAULT 1');
+    $add('streams', 'yt_done_rev', 'INTEGER NOT NULL DEFAULT 0');
+    $add('streams', 'yt_done_start', 'INTEGER NOT NULL DEFAULT 0');
+    $add('streams', 'yt_try_at', 'INTEGER NOT NULL DEFAULT 0');
+    $add('streams', 'yt_video', "TEXT NOT NULL DEFAULT ''");
+    $add('streams', 'yt_msg', "TEXT NOT NULL DEFAULT ''");
+    $add('streams', 'yt_msg_ok', 'INTEGER NOT NULL DEFAULT 0');
+    $add('streams', 'yt_fails', 'INTEGER NOT NULL DEFAULT 0');
+    $add('streams', 'yt_fail_start', 'INTEGER NOT NULL DEFAULT 0');
 
     // The Ball Drop game moved from the home page to /ball/ (the home page is now the games website).
     $done = $pdo->query("SELECT value FROM settings WHERE key = 'mig_ball_path'")->fetchColumn();

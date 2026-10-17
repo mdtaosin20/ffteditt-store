@@ -1,0 +1,322 @@
+<?php
+/**
+ * YouTube connection (Google OAuth) — sets the live video's title, description and thumbnail.
+ *
+ * One Google "OAuth client" (Client ID + Secret, saved in settings) is shared by all channels.
+ * Each stream row connects its own YouTube channel and keeps its own refresh token.
+ * The secret and tokens never leave the server and are never shown in the panel.
+ */
+declare(strict_types=1);
+
+const YT_SCOPE = 'https://www.googleapis.com/auth/youtube.force-ssl';
+const YT_API   = 'https://www.googleapis.com/youtube/v3/';
+
+/* ---------------------------------------------------------------- app keys */
+
+function yt_client(): array
+{
+    return [
+        'id'     => (string) (setting_get('yt_client_id') ?? ''),
+        'secret' => (string) (setting_get('yt_client_secret') ?? ''),
+    ];
+}
+
+function yt_ready(): bool
+{
+    $c = yt_client();
+    return $c['id'] !== '' && $c['secret'] !== '';
+}
+
+function yt_redirect_uri(): string
+{
+    $host = preg_replace('/[^a-z0-9.\-:]/i', '', (string) ($_SERVER['HTTP_HOST'] ?? 'ffteditt.store'));
+    return 'https://' . $host . '/admin/yt_oauth.php';
+}
+
+function yt_auth_url(string $state): string
+{
+    return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
+        'client_id'              => yt_client()['id'],
+        'redirect_uri'           => yt_redirect_uri(),
+        'response_type'          => 'code',
+        'scope'                  => YT_SCOPE,
+        'access_type'            => 'offline',
+        'prompt'                 => 'consent select_account',
+        'include_granted_scopes' => 'true',
+        'state'                  => $state,
+    ]);
+}
+
+/* ---------------------------------------------------------------- HTTP */
+
+/** @return array{0:int,1:array|null,2:string} [status, json, raw] */
+function yt_http(string $method, string $url, array $headers = [], ?string $body = null, int $timeout = 12): array
+{
+    $test = getenv('YT_TEST_BASE'); // local tests only: send Google calls to a fake server
+    if ($test) {
+        $url = preg_replace('#^https://[^/]+#', $test, $url);
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST  => $method,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => $headers,
+        CURLOPT_TIMEOUT        => $timeout,
+        CURLOPT_CONNECTTIMEOUT => 6,
+    ]);
+    if ($body !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    }
+    $raw  = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+    if ($raw === false) {
+        return [0, null, $err];
+    }
+    $j = json_decode((string) $raw, true);
+    return [$code, is_array($j) ? $j : null, (string) $raw];
+}
+
+function yt_err(array $r): string
+{
+    [$code, $j, $raw] = $r;
+    if ($code === 0) return 'Could not reach Google (' . $raw . ')';
+    $m = $j['error']['message'] ?? $j['error_description'] ?? (is_string($j['error'] ?? null) ? $j['error'] : '') ?: substr(strip_tags($raw), 0, 120);
+    $reason = $j['error']['errors'][0]['reason'] ?? '';
+    if ($reason === 'quotaExceeded') return 'YouTube daily limit used up. It resets at 1–2 PM Bangladesh time.';
+    if ($code === 403 && stripos((string) $m, 'thumbnail') !== false) return 'YouTube does not allow custom thumbnails on this channel yet. Verify the channel with your phone at youtube.com/verify.';
+    return "Google said ({$code}): " . strip_tags((string) $m);
+}
+
+/** Swap the auth code (after "Allow") for tokens. */
+function yt_exchange(string $code): array
+{
+    $c = yt_client();
+    $r = yt_http('POST', 'https://oauth2.googleapis.com/token', ['Content-Type: application/x-www-form-urlencoded'], http_build_query([
+        'code'          => $code,
+        'client_id'     => $c['id'],
+        'client_secret' => $c['secret'],
+        'redirect_uri'  => yt_redirect_uri(),
+        'grant_type'    => 'authorization_code',
+    ]));
+    if ($r[0] !== 200 || empty($r[1]['access_token'])) {
+        throw new RuntimeException(yt_err($r));
+    }
+    return $r[1];
+}
+
+/** A fresh access token for this stream's channel (cached ~55 minutes). */
+function yt_token(array $s): string
+{
+    if ($s['yt_refresh'] === '') {
+        throw new RuntimeException('This channel is not connected to YouTube yet.');
+    }
+    $key   = 'yt_at_' . (int) $s['id'];
+    $cache = json_decode((string) (setting_get($key) ?? ''), true);
+    if (is_array($cache) && ($cache['exp'] ?? 0) > time() + 60 && ($cache['rh'] ?? '') === md5($s['yt_refresh'])) {
+        return (string) $cache['t'];
+    }
+    $c = yt_client();
+    $r = yt_http('POST', 'https://oauth2.googleapis.com/token', ['Content-Type: application/x-www-form-urlencoded'], http_build_query([
+        'client_id'     => $c['id'],
+        'client_secret' => $c['secret'],
+        'refresh_token' => $s['yt_refresh'],
+        'grant_type'    => 'refresh_token',
+    ]));
+    if ($r[0] !== 200 || empty($r[1]['access_token'])) {
+        if (($r[1]['error'] ?? '') === 'invalid_grant') {
+            throw new RuntimeException('The YouTube connection has expired. Press "Connect YouTube" again. (Tip: in Google Cloud set the app to "In production" so it stays connected.)');
+        }
+        throw new RuntimeException(yt_err($r));
+    }
+    setting_set($key, json_encode(['t' => $r[1]['access_token'], 'exp' => time() + (int) ($r[1]['expires_in'] ?? 3600), 'rh' => md5($s['yt_refresh'])]));
+    return (string) $r[1]['access_token'];
+}
+
+function yt_get(string $tok, string $path, array $q): array
+{
+    return yt_http('GET', YT_API . $path . '?' . http_build_query($q), ['Authorization: Bearer ' . $tok]);
+}
+
+/** Name of the channel the token belongs to. */
+function yt_channel_title(string $tok): string
+{
+    $r = yt_get($tok, 'channels', ['part' => 'snippet', 'mine' => 'true']);
+    if ($r[0] !== 200) throw new RuntimeException(yt_err($r));
+    return (string) ($r[1]['items'][0]['snippet']['title'] ?? '(no channel)');
+}
+
+function yt_revoke(string $refresh): void
+{
+    if ($refresh !== '') {
+        yt_http('POST', 'https://oauth2.googleapis.com/revoke', ['Content-Type: application/x-www-form-urlencoded'], http_build_query(['token' => $refresh]), 6);
+    }
+}
+
+/* ---------------------------------------------------------------- texts and thumbnails */
+
+function yt_defaults(string $game): array
+{
+    if ($game === 'flags') {
+        return [
+            'title' => '🔴 LIVE Country Flag Battle 🌍 195 Countries, Only 1 Winner! Comment Your Country 🏆',
+            'desc'  => "🌍 195 countries fight inside a turning ring. Only one flag survives!\n"
+                . "Which country will be the champion today? 🏆\n\n"
+                . "👇 COMMENT YOUR COUNTRY and cheer for your flag!\n"
+                . "🔔 Subscribe and turn on notifications so you never miss a battle.\n\n"
+                . "🇧🇩 Bangladesh 🇮🇳 India 🇵🇰 Pakistan 🇺🇸 USA 🇧🇷 Brazil 🇦🇷 Argentina 🇸🇦 Saudi Arabia 🇹🇷 Turkey 🇮🇩 Indonesia 🇳🇬 Nigeria\n\n"
+                . "#countryballs #flagbattle #marblerace #countries #flags #live #satisfying #game #worldflags #geography",
+        ];
+    }
+    return [
+        'title' => '🔴 LIVE Messi vs Ronaldo ⚽ Ball Drop Battle — Who Wins? Comment M or R!',
+        'desc'  => "⚽ Messi or Ronaldo? Balls fall into the bowl and every goal counts!\n"
+            . "Live 24/7 — watch who wins each round. 🏆\n\n"
+            . "👇 Comment M for Messi or R for Ronaldo!\n"
+            . "🔔 Subscribe and turn on notifications.\n\n"
+            . "#messi #ronaldo #messivsronaldo #football #soccer #marblerace #satisfying #live #game #goat",
+    ];
+}
+
+function yt_thumb_dir(): string
+{
+    $d = DATA_DIR . '/yt';
+    if (!is_dir($d)) @mkdir($d, 0700, true);
+    return $d;
+}
+
+/** @return array{0:string,1:string}|null [file path, mime] of the thumbnail to use */
+function yt_thumb_file(array $s): ?array
+{
+    $t = (string) $s['yt_thumb'];
+    if ($t === 'jpg' || $t === 'png') {
+        $f = yt_thumb_dir() . '/thumb_' . (int) $s['id'] . '.' . $t;
+        if (is_file($f)) return [$f, $t === 'png' ? 'image/png' : 'image/jpeg'];
+        $t = 'default';
+    }
+    if ($t === 'default') {
+        $f = APP_DIR . '/yt/' . (game_of_url($s['page_url']) === 'flags' ? 'flags' : 'ball') . '.jpg';
+        return is_file($f) ? [$f, 'image/jpeg'] : null;
+    }
+    return null;
+}
+
+/** Texts this stream will use (its own, or the game's ready-made ones). */
+function yt_texts(array $s): array
+{
+    $d = yt_defaults(game_of_url($s['page_url']));
+    return [
+        'title' => $s['yt_title'] !== '' ? $s['yt_title'] : $d['title'],
+        'desc'  => $s['yt_desc'] !== '' ? $s['yt_desc'] : $d['desc'],
+    ];
+}
+
+/* ---------------------------------------------------------------- apply to the live video */
+
+/**
+ * Finds the live video this stream is sending to and sets title, description and thumbnail.
+ * Uses ~103 of the 10,000 daily YouTube "units" (title 50 + thumbnail 50 + lookups).
+ */
+function yt_apply(array $s): array
+{
+    $mark = db()->prepare('UPDATE streams SET yt_msg = ?, yt_msg_ok = ?, yt_try_at = ? WHERE id = ?');
+    try {
+        $tok = yt_token($s);
+
+        // Which YouTube "stream" uses our stream key? (so the right live video is changed)
+        $boundId = '';
+        $r = yt_get($tok, 'liveStreams', ['part' => 'id,cdn', 'mine' => 'true', 'maxResults' => 50]);
+        if ($r[0] === 200) {
+            foreach ($r[1]['items'] ?? [] as $ls) {
+                if (($ls['cdn']['ingestionInfo']['streamName'] ?? '') === $s['stream_key']) {
+                    $boundId = (string) $ls['id'];
+                }
+            }
+        }
+
+        $video = '';
+        foreach (['active', 'upcoming'] as $status) {
+            $r = yt_get($tok, 'liveBroadcasts', ['part' => 'id,contentDetails', 'broadcastStatus' => $status, 'broadcastType' => 'all', 'maxResults' => 25]);
+            if ($r[0] !== 200) throw new RuntimeException(yt_err($r));
+            $items = $r[1]['items'] ?? [];
+            foreach ($items as $b) {
+                if ($boundId !== '' && ($b['contentDetails']['boundStreamId'] ?? '') === $boundId) {
+                    $video = (string) $b['id'];
+                    break 2;
+                }
+            }
+            if ($status === 'active' && count($items) === 1 && $boundId === '') {
+                $video = (string) $items[0]['id'];
+                break;
+            }
+        }
+        if ($video === '') {
+            throw new RuntimeException('No live video found on this channel yet. Start the stream and try again in a minute.');
+        }
+
+        $r = yt_get($tok, 'videos', ['part' => 'snippet', 'id' => $video]);
+        if ($r[0] !== 200 || empty($r[1]['items'][0])) throw new RuntimeException(yt_err($r));
+        $sn = $r[1]['items'][0]['snippet'];
+
+        $t = yt_texts($s);
+        preg_match_all('/#([\p{L}\p{N}_]+)/u', $t['desc'], $m);
+        $snippet = [
+            'title'       => $t['title'],
+            'description' => $t['desc'],
+            'categoryId'  => (string) ($sn['categoryId'] ?? '20'),
+        ];
+        $tags = array_slice(array_values(array_unique($m[1])), 0, 15);
+        if ($tags) $snippet['tags'] = $tags;
+        if (!empty($sn['defaultLanguage'])) $snippet['defaultLanguage'] = $sn['defaultLanguage'];
+
+        $r = yt_http('PUT', YT_API . 'videos?part=snippet', ['Authorization: Bearer ' . $tok, 'Content-Type: application/json'],
+            json_encode(['id' => $video, 'snippet' => $snippet], JSON_UNESCAPED_UNICODE));
+        if ($r[0] !== 200) throw new RuntimeException(yt_err($r));
+
+        $note = 'Title and description set';
+        $thumb = yt_thumb_file($s);
+        if ($thumb) {
+            $r = yt_http('POST', 'https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=' . rawurlencode($video),
+                ['Authorization: Bearer ' . $tok, 'Content-Type: ' . $thumb[1]], (string) file_get_contents($thumb[0]), 30);
+            $note .= $r[0] === 200 ? ', thumbnail set' : '. Thumbnail failed: ' . yt_err($r);
+        }
+
+        db()->prepare('UPDATE streams SET yt_video = ?, yt_done_rev = yt_rev, yt_done_start = COALESCE(started_at, 0) WHERE id = ?')
+            ->execute([$video, $s['id']]);
+        $msg = $note . ' (' . date('d M, h:i A') . ').';
+        $mark->execute([$msg, 1, time(), $s['id']]);
+        db()->prepare('UPDATE streams SET yt_fails = 0 WHERE id = ?')->execute([$s['id']]);
+        log_activity("YouTube: {$s['name']} — {$note}", 'ok');
+        return [true, $msg];
+    } catch (Throwable $e) {
+        $mark->execute([$e->getMessage(), 0, time(), $s['id']]);
+        db()->prepare('UPDATE streams SET yt_fails = CASE WHEN yt_fail_start = COALESCE(started_at, 0) THEN yt_fails + 1 ELSE 1 END,
+                       yt_fail_start = COALESCE(started_at, 0) WHERE id = ?')->execute([$s['id']]);
+        return [false, $e->getMessage()];
+    }
+}
+
+/**
+ * Called after each worker check-in: when a connected stream has been live for a minute and its
+ * title/thumbnail are not set on this live video yet, set them. Retries every 3 minutes,
+ * at most 5 times per live session (keeps the daily YouTube limit safe).
+ */
+function yt_tick(int $serverId): void
+{
+    if (!yt_ready()) return;
+    $now = time();
+    $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_auto = 1 AND yt_refresh != ''
+                         AND (yt_done_rev != yt_rev OR yt_done_start != COALESCE(started_at, 0))
+                         AND NOT (yt_fail_start = COALESCE(started_at, 0) AND yt_fails >= 5)
+                         AND COALESCE(started_at, 0) > 0 AND started_at < ? AND yt_try_at < ?");
+    $st->execute([$serverId, $now - 60, $now - 180]);
+    foreach ($st->fetchAll() as $s) {
+        // claim it first so two check-ins never do the same job
+        $c = db()->prepare('UPDATE streams SET yt_try_at = ? WHERE id = ? AND yt_try_at = ?');
+        $c->execute([$now, $s['id'], $s['yt_try_at']]);
+        if ($c->rowCount() === 1) {
+            yt_apply($s);
+        }
+    }
+}
