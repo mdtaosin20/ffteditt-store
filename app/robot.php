@@ -5,6 +5,26 @@
  */
 declare(strict_types=1);
 
+/** Voices the host can use (free Piper voices made on the VPS). key => [label, description] */
+function robot_voices(): array
+{
+    return [
+        'lessac'  => ['Lessac', 'Woman · American · soft and warm'],
+        'amy'     => ['Amy', 'Woman · American · bright and lively'],
+        'kristin' => ['Kristin', 'Woman · American · clear and friendly'],
+        'hfc'     => ['Hannah', 'Woman · American · young and cheerful'],
+        'jenny'   => ['Jenny', 'Woman · British · sweet and calm'],
+        'cori'    => ['Cori', 'Woman · British · gentle'],
+        'ryan'    => ['Ryan', 'Man · American (the robot voice until now)'],
+    ];
+}
+
+function robot_voice(): string
+{
+    $v = (string) (chat_cfg()['host_voice'] ?? 'lessac');
+    return isset(robot_voices()[$v]) ? $v : 'lessac';
+}
+
 /** Only what the voice can read: Latin letters, digits and simple punctuation. */
 function robot_text(string $t): string
 {
@@ -13,9 +33,9 @@ function robot_text(string $t): string
     return mb_substr($t, 0, 220);
 }
 
-function robot_hash(string $t): string
+function robot_hash(string $t, string $voice): string
 {
-    return substr(hash('sha256', 'robot1|' . $t), 0, 24);
+    return substr(hash('sha256', 'robot2|' . $voice . '|' . $t), 0, 24);
 }
 
 function robot_file(string $h): string
@@ -24,13 +44,16 @@ function robot_file(string $h): string
 }
 
 /** Ask for a line. Returns ['h' => hash, 'url' => '' while it is being made]. */
-function robot_request(string $text): array
+function robot_request(string $text, ?string $voice = null): array
 {
+    $voice = $voice !== null && isset(robot_voices()[$voice]) ? $voice : robot_voice();
     $t = robot_text($text);
     if (mb_strlen($t) < 2) return ['h' => '', 'url' => ''];
-    $h = robot_hash($t);
+    $h = robot_hash($t, $voice);
     if (is_file(upload_dir() . '/' . robot_file($h))) return ['h' => $h, 'url' => upload_url(robot_file($h))];
-    db()->prepare("INSERT OR IGNORE INTO robot_tts (h, text, status, created) VALUES (?, ?, 'wait', ?)")->execute([$h, $t, time()]);
+    db()->prepare("INSERT OR IGNORE INTO robot_tts (h, text, voice, status, created) VALUES (?, ?, ?, 'wait', ?)")->execute([$h, $t, $voice, time()]);
+    // a line that failed earlier may be asked again
+    db()->prepare("UPDATE robot_tts SET status = 'wait', created = ? WHERE h = ? AND status = 'fail'")->execute([time(), $h]);
     return ['h' => $h, 'url' => ''];
 }
 
@@ -48,13 +71,13 @@ function robot_status(string $h): array
 function robot_jobs(): array
 {
     $now = time();
-    db()->prepare("UPDATE robot_tts SET status = 'fail' WHERE status IN ('wait', 'sent') AND created < ?")->execute([$now - 40]);
-    $st = db()->prepare("SELECT h, text FROM robot_tts WHERE status = 'wait' OR (status = 'sent' AND sent_at < ?) ORDER BY created DESC LIMIT 4");
+    db()->prepare("UPDATE robot_tts SET status = 'fail' WHERE status IN ('wait', 'sent') AND created < ?")->execute([$now - 90]);
+    $st = db()->prepare("SELECT h, text, voice FROM robot_tts WHERE status = 'wait' OR (status = 'sent' AND sent_at < ?) ORDER BY created DESC LIMIT 4");
     $st->execute([$now - 15]);
     $jobs = $st->fetchAll();
     $mark = db()->prepare("UPDATE robot_tts SET status = 'sent', sent_at = ? WHERE h = ?");
     foreach ($jobs as $j) $mark->execute([$now, $j['h']]);
-    return array_map(fn ($j) => ['h' => $j['h'], 'text' => $j['text']], $jobs);
+    return array_map(fn ($j) => ['h' => $j['h'], 'text' => $j['text'], 'voice' => $j['voice']], $jobs);
 }
 
 function robot_save(string $h, string $mp3): void

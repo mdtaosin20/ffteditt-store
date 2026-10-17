@@ -27,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'enabled'    => isset($_POST['enabled']),
             'robot'      => isset($_POST['robot']),
             'voice'      => isset($_POST['voice']),
+            'host_voice' => isset(robot_voices()[$_POST['host_voice'] ?? '']) ? $_POST['host_voice'] : 'lessac',
             'box'        => isset($_POST['box']),
             'subs'       => isset($_POST['subs']),
             'idle'       => isset($_POST['idle']),
@@ -100,6 +101,18 @@ page_start('YouTube Manager', 'youtube', $admin);
       <label class="check"><input type="checkbox" name="idle" <?= $chat['idle'] ? 'checked' : '' ?>> Robot asks for likes, subscribes &amp; comments</label>
       <label class="field"><span>Robot name</span><input name="robot_name" maxlength="20" value="<?= e($chat['robot_name']) ?>"></label>
     </div>
+    <div class="field"><span>Host voice — press ▶ Listen, choose one, then Save</span>
+      <div class="vp-list">
+      <?php foreach (robot_voices() as $vk => [$vl, $vd]): ?>
+        <div class="vp">
+          <label><input type="radio" name="host_voice" value="<?= e($vk) ?>" <?= robot_voice() === $vk ? 'checked' : '' ?>>
+            <b><?= e($vl) ?></b> <small class="muted"><?= e($vd) ?></small></label>
+          <button type="button" class="btn btn-ghost btn-sm" data-listen="<?= e($vk) ?>">▶ Listen</button>
+          <span class="vp-note muted small"></span>
+        </div>
+      <?php endforeach; ?>
+      </div>
+    </div>
     <div class="form-actions"><button class="btn btn-blue" type="submit">Save</button>
       <a class="btn btn-ghost" href="/flags/?chatdemo=1" target="_blank" rel="noopener">Preview Flag Battle</a>
       <a class="btn btn-ghost" href="/ball/?chatdemo=1" target="_blank" rel="noopener">Preview Ball Drop</a></div>
@@ -159,4 +172,4 @@ page_start('YouTube Manager', 'youtube', $admin);
     <li>Add your channel link (e.g. <code>https://www.youtube.com/@yourname</code>) so the <strong>Watch</strong> button opens your live.</li>
   </ol>
 </section>
-<?php page_end();
+<?php page_end('voice_pick.js');

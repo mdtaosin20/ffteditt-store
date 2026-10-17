@@ -13,6 +13,7 @@ function chat_defaults(): array
         'robot'   => true,          // robot host answers on screen
         'voice'   => true,          // robot speaks out loud (replaces the old commentator voice)
         'robot_name' => 'ROBO HOST',
+        'host_voice' => 'lessac',   // see robot_voices()
         'box'     => true,          // show the chat box
         'subs'    => true,          // new subscriber banner
         'idle'    => true,          // robot asks people to comment when the chat is quiet

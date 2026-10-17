@@ -28,7 +28,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
@@ -40,8 +40,17 @@ PULSE_SOCK = PULSE_DIR + "/native"
 TTS_DIR = "/opt/ffteditt-worker/tts"
 VOICE_MODEL = "en_US-ryan-high"
 VOICE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/high/" + VOICE_MODEL
-ROBOT_MODEL = "en_US-ryan-medium"   # lighter voice for the live robot host (made on the fly)
-ROBOT_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/ryan/medium/" + ROBOT_MODEL
+# Voices for the live host (made on the fly). key -> path inside the Piper voices collection
+HOST_VOICES = {
+    "ryan": "en/en_US/ryan/medium/en_US-ryan-medium",
+    "lessac": "en/en_US/lessac/medium/en_US-lessac-medium",
+    "amy": "en/en_US/amy/medium/en_US-amy-medium",
+    "kristin": "en/en_US/kristin/medium/en_US-kristin-medium",
+    "hfc": "en/en_US/hfc_female/medium/en_US-hfc_female-medium",
+    "jenny": "en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium",
+    "cori": "en/en_GB/cori/medium/en_GB-cori-medium",
+}
+HOST_VOICE_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
 
 
 def log(msg):
@@ -263,7 +272,8 @@ class RobotVoice:
         self.results = []
         self.wake = threading.Event()
         self.proc = None
-        self.failed_until = 0
+        self.proc_voice = None
+        self.failed_until = {}       # voice -> time until which it is not retried
         threading.Thread(target=self._loop, daemon=True).start()
 
     def submit(self, jobs):
@@ -286,15 +296,18 @@ class RobotVoice:
         with self.lock:
             self.results = results + self.results
 
-    def _start(self):
+    def _start(self, voice):
+        self._stop_proc()
         py, _say, _model = self.voices._setup()
         mdir = TTS_DIR + "/models"
+        path = HOST_VOICES[voice]
+        name = path.rsplit("/", 1)[1]
         for ext in (".onnx", ".onnx.json"):
-            dest = mdir + "/" + ROBOT_MODEL + ext
+            dest = mdir + "/" + name + ext
             if not os.path.exists(dest) or os.path.getsize(dest) < 100:
-                log("[robot] downloading robot voice %s" % ext)
+                log("[robot] downloading voice %s%s" % (name, ext))
                 tmp = dest + ".part"
-                req = urllib.request.Request(ROBOT_URL + ext + "?download=true", headers={"User-Agent": "ffteditt-worker"})
+                req = urllib.request.Request(HOST_VOICE_BASE + path + ext + "?download=true", headers={"User-Agent": "ffteditt-worker"})
                 with urllib.request.urlopen(req, timeout=300) as r, open(tmp, "wb") as f:
                     shutil.copyfileobj(r, f)
                 os.replace(tmp, dest)
@@ -303,12 +316,22 @@ class RobotVoice:
             f.write(ROBOT_PY)
         env = dict(os.environ, OMP_NUM_THREADS="1")
         # low priority: the live stream always comes first
-        self.proc = subprocess.Popen(["nice", "-n", "12", py, script, mdir + "/" + ROBOT_MODEL + ".onnx"],
+        self.proc = subprocess.Popen(["nice", "-n", "12", py, script, mdir + "/" + name + ".onnx"],
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                      text=True, bufsize=1, env=env)
         if self.proc.stdout.readline().strip() != "ready":
-            raise RuntimeError("robot voice did not start")
-        log("[robot] voice ready")
+            raise RuntimeError("voice did not start")
+        self.proc_voice = voice
+        log("[robot] voice %s ready" % voice)
+
+    def _stop_proc(self):
+        try:
+            if self.proc:
+                self.proc.kill()
+        except Exception:
+            pass
+        self.proc = None
+        self.proc_voice = None
 
     def _make(self, j):
         tmp = tempfile.mkdtemp(prefix="fftrobot-")
@@ -337,23 +360,19 @@ class RobotVoice:
                     j = self.jobs.pop() if self.jobs else None   # newest first
                 if not j:
                     break
-                if time.time() < self.failed_until:
+                voice = j.get("voice") if j.get("voice") in HOST_VOICES else "ryan"
+                if time.time() < self.failed_until.get(voice, 0):
                     continue
                 try:
-                    if not self.proc or self.proc.poll() is not None:
-                        self._start()
+                    if not self.proc or self.proc.poll() is not None or self.proc_voice != voice:
+                        self._start(voice)
                     res = self._make(j)
                     with self.lock:
                         self.results.append(res)
                 except Exception as ex:
-                    log("[robot] voice problem: %s" % ex)
-                    try:
-                        if self.proc:
-                            self.proc.kill()
-                    except Exception:
-                        pass
-                    self.proc = None
-                    self.failed_until = time.time() + 60
+                    log("[robot] voice %s problem: %s" % (voice, ex))
+                    self._stop_proc()
+                    self.failed_until[voice] = time.time() + 60
 
 
 class Stream:

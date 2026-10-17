@@ -227,8 +227,8 @@ if ($voiceJobs) {
 // Robot host lines to speak (only while a stream reads its chat with the robot voice on).
 $robotJobs = [];
 $cc = chat_cfg();
-if ($cc['enabled'] && $cc['robot'] && $cc['voice'] && array_filter($out, fn ($o) => !empty($o['chat']))) {
-    $robotJobs = robot_jobs();
+$robotJobs = robot_jobs();   // live lines and voice previews from the panel
+if ($robotJobs || ($cc['enabled'] && $cc['robot'] && $cc['voice'] && array_filter($out, fn ($o) => !empty($o['chat'])))) {
     $poll = min($poll, 2);
 }
 

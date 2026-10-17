@@ -130,6 +130,9 @@ function migrate(PDO $pdo): void
     $add('streams', 'chat_status', "TEXT NOT NULL DEFAULT ''");
     $add('streams', 'chat_seen', 'INTEGER NOT NULL DEFAULT 0');
     $add('streams', 'chat_count', 'INTEGER NOT NULL DEFAULT 0');
+    if ($pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='robot_tts'")->fetchColumn()) {
+        $add('robot_tts', 'voice', "TEXT NOT NULL DEFAULT 'ryan'");
+    }
 
     // The Ball Drop game moved from the home page to /ball/ (the home page is now the games website).
     $done = $pdo->query("SELECT value FROM settings WHERE key = 'mig_ball_path'")->fetchColumn();
@@ -176,6 +179,7 @@ function migrate(PDO $pdo): void
         CREATE TABLE IF NOT EXISTS robot_tts (
             h       TEXT PRIMARY KEY,
             text    TEXT NOT NULL,
+            voice   TEXT NOT NULL DEFAULT 'ryan',
             status  TEXT NOT NULL DEFAULT 'wait',
             created INTEGER NOT NULL,
             sent_at INTEGER NOT NULL DEFAULT 0
