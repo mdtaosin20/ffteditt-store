@@ -21,7 +21,7 @@ if ($id) {
 $defaults = [
     'name'         => '',
     'rtmp_url'     => 'rtmp://a.rtmp.youtube.com/live2',
-    'page_url'     => 'https://ffteditt.store/',
+    'page_url'     => 'https://ffteditt.store/ball/',
     'server_id'    => $servers ? array_key_first($servers) : null,
     'quality'      => '480p-v',
     'fps'          => 20,
@@ -157,8 +157,8 @@ page_start($stream ? 'Edit stream' : 'Add stream', 'streams', $admin);
   <label class="field"><span>Page to stream</span>
     <input name="page_url" id="page_url" type="url" required value="<?= e($v['page_url']) ?>">
     <span class="pick-row">
-      <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/">Ball Drop</button>
-      <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/?mode=2d">Ball Drop (2D, light)</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/ball/">Ball Drop</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/ball/?mode=2d">Ball Drop (2D, light)</button>
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/flags/">Country Flag Battle</button>
     </span>
     <small class="muted">The game page the server opens and sends to YouTube. Tap a game to fill it in.</small>

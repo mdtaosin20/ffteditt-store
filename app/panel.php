@@ -44,10 +44,16 @@ function games_list(): array
     $ball  = game_config();
     $flags = flags_config();
     return [
-        'ball'  => ['id' => 1, 'key' => 'ball',  'name' => 'Ball Drop',      'url' => '/',       'settings' => 'game.php',
+        'ball'  => ['id' => 1, 'key' => 'ball',  'name' => 'Ball Drop',      'url' => '/ball/',  'settings' => 'game.php',
+                    'title' => ucwords(strtolower($ball['players'][0]['name'])) . ' vs ' . ucwords(strtolower($ball['players'][1]['name'])), 'category' => 'football',
+                    'tags' => ['football', 'battle', 'arcade'], 'thumb' => '/assets/site/ball.jpg',
+                    'desc' => 'Two balls drop into the bowl — first into the hole scores. First to ' . (int) $ball['target'] . ' wins!',
                     'autoplay' => (bool) $ball['autoplay'],  'pace' => (string) $ball['pace'],
                     'detail' => $ball['players'][0]['name'] . ' vs ' . $ball['players'][1]['name']],
         'flags' => ['id' => 2, 'key' => 'flags', 'name' => 'Flag Battle', 'url' => '/flags/', 'settings' => 'flags.php',
+                    'title' => 'Country Flag Battle', 'category' => 'countries',
+                    'tags' => ['countries', 'battle', 'arcade'], 'thumb' => '/assets/site/flags.jpg',
+                    'desc' => 'Flags bounce in a turning ring. The last flag left goes to the final!',
                     'autoplay' => (bool) $flags['autoplay'], 'pace' => (string) $flags['pace'],
                     'detail' => '195 countries · final of ' . (int) $flags['target']],
     ];

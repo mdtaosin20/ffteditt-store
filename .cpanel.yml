@@ -12,5 +12,6 @@ deployment:
     - /bin/mkdir -p $DOCROOT/worker $APPDIR $DATADIR
     - /bin/chmod 700 $DATADIR $APPDIR
     - /bin/cp -R public/. $DOCROOT/
+    - /bin/rm -f $DOCROOT/index.html
     - /bin/cp -R app/. $APPDIR/
     - /bin/cp worker/agent.py worker/install.sh $DOCROOT/worker/

@@ -55,7 +55,7 @@ function migrate(PDO $pdo): void
             name         TEXT NOT NULL,
             stream_key   TEXT NOT NULL DEFAULT '',
             rtmp_url     TEXT NOT NULL DEFAULT 'rtmp://a.rtmp.youtube.com/live2',
-            page_url     TEXT NOT NULL DEFAULT 'https://ffteditt.store/',
+            page_url     TEXT NOT NULL DEFAULT 'https://ffteditt.store/ball/',
             server_id    INTEGER REFERENCES servers(id) ON DELETE SET NULL,
             quality      TEXT NOT NULL DEFAULT '480p-v',
             fps          INTEGER NOT NULL DEFAULT 20,
@@ -108,6 +108,20 @@ function migrate(PDO $pdo): void
     $add('streams', 'channel_name', "TEXT NOT NULL DEFAULT ''");
     $add('streams', 'channel_url', "TEXT NOT NULL DEFAULT ''");
     $add('activity', 'level', "TEXT NOT NULL DEFAULT 'info'");
+
+    // The Ball Drop game moved from the home page to /ball/ (the home page is now the games website).
+    $done = $pdo->query("SELECT value FROM settings WHERE key = 'mig_ball_path'")->fetchColumn();
+    if ($done === false) {
+        $up = $pdo->prepare('UPDATE streams SET page_url = ?, rev = rev + 1 WHERE id = ?');
+        foreach ($pdo->query('SELECT id, page_url FROM streams')->fetchAll() as $r) {
+            $u = parse_url((string) $r['page_url']);
+            if (!empty($u['host']) && in_array($u['path'] ?? '/', ['', '/', '/index.html'], true)) {
+                $new = ($u['scheme'] ?? 'https') . '://' . $u['host'] . '/ball/' . (isset($u['query']) ? '?' . $u['query'] : '');
+                $up->execute([$new, $r['id']]);
+            }
+        }
+        $pdo->exec("INSERT INTO settings (key, value) VALUES ('mig_ball_path', '1')");
+    }
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS metrics (

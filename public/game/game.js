@@ -1,7 +1,7 @@
 // FFTEdit · Ball Drop Game (3D). Runs by itself, made for 24/7 vertical live streams.
 import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
-import { Sfx, Commentator, holdScreen, PACE } from './audio.js?v=7';
+import { Sfx, Commentator, holdScreen, PACE, reporter } from './audio.js?v=8';
 
 /* ------------------------------------------------------------------ config */
 const DEFAULTS = {
@@ -540,6 +540,7 @@ async function main() {
   const cfg = await loadConfig();
   if (cfg.autoplay === false) { holdScreen('/api/game.php', cfg.rev); return; }
   const pace = PACE[cfg.pace] || 1;
+  const report = reporter('ball');
   const P = cfg.players;
 
   // texts and photos
@@ -871,6 +872,7 @@ async function main() {
   const onGoal = (w) => {
     const before = leader();
     score[w]++; saveScore(); showScore(w); popup(w);
+    report({ score, names: P.map((p) => p.name), ...(score[w] >= cfg.target ? { winner: w } : {}) });
     sfx.goal();
     if (score[w] >= cfg.target) return; // the winner line plays on the winner screen
     voice.say('goal_p' + (w + 1), { chance: 0.8 });
@@ -925,6 +927,7 @@ async function main() {
       }
     } else if (phase === 'winner' && phaseT > 8) {
       $('winner').hidden = true; score = [0, 0]; saveScore(); showScore(); newRound();
+      report({ score, names: P.map((p) => p.name) });
       voice.say('new_game', { urgent: true });
     }
     // invite comments now and then

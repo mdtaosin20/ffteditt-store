@@ -39,9 +39,16 @@ monthly bandwidth, and a bell for warnings and problems. Shared pieces live in `
 2. **Servers** → add a server → copy the install line → paste it into the VPS terminal (as root).
 3. **Streams** → **+ Add stream** → paste the YouTube stream key, choose the server → **Start**.
 
+## Games website
+
+`https://ffteditt.store/` is the games website (`public/index.php`, `assets/site.css|js`): all games, search,
+categories, favorites (kept in the visitor's browser), which streams are live, a live scoreboard and latest results.
+The stream browser opens each game with `?stream=ID&sig=…` (added by the worker API); only those pages may post to
+`/api/results.php`, so visitors can't fake scores. Texts and the YouTube link: Admin → **Website**.
+
 ## The game
 
-`https://ffteditt.store/` (the home page) is the 3D Ball Drop game; its files live in `public/game/` (three.js, bundled in `public/game/vendor`). It plays itself:
+`https://ffteditt.store/ball/` is the 3D Ball Drop game (2D on servers without a graphics card); its files live in `public/game/` (three.js, bundled in `public/game/vendor`). It plays itself:
 two balls drop into a glossy bowl, the first to fall into the hole scores, first to the target wins, then it restarts.
 Admin → **Game** sets names, colours, shirt numbers, photos (stored privately, served by `/api/image.php`) and the target,
 and can reset scores. Open games pick up changes within ~20 s. The bowl is rendered once and only the balls are drawn

@@ -163,3 +163,17 @@ export function holdScreen(api, rev) {
     } catch (e) { /* try again later */ }
   }, 15000);
 }
+
+/* ------------------------------------------------------------ live results */
+// The stream browser opens the game with ?stream=ID&sig=…; only then are scores sent to the website.
+export function reporter(game) {
+  const q = new URLSearchParams(location.search);
+  const stream = q.get('stream'), sig = q.get('sig');
+  if (!stream || !sig) return () => {};
+  return (data) => {
+    fetch('/api/results.php', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ stream: Number(stream), sig, game, ...data }),
+    }).catch(() => {});
+  };
+}

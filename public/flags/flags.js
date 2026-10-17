@@ -1,7 +1,7 @@
 // FFTEdit · Country Flag Battle. Runs by itself, made for 24/7 vertical live streams.
 // 195 flags bounce inside a turning ring with a gap. A flag that slips out is eliminated;
 // the last flag left qualifies for the final. When the final is full, the final round finds the champion.
-import { Sfx, Commentator, holdScreen, PACE } from '/game/audio.js?v=7';
+import { Sfx, Commentator, holdScreen, PACE, reporter } from '/game/audio.js?v=8';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -67,6 +67,7 @@ async function main() {
   const cfg = { ...DEF, ...(remote || {}) };
   if (cfg.autoplay === false) { holdScreen('/api/flags.php', cfg.rev); return; }
   const pace = PACE[cfg.pace] || 1;
+  const report = reporter('flags');
   const atlas = new Image();
   atlas.src = '/flags/flags.png';
   await atlas.decode().catch(() => {});
@@ -218,6 +219,7 @@ async function main() {
     if (isFinal) banner('GRAND FINAL', `${entrants} FLAGS · 1 CHAMPION`);
     else banner(`ROUND ${st.qualified.length + 1}`, `QUALIFYING · ${entrants} FLAGS`);
     sfx.spawn();
+    report({ round: st.qualified.length + 1, final: isFinal, qualified: Math.min(st.qualified.length, cfg.target) });
     if (isFinal) voice.say('flag_final', { urgent: true });
     else if (simT > 5) voice.say('flag_start', { chance: 0.35 });
   };
@@ -253,6 +255,8 @@ async function main() {
     }
     save();
     updateUI(); gridClass(); updateTimer();
+    report({ round: isFinal ? st.qualified.length + 1 : st.qualified.length, final: isFinal,
+      qualified: Math.min(st.qualified.length, cfg.target), event: isFinal ? 'champion' : 'qualified', code, name: C[winner.i].name });
   };
 
   const showWinPopup = () => {
