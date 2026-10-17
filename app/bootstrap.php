@@ -23,3 +23,4 @@ const LOGIN_LOCK_SECONDS   = 900;  // 15 minutes
 require APP_DIR . '/db.php';
 require APP_DIR . '/auth.php';
 require APP_DIR . '/helpers.php';
+require APP_DIR . '/game.php';

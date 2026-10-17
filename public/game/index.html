@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Messi vs Ronaldo · Ball Drop Game</title>
+<link rel="stylesheet" href="game.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" width="1080" height="1920" aria-hidden="true"></canvas>
+
+  <!-- top: big player photos + title -->
+  <div class="hero">
+    <div class="hero-photo left"><img id="p1-hero" alt=""></div>
+    <div class="hero-photo right"><img id="p2-hero" alt=""></div>
+    <div class="title">
+      <svg class="crown" viewBox="0 0 120 70" aria-hidden="true">
+        <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3a0"/><stop offset=".5" stop-color="#ffc41a"/><stop offset="1" stop-color="#b8780a"/></linearGradient></defs>
+        <path d="M8 62 L14 18 L38 42 L60 6 L82 42 L106 18 L112 62 Z" fill="url(#cg)" stroke="#7a4a00" stroke-width="3" stroke-linejoin="round"/>
+        <circle cx="14" cy="16" r="6" fill="url(#cg)"/><circle cx="60" cy="6" r="6" fill="url(#cg)"/><circle cx="106" cy="16" r="6" fill="url(#cg)"/>
+      </svg>
+      <div class="football"><svg viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="fbA" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff"/><stop offset=".6" stop-color="#e3e7f2"/><stop offset="1" stop-color="#8a90a6"/></radialGradient><clipPath id="fbAc"><circle cx="50" cy="50" r="48"/></clipPath></defs><circle cx="50" cy="50" r="48" fill="url(#fbA)"/><g clip-path="url(#fbAc)"><polygon points="50.0,35.0 64.3,45.4 58.8,62.1 41.2,62.1 35.7,45.4" fill="#111"/><polygon points="50.0,21.0 35.7,10.6 41.2,-6.1 58.8,-6.1 64.3,10.6" fill="#111"/><line x1="50.0" y1="35.0" x2="50.0" y2="19.0" stroke="#222" stroke-width="2"/><polygon points="77.6,41.0 83.0,24.3 100.7,24.3 106.1,41.0 91.8,51.4" fill="#111"/><line x1="64.3" y1="45.4" x2="79.5" y2="40.4" stroke="#222" stroke-width="2"/><polygon points="67.0,73.5 84.7,73.5 90.1,90.2 75.9,100.6 61.6,90.2" fill="#111"/><line x1="58.8" y1="62.1" x2="68.2" y2="75.1" stroke="#222" stroke-width="2"/><polygon points="33.0,73.5 38.4,90.2 24.1,100.6 9.9,90.2 15.3,73.5" fill="#111"/><line x1="41.2" y1="62.1" x2="31.8" y2="75.1" stroke="#222" stroke-width="2"/><polygon points="22.4,41.0 8.2,51.4 -6.1,41.0 -0.7,24.3 17.0,24.3" fill="#111"/><line x1="35.7" y1="45.4" x2="20.5" y2="40.4" stroke="#222" stroke-width="2"/></g></svg></div>
+      <h1 class="fit"><span class="t1" id="p1-title">MESSI</span><span class="tvs">Vs</span><span class="t2" id="p2-title">RONALDO</span></h1>
+      <div class="subtitle">BALL DROP GAME</div>
+    </div>
+  </div>
+
+  <!-- scoreboard -->
+  <div class="scores">
+    <div class="card c1">
+      <img class="avatar" id="p1-avatar" alt="">
+      <div class="who"><div class="name"><span class="lead-crown" id="p1-crown">♛</span><span id="p1-name">MESSI</span></div><div class="team" id="p1-team">PINK TEAM</div></div>
+      <div class="num" id="p1-score">0</div>
+    </div>
+    <div class="vs-mid">VS</div>
+    <div class="card c2">
+      <img class="avatar" id="p2-avatar" alt="">
+      <div class="who"><div class="name"><span class="lead-crown" id="p2-crown">♛</span><span id="p2-name">RONALDO</span></div><div class="team" id="p2-team">GOLD TEAM</div></div>
+      <div class="num" id="p2-score">0</div>
+    </div>
+  </div>
+  <div class="target" id="target">FIRST TO <b>20</b> WINS</div>
+
+  <!-- the 3D bowl -->
+  <img id="bowl-img" alt="">
+  <canvas id="three" aria-label="Ball drop bowl"></canvas>
+
+  <div class="popup" id="popup" hidden><div class="popup-in"><span id="popup-name">MESSI</span> SCORES!<small>+1 POINT</small></div></div>
+
+  <div class="footer"><div class="footer-in"><span class="fb"><svg viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="fbB" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff"/><stop offset=".6" stop-color="#e3e7f2"/><stop offset="1" stop-color="#8a90a6"/></radialGradient><clipPath id="fbBc"><circle cx="50" cy="50" r="48"/></clipPath></defs><circle cx="50" cy="50" r="48" fill="url(#fbB)"/><g clip-path="url(#fbBc)"><polygon points="50.0,35.0 64.3,45.4 58.8,62.1 41.2,62.1 35.7,45.4" fill="#111"/><polygon points="50.0,21.0 35.7,10.6 41.2,-6.1 58.8,-6.1 64.3,10.6" fill="#111"/><line x1="50.0" y1="35.0" x2="50.0" y2="19.0" stroke="#222" stroke-width="2"/><polygon points="77.6,41.0 83.0,24.3 100.7,24.3 106.1,41.0 91.8,51.4" fill="#111"/><line x1="64.3" y1="45.4" x2="79.5" y2="40.4" stroke="#222" stroke-width="2"/><polygon points="67.0,73.5 84.7,73.5 90.1,90.2 75.9,100.6 61.6,90.2" fill="#111"/><line x1="58.8" y1="62.1" x2="68.2" y2="75.1" stroke="#222" stroke-width="2"/><polygon points="33.0,73.5 38.4,90.2 24.1,100.6 9.9,90.2 15.3,73.5" fill="#111"/><line x1="41.2" y1="62.1" x2="31.8" y2="75.1" stroke="#222" stroke-width="2"/><polygon points="22.4,41.0 8.2,51.4 -6.1,41.0 -0.7,24.3 17.0,24.3" fill="#111"/><line x1="35.7" y1="45.4" x2="20.5" y2="40.4" stroke="#222" stroke-width="2"/></g></svg></span><span class="t1" id="p1-foot">MESSI</span><span class="tvs">Vs</span><span class="t2" id="p2-foot">RONALDO</span></div></div>
+
+  <div class="winner" id="winner" hidden>
+    <div class="winner-in">
+      <img id="winner-photo" alt="">
+      <div class="winner-name" id="winner-name">MESSI</div>
+      <div class="winner-wins">WINS THE GAME!</div>
+      <div class="winner-score" id="winner-score">20 – 14</div>
+      <div class="winner-next">New game starts soon…</div>
+    </div>
+  </div>
+</div>
+<script type="module" src="game.js"></script>
+</body>
+</html>

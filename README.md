@@ -31,6 +31,14 @@ Deployment is handled by `.cpanel.yml` (cPanel → Git Version Control → Updat
 2. **Servers** → add a server → copy the install line → paste it into the VPS terminal (as root).
 3. **Streams** → **+ Add stream** → paste the YouTube stream key, choose the server → **Start**.
 
+## The game
+
+`https://ffteditt.store/game/` is the 3D Ball Drop game (three.js, bundled in `public/game/vendor`). It plays itself:
+two balls drop into a glossy bowl, the first to fall into the hole scores, first to the target wins, then it restarts.
+Admin → **Game** sets names, colours, shirt numbers, photos (stored privately, served by `/api/image.php`) and the target,
+and can reset scores. Open games pick up changes within ~20 s. The bowl is rendered once and only the balls are drawn
+each frame, so it streams smoothly on CPU-only servers (the worker starts Chrome with SwiftShader WebGL).
+
 ## Web terminal
 
 Admin → **Terminal** runs commands on a VPS from any phone or computer, through the worker (no SSH needed after the first install).

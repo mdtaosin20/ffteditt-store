@@ -197,3 +197,18 @@ input:focus, select:focus, .btn:focus-visible, a:focus-visible { outline: 2px so
   .term-input { flex-wrap: nowrap; }
   .term { padding: 12px; font-size: 13px; }
 }
+
+/* game settings */
+.form-wide { display: flex; flex-direction: column; gap: 20px; }
+.player { display: flex; flex-direction: column; gap: 16px; border-top: 4px solid var(--pc, var(--pink)); }
+.player h2 { color: var(--pc, var(--ink)); }
+input[type=color].color { min-height: 48px; width: 100%; padding: 4px; background: var(--field); border: 1px solid var(--field-line); border-radius: 10px; cursor: pointer; }
+input[type=number] { min-height: 48px; width: 100%; background: var(--field); border: 1px solid var(--field-line); border-radius: 10px; color: var(--ink); font-family: inherit; font-size: 16px; padding: 0 14px; }
+input[type=file] { color: var(--soft); font-family: inherit; font-size: 14px; max-width: 100%; }
+.upload { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.thumb { width: 96px; height: 96px; flex: 0 0 auto; border-radius: 12px; background: var(--field); border: 1px dashed var(--field-line); display: flex; align-items: center; justify-content: center; overflow: hidden; text-align: center; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.upload-body { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.form-inline { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.form-inline .field { flex: 0 1 260px; }
+.check.small { font-size: 14px; min-height: 36px; }

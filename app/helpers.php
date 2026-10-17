@@ -122,7 +122,7 @@ function page_start(string $title, string $active = '', ?array $admin = null): v
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/admin.css?v=2">
+<link rel="stylesheet" href="/assets/admin.css?v=3">
 </head>
 <body>
 <?php if ($admin): ?>
@@ -131,6 +131,7 @@ function page_start(string $title, string $active = '', ?array $admin = null): v
     <a class="brand" href="dashboard.php"><span class="logo">FFTEdit</span><span class="pill">Admin</span></a>
     <nav class="nav">
       <a href="dashboard.php" class="<?= $active === 'streams' ? 'on' : '' ?>">Streams</a>
+      <a href="game.php" class="<?= $active === 'game' ? 'on' : '' ?>">Game</a>
       <a href="servers.php" class="<?= $active === 'servers' ? 'on' : '' ?>">Servers</a>
       <a href="terminal.php" class="<?= $active === 'terminal' ? 'on' : '' ?>">Terminal</a>
       <a href="activity.php" class="<?= $active === 'activity' ? 'on' : '' ?>">Activity</a>
