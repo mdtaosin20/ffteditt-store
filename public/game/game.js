@@ -477,77 +477,245 @@ async function main() {
   };
   showScore();
 
-  // three.js
-  // The bowl never moves, so it is drawn once in high quality ("baked") into a picture.
-  // Every frame only the balls are drawn on top. This keeps the stream smooth on servers
-  // without a graphics card.
+  // Drawing. 3D (WebGL) is used when the browser supports it; otherwise the same scene is
+  // drawn with plain 2D canvas, so the game always runs (e.g. on servers without 3D support).
   const canvas = $('three');
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'high-performance' });
-  // ?q=0.5 draws the balls at half resolution (lighter for small servers)
-  const Q = Math.min(2, Math.max(0.3, parseFloat(new URLSearchParams(location.search).get('q')) || 1));
-  const DPR = Math.min(devicePixelRatio || 1, 1.5);
-  renderer.setPixelRatio(DPR * Q);
-  const setupRenderer = (r) => {
-    r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = 0.82;
-    r.outputColorSpace = THREE.SRGBColorSpace;
-  };
-  setupRenderer(renderer);
-  const scene = new THREE.Scene();
-  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.4;
-
   const camera = new THREE.PerspectiveCamera(30, 1080 / 860, 0.1, 100);
   camera.position.set(0, 11.6, 15.6);
   camera.lookAt(0, -0.9, 0);
-
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x221133, 0.35));
-  const key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(0, 12, 9); scene.add(key);
-  const pl = new THREE.PointLight(new THREE.Color(P[0].color), 40, 18); pl.position.set(-6.5, 3, 3); scene.add(pl);
-  const gl = new THREE.PointLight(new THREE.Color(P[1].color), 40, 18); gl.position.set(6.5, 3, 3); scene.add(gl);
-
-  const bowl = buildBowl(scene, P);
-  // remember the real look; during play the bowl only blocks balls (e.g. inside the hole)
-  const looks = [];
-  const depthOnly = new THREE.MeshBasicMaterial({ colorWrite: false });
-  bowl.traverse((o) => { if (o.isMesh || o.isSprite) looks.push([o, o.material]); });
-  const playMode = () => looks.forEach(([o]) => { if (o.isSprite) o.visible = false; else o.material = depthOnly; });
-  const lookMode = () => looks.forEach(([o, m]) => { o.visible = true; o.material = m; });
-
-  let balls = [];
-  const bake = () => {
-    const r = canvas.getBoundingClientRect();
-    const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
-    const bc = document.createElement('canvas');
-    const br = new THREE.WebGLRenderer({ canvas: bc, antialias: true, alpha: true, preserveDrawingBuffer: true });
-    setupRenderer(br);
-    br.setPixelRatio(Math.min(2, DPR * 1.5));
-    br.setSize(w, h, false);
-    const pm = new THREE.PMREMGenerator(br);
-    const env = pm.fromScene(new RoomEnvironment(), 0.04).texture;
-    const keepEnv = scene.environment;
-    scene.environment = env;
-    const shown = balls.map((b) => [b.mesh.visible, b.halo.visible]);
-    balls.forEach((b) => { b.mesh.visible = b.halo.visible = false; b.trail.forEach((s) => (s.visible = false)); });
-    lookMode();
-    br.render(scene, camera);
-    $('bowl-img').src = bc.toDataURL('image/png');
-    playMode();
-    balls.forEach((b, i) => { b.mesh.visible = shown[i][0]; b.halo.visible = shown[i][1]; });
-    scene.environment = keepEnv;
-    env.dispose(); pm.dispose(); br.dispose(); br.forceContextLoss();
-  };
-
+  camera.updateMatrixWorld();
+  const Q = Math.min(2, Math.max(0.3, parseFloat(new URLSearchParams(location.search).get('q')) || 1));
+  const DPR = Math.min(devicePixelRatio || 1, 1.5);
   const imgs = await Promise.all(P.map((p) => loadImage(p.ball || p.face || p.photo)));
-  balls = P.map((p, i) => new Ball(scene, i, p, imgs[i]));
-  balls.forEach((b) => b.hide());
+  let balls = [];
+  let gfx = null;
+  const force2D = new URLSearchParams(location.search).get('mode') === '2d';
+  if (!force2D) {
+    try { gfx = make3D(); } catch (e) { console.warn('3D not available, using 2D drawing:', e && e.message); gfx = null; }
+  }
+  if (!gfx) gfx = make2D();
+  document.documentElement.dataset.render = gfx.mode;
 
-  const resize = () => {
-    const r = canvas.getBoundingClientRect();
-    renderer.setSize(Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height)), false);
-    bake();
-  };
-  resize(); addEventListener('resize', resize);
+  function make3D() {
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(DPR * Q);
+    const setupRenderer = (r) => {
+      r.toneMapping = THREE.ACESFilmicToneMapping;
+      r.toneMappingExposure = 0.82;
+      r.outputColorSpace = THREE.SRGBColorSpace;
+    };
+    setupRenderer(renderer);
+    const scene = new THREE.Scene();
+    scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.4;
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x221133, 0.35));
+    const key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(0, 12, 9); scene.add(key);
+    const pl = new THREE.PointLight(new THREE.Color(P[0].color), 40, 18); pl.position.set(-6.5, 3, 3); scene.add(pl);
+    const gl = new THREE.PointLight(new THREE.Color(P[1].color), 40, 18); gl.position.set(6.5, 3, 3); scene.add(gl);
+
+    // The bowl never moves, so it is drawn once in high quality ("baked") into a picture.
+    // Every frame only the balls are drawn on top.
+    const bowl = buildBowl(scene, P);
+    const looks = [];
+    const depthOnly = new THREE.MeshBasicMaterial({ colorWrite: false });
+    bowl.traverse((o) => { if (o.isMesh || o.isSprite) looks.push([o, o.material]); });
+    const playMode = () => looks.forEach(([o]) => { if (o.isSprite) o.visible = false; else o.material = depthOnly; });
+    const lookMode = () => looks.forEach(([o, m]) => { o.visible = true; o.material = m; });
+
+    const bake = () => {
+      const r = canvas.getBoundingClientRect();
+      const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+      const bc = document.createElement('canvas');
+      const br = new THREE.WebGLRenderer({ canvas: bc, antialias: true, alpha: true, preserveDrawingBuffer: true });
+      setupRenderer(br);
+      br.setPixelRatio(Math.min(2, DPR * 1.5));
+      br.setSize(w, h, false);
+      const pm = new THREE.PMREMGenerator(br);
+      const env = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+      const keepEnv = scene.environment;
+      scene.environment = env;
+      const shown = balls.map((b) => [b.mesh.visible, b.halo.visible]);
+      balls.forEach((b) => { b.mesh.visible = b.halo.visible = false; b.trail.forEach((s) => (s.visible = false)); });
+      lookMode();
+      br.render(scene, camera);
+      $('bowl-img').src = bc.toDataURL('image/png');
+      playMode();
+      balls.forEach((b, i) => { b.mesh.visible = shown[i][0]; b.halo.visible = shown[i][1]; });
+      scene.environment = keepEnv;
+      env.dispose(); pm.dispose(); br.dispose(); br.forceContextLoss();
+    };
+
+    balls = P.map((p, i) => new Ball(scene, i, p, imgs[i]));
+    balls.forEach((b) => b.hide());
+    const resize = () => {
+      const r = canvas.getBoundingClientRect();
+      renderer.setSize(Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height)), false);
+      bake();
+    };
+    resize();
+    // a first test frame: if WebGL is broken this throws here, and we switch to 2D
+    renderer.render(scene, camera);
+    return {
+      mode: '3d',
+      resize,
+      draw(dt) { balls.forEach((b) => b.render(dt)); renderer.render(scene, camera); },
+    };
+  }
+
+  function make2D() {
+    // a fresh canvas, in case a failed WebGL attempt left the old one unusable
+    const fresh = canvas.cloneNode(false);
+    canvas.replaceWith(fresh);
+    const ctx = fresh.getContext('2d');
+    const dummy = new THREE.Scene();
+    balls = P.map((p, i) => new Ball(dummy, i, p, imgs[i]));
+    balls.forEach((b) => b.hide());
+    let W = 1, H = 1, holePath = null;
+    const v = new THREE.Vector3();
+    const proj = (x, y, z) => { v.set(x, y, z).project(camera); return [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H]; };
+    const ring = (r, y, a0 = 0, a1 = Math.PI * 2, n = 120) => {
+      const pts = [];
+      for (let i = 0; i <= n; i++) { const a = a0 + ((a1 - a0) * i) / n; pts.push(proj(r * Math.cos(a), y, r * Math.sin(a))); }
+      return pts;
+    };
+    const pathOf = (c, pts, close = true) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); if (close) c.closePath(); };
+    const col = (hex, a) => { const c = new THREE.Color(hex); return `rgba(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)},${a})`; };
+    const neonHalves = (c, r, y, w) => {
+      c.lineWidth = w; c.lineCap = 'round';
+      [[P[0].color, Math.PI / 2, Math.PI * 1.5], [P[1].color, -Math.PI / 2, Math.PI / 2]].forEach(([hex, a0, a1]) => {
+        c.strokeStyle = hex; c.shadowColor = hex; c.shadowBlur = w * 3;
+        pathOf(c, ring(r, y, a0, a1, 90), false); c.stroke();
+      });
+      c.shadowBlur = 0;
+    };
+
+    const bakeBowl = () => {
+      const bc = document.createElement('canvas'); bc.width = W; bc.height = H;
+      const c = bc.getContext('2d');
+      const S = H / 860; // pixels per stage pixel
+      // base band (front side)
+      const topF = ring(5.4, 0.0, 0, Math.PI, 90), botF = ring(5.25, -1.7, Math.PI, 0, 90);
+      const g = c.createLinearGradient(0, proj(0, 0, 5.4)[1], 0, proj(0, -1.7, 5.25)[1]);
+      g.addColorStop(0, '#221c30'); g.addColorStop(1, '#09070f');
+      c.fillStyle = g; pathOf(c, topF.concat(botF)); c.fill();
+      neonHalves(c, 5.27, -1.7, 7 * S);
+      // team panels and football on the band
+      const panel = (ang, hex, text) => {
+        const [x, y] = proj(5.35 * Math.cos(ang), -0.85, 5.35 * Math.sin(ang));
+        const [ax, ay] = proj(5.35 * Math.cos(ang - 0.05), -0.85, 5.35 * Math.sin(ang - 0.05));
+        const [bx, by] = proj(5.35 * Math.cos(ang + 0.05), -0.85, 5.35 * Math.sin(ang + 0.05));
+        let rot = Math.atan2(by - ay, bx - ax); if (Math.abs(rot) > Math.PI / 2) rot += Math.PI;
+        c.save(); c.translate(x, y); c.rotate(rot);
+        c.font = `italic 900 ${Math.round(64 * S)}px Oswald, Impact, Arial Black, sans-serif`;
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillStyle = hex; c.shadowColor = hex; c.shadowBlur = 18 * S;
+        c.fillText(text, 0, 0);
+        c.restore();
+      };
+      panel(Math.PI / 2 + 0.55, P[0].color, P[0].name);
+      panel(Math.PI / 2 - 0.55, P[1].color, P[1].name);
+      const [ex, ey] = proj(0, -0.85, 5.4);
+      c.fillStyle = '#0c0a14'; c.strokeStyle = '#8fa8ff'; c.lineWidth = 4 * S;
+      c.beginPath(); c.ellipse(ex, ey, 46 * S, 36 * S, 0, 0, Math.PI * 2); c.fill(); c.stroke();
+      drawFootball(c, ex, ey, 26 * S);
+      // outer lip
+      c.fillStyle = '#d9d7e2'; pathOf(c, ring(5.42, 0.2)); c.fill();
+      // funnel: rings from the rim down to the hole, getting darker with depth
+      const N = 48;
+      for (let k = 0; k <= N; k++) {
+        const t = k / N, r = RIM_R + 0.6 * (1 - t) * 0 + (HOLE_R - RIM_R) * t + (k === 0 ? 0.6 : 0);
+        const y = surfaceY(Math.min(RIM_R, r));
+        const pts = ring(r, y);
+        const xs = pts.map((q) => q[0]);
+        const lg = c.createLinearGradient(Math.min(...xs), 0, Math.max(...xs), 0);
+        const shade = 0.96 - 0.32 * Math.pow(t, 1.4);
+        const base = Math.round(255 * shade);
+        lg.addColorStop(0, `rgb(${base},${Math.round(base * 0.9)},${Math.round(base * 0.95)})`);
+        lg.addColorStop(0.5, `rgb(${base},${base},${Math.min(255, base + 6)})`);
+        lg.addColorStop(1, `rgb(${base},${Math.round(base * 0.97)},${Math.round(base * 0.85)})`);
+        c.fillStyle = lg; pathOf(c, pts); c.fill();
+      }
+      // soft shine on the back wall
+      const [sx, sy] = proj(0, -0.4, -2.2);
+      const sg = c.createRadialGradient(sx, sy, 0, sx, sy, 260 * S);
+      sg.addColorStop(0, 'rgba(255,255,255,.55)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = sg; pathOf(c, ring(RIM_R, surfaceY(RIM_R))); c.fill();
+      // rim neon
+      neonHalves(c, 5.36, 0.22, 6 * S);
+      // hole
+      const hy = surfaceY(HOLE_R);
+      const hole = ring(HOLE_R, hy);
+      const [hx, hcy] = proj(0, hy, 0);
+      const hg = c.createRadialGradient(hx, hcy, 0, hx, hcy, 70 * S);
+      hg.addColorStop(0, '#000'); hg.addColorStop(0.8, '#120f1c'); hg.addColorStop(1, '#2b2540');
+      c.fillStyle = hg; pathOf(c, hole); c.fill();
+      neonHalves(c, HOLE_R + 0.12, hy + 0.04, 5 * S);
+      $('bowl-img').src = bc.toDataURL('image/png');
+      holePath = hole;
+    };
+
+    const glow = (x, y, r, hex, a) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, col(hex, a)); g.addColorStop(1, col(hex, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    };
+    const drawBall = (b) => {
+      if (b.state === 'hidden' || b.state === 'scored' || !b.mesh.visible) return;
+      const hex = P[b.idx].color, m = b.mesh.position;
+      const [x, y] = proj(m.x, m.y, m.z);
+      const [x2] = proj(m.x + BALL_R, m.y, m.z);
+      const R = Math.abs(x2 - x) * b.mesh.scale.x;
+      if (b.state === 'rolling') {
+        const sp = b.vel.length();
+        b.history.forEach((h, i) => {
+          if (i % 2 || i < 2) return;
+          const k = 1 - i / b.history.length;
+          const [tx, ty] = proj(h.x, h.y, h.z);
+          glow(tx, ty, R * (1.1 + 1.2 * k), hex, 0.35 * k * Math.min(1, sp / 2));
+        });
+      }
+      ctx.save();
+      if (b.state === 'falling' && holePath) { pathOf(ctx, holePath); ctx.clip(); }
+      glow(x, y, R * 2.4, hex, 0.55);
+      const bg = ctx.createRadialGradient(x - R * 0.35, y - R * 0.4, R * 0.1, x, y, R);
+      const c0 = new THREE.Color(hex);
+      bg.addColorStop(0, '#' + c0.clone().lerp(new THREE.Color('#ffffff'), 0.6).getHexString());
+      bg.addColorStop(0.55, hex);
+      bg.addColorStop(1, '#' + c0.clone().multiplyScalar(0.45).getHexString());
+      ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+      const img = imgs[b.idx];
+      if (img) {
+        ctx.save(); ctx.beginPath(); ctx.arc(x, y, R * 0.68, 0, Math.PI * 2); ctx.clip();
+        const s = Math.max((R * 1.36) / img.width, (R * 1.36) / img.height);
+        ctx.drawImage(img, x - (img.width * s) / 2, y - (img.height * s) / 2, img.width * s, img.height * s);
+        ctx.restore();
+      }
+      const sh = ctx.createRadialGradient(x - R * 0.4, y - R * 0.45, 0, x - R * 0.4, y - R * 0.45, R * 0.6);
+      sh.addColorStop(0, 'rgba(255,255,255,.75)'); sh.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    };
+
+    const resize = () => {
+      const r = fresh.getBoundingClientRect();
+      const dpr = DPR * Q;
+      W = fresh.width = Math.max(1, Math.round(r.width * dpr));
+      H = fresh.height = Math.max(1, Math.round(r.height * dpr));
+      bakeBowl();
+    };
+    resize();
+    return {
+      mode: '2d',
+      resize,
+      draw(dt) {
+        balls.forEach((b) => b.render(dt)); // updates positions and trail history
+        ctx.clearRect(0, 0, W, H);
+        balls.slice().sort((a, b) => a.mesh.position.z - b.mesh.position.z).forEach(drawBall);
+      },
+    };
+  }
+
+  addEventListener('resize', () => gfx.resize());
 
   // game flow
   let phase = 'start', phaseT = 0, roundWinner = -1;
@@ -602,12 +770,11 @@ async function main() {
     } else if (phase === 'winner' && phaseT > 8) {
       $('winner').hidden = true; score = [0, 0]; saveScore(); showScore(); newRound();
     }
-    balls.forEach((b) => b.render(dt));
-    renderer.render(scene, camera);
+    gfx.draw(dt);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__fft = { balls, score: () => score }; // for testing
+  window.__fft = { balls, score: () => score, mode: gfx.mode }; // for testing
 }
 
 main();
