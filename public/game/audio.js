@@ -3,6 +3,7 @@
 /* ------------------------------------------------------------------- sounds */
 // All sound effects are made in code (no files needed).
 export class Sfx {
+  // Only clean tones — no white noise at all (noise sounds like TV static on YouTube).
   constructor() {
     const AC = window.AudioContext || window.webkitAudioContext;
     this.ok = !!AC;
@@ -11,65 +12,42 @@ export class Sfx {
     this.master = this.ctx.createGain(); this.master.gain.value = 0.9;
     const comp = this.ctx.createDynamicsCompressor();
     this.master.connect(comp); comp.connect(this.ctx.destination);
-    const len = this.ctx.sampleRate * 2;
-    this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
-    const d = this.noise.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    // continuous layer
-    // only a soft low rumble while balls roll (no always-on background hiss)
-    this.rollGain = this.loop(160, 0.7, 0, 'lowpass');
     this.last = {};
   }
   get running() { return this.ok && this.ctx.state === 'running'; }
   resume() { if (this.ok && this.ctx.state !== 'running') this.ctx.resume(); }
-  loop(freq, q, gain, type, lfoRate) {
-    const src = this.ctx.createBufferSource(); src.buffer = this.noise; src.loop = true;
-    const f = this.ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
-    const g = this.ctx.createGain(); g.gain.value = gain;
-    src.connect(f); f.connect(g); g.connect(this.master); src.start();
-    if (lfoRate) {
-      const lfo = this.ctx.createOscillator(); lfo.frequency.value = lfoRate;
-      const lg = this.ctx.createGain(); lg.gain.value = gain * 0.5;
-      lfo.connect(lg); lg.connect(g.gain); lfo.start();
-    }
-    return g;
-  }
   limit(name, ms) { const now = performance.now(); if (now - (this.last[name] || 0) < ms) return false; this.last[name] = now; return true; }
-  burst({ freq = 1000, q = 1, type = 'bandpass', dur = 0.1, vol = 0.5, sweepTo = 0, delay = 0 }) {
-    const t = this.ctx.currentTime + delay;
-    const src = this.ctx.createBufferSource(); src.buffer = this.noise;
-    const f = this.ctx.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
-    if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, t + dur);
-    const g = this.ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.connect(f); f.connect(g); g.connect(this.master); src.start(t, Math.random()); src.stop(t + dur + 0.05);
+  // kept for older callers: a short soft "tock" instead of a noise burst
+  burst({ freq = 1000, dur = 0.1, vol = 0.5, delay = 0 }) {
+    this.tone({ freq: Math.min(1400, Math.max(180, freq / 2)), type: 'sine', dur: Math.min(dur, 0.12), vol: vol * 0.3, delay });
   }
   tone({ freq = 440, to = 0, type = 'sine', dur = 0.2, vol = 0.3, delay = 0, attack = 0.005 }) {
     const t = this.ctx.currentTime + delay;
     const o = this.ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
     if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
-    const g = this.ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    const g = this.ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05);
   }
-  release() { if (!this.running) return; this.tone({ freq: 1500, to: 900, type: 'square', dur: 0.05, vol: 0.08 }); this.burst({ freq: 3000, q: 2, dur: 0.05, vol: 0.25 }); }
-  land(s = 1) { if (!this.running || !this.limit('land', 60)) return; this.tone({ freq: 140, to: 55, dur: 0.18, vol: 0.5 * s }); this.burst({ freq: 900, q: 1, dur: 0.08, vol: 0.3 * s }); }
-  rim(s = 1) { if (!this.running || !this.limit('rim', 90)) return; this.tone({ freq: 220, to: 120, dur: 0.12, vol: 0.25 * s, type: 'triangle' }); this.burst({ freq: 1600, q: 2, dur: 0.06, vol: 0.25 * s }); }
-  clack(s = 1) { if (!this.running || !this.limit('clack', 80)) return; this.burst({ freq: 2600, q: 4, dur: 0.06, vol: 0.6 * s }); this.tone({ freq: 950, type: 'triangle', dur: 0.07, vol: 0.2 * s }); }
-  fall() { if (!this.running) return; this.burst({ freq: 2200, sweepTo: 250, q: 1.5, dur: 0.6, vol: 0.45 }); this.tone({ freq: 600, to: 120, dur: 0.5, vol: 0.18, type: 'sine' }); }
+  release() { if (!this.running) return; this.tone({ freq: 880, to: 660, dur: 0.08, vol: 0.12 }); }
+  land(s = 1) { if (!this.running || !this.limit('land', 120)) return; this.tone({ freq: 150, to: 60, dur: 0.18, vol: 0.4 * s }); }
+  rim(s = 1) { if (!this.running || !this.limit('rim', 150)) return; this.tone({ freq: 520, to: 420, dur: 0.1, vol: 0.12 * s, type: 'triangle' }); }
+  clack(s = 1) { if (!this.running || !this.limit('clack', 120)) return; this.tone({ freq: 1180, dur: 0.06, vol: 0.18 * s }); this.tone({ freq: 1770, dur: 0.04, vol: 0.08 * s }); }
+  fall() { if (!this.running) return; this.tone({ freq: 700, to: 140, dur: 0.55, vol: 0.2 }); }
   goal() {
     if (!this.running) return;
-    // whistle + cheering crowd + short horn chord
-    this.tone({ freq: 2900, dur: 0.18, vol: 0.12, type: 'sine' }); this.tone({ freq: 2900, dur: 0.35, vol: 0.12, type: 'sine', delay: 0.22 });
-    for (let i = 0; i < 6; i++) this.burst({ freq: 700 + Math.random() * 900, q: 0.8, dur: 2.2, vol: 0.22, delay: 0.05 * i });
-    [523, 659, 784].forEach((f) => this.tone({ freq: f, type: 'sawtooth', dur: 0.6, vol: 0.07, delay: 0.1, attack: 0.02 }));
+    // referee whistle + happy horn chord
+    this.tone({ freq: 2600, dur: 0.16, vol: 0.08 }); this.tone({ freq: 2600, dur: 0.3, vol: 0.08, delay: 0.2 });
+    [523, 659, 784].forEach((f, i) => this.tone({ freq: f, type: 'triangle', dur: 0.7, vol: 0.14, delay: 0.1 + i * 0.07, attack: 0.02 }));
+    this.tone({ freq: 1047, type: 'triangle', dur: 0.9, vol: 0.12, delay: 0.35, attack: 0.02 });
   }
   win() {
     if (!this.running) return;
-    [523, 659, 784, 1047].forEach((f, i) => { this.tone({ freq: f, type: 'triangle', dur: 0.5, vol: 0.25, delay: i * 0.16 }); this.tone({ freq: f / 2, type: 'sawtooth', dur: 0.5, vol: 0.06, delay: i * 0.16 }); });
-    [523, 659, 784, 1047].forEach((f) => this.tone({ freq: f, type: 'triangle', dur: 1.6, vol: 0.16, delay: 0.7, attack: 0.03 }));
-    for (let i = 0; i < 10; i++) this.burst({ freq: 600 + Math.random() * 1200, q: 0.7, dur: 3.2, vol: 0.2, delay: 0.1 * i });
+    [523, 659, 784, 1047].forEach((f, i) => this.tone({ freq: f, type: 'triangle', dur: 0.45, vol: 0.22, delay: i * 0.16 }));
+    [523, 659, 784, 1047].forEach((f) => this.tone({ freq: f, type: 'triangle', dur: 1.8, vol: 0.13, delay: 0.7, attack: 0.03 }));
+    [1319, 1568].forEach((f, i) => this.tone({ freq: f, dur: 0.25, vol: 0.06, delay: 1.0 + i * 0.25 }));
   }
-  setRoll(speed) { if (this.ok) this.rollGain.gain.setTargetAtTime(speed > 0.3 ? Math.min(0.05, speed * 0.015) : 0, this.ctx.currentTime, 0.08); }
-  duck(on) { if (this.ok) this.master.gain.setTargetAtTime(on ? 0.6 : 0.9, this.ctx.currentTime, 0.3); } // sound effects step back while the commentator talks
+  setRoll() { /* no rolling noise */ }
+  duck(on) { if (this.ok) this.master.gain.setTargetAtTime(on ? 0.6 : 0.9, this.ctx.currentTime, 0.3); } // effects step back while the commentator talks
 }
 
 /* -------------------------------------------------------------- commentator */
