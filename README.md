@@ -31,6 +31,12 @@ Deployment is handled by `.cpanel.yml` (cPanel → Git Version Control → Updat
 2. **Servers** → add a server → copy the install line → paste it into the VPS terminal (as root).
 3. **Streams** → **+ Add stream** → paste the YouTube stream key, choose the server → **Start**.
 
+## Web terminal
+
+Admin → **Terminal** runs commands on a VPS from any phone or computer, through the worker (no SSH needed after the first install).
+It asks for the admin password again, locks after 15 minutes without a command, logs every command in Activity, and can be
+switched off per server on the Servers page. Limits: 60 s per command, no interactive programs (nano, top, less).
+
 ## Useful VPS commands
 
 ```bash

@@ -169,3 +169,31 @@ input:focus, select:focus, .btn:focus-visible, a:focus-visible { outline: 2px so
 .log li { display: flex; gap: 16px; padding: 11px 0; border-bottom: 1px solid #232030; flex-wrap: wrap; }
 .log time { color: var(--muted); font-size: 14px; flex: 0 0 140px; font-variant-numeric: tabular-nums; }
 .log span { flex: 1 1 240px; }
+
+/* terminal */
+.btn-sm { min-height: 44px; padding: 0 14px; font-size: 14px; }
+.term-top { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.term-server { flex: 1 1 240px; max-width: 420px; }
+.term-top .badge { margin-bottom: 12px; }
+.quick { display: flex; flex-wrap: wrap; gap: 8px; }
+#term-app { display: flex; flex-direction: column; gap: 16px; }
+.term { background: #07060b; border: 1px solid var(--line); border-radius: 14px; padding: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.55; color: #d8d4ea; }
+#term-out { min-height: 300px; max-height: 60vh; overflow-y: auto; padding-bottom: 6px; }
+.term-block { margin-bottom: 14px; }
+.term-line { white-space: pre-wrap; word-break: break-word; }
+.term-p, .term-prompt { color: var(--gold); }
+.term-pre { margin: 2px 0 0; white-space: pre; overflow-x: auto; font: inherit; color: #e6e3f2; }
+.term-meta { color: #7d7894; font-size: 12px; margin-top: 2px; }
+.term-bad { color: #ff9b9b; }
+.term-wait { color: #ffd18a; }
+.term-note { color: var(--muted); margin: 0 0 10px; font-family: "Manrope", system-ui, sans-serif; }
+.term-input { display: flex; align-items: center; gap: 8px; border-top: 1px solid #1f1c2a; padding-top: 12px; flex-wrap: wrap; }
+.term-prompt { white-space: nowrap; font-size: 13px; }
+.term-input input { flex: 1 1 200px; min-width: 0; font-family: inherit; background: #0e0d16; }
+.term-foot { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.term-foot p { margin: 0; flex: 1 1 300px; }
+@media (max-width: 520px) {
+  .term-prompt { display: none; }
+  .term-input { flex-wrap: nowrap; }
+  .term { padding: 12px; font-size: 13px; }
+}

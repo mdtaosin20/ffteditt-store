@@ -81,6 +81,12 @@ function attempt_login(string $username, string $password): bool
         return true;
     }
 
+    record_login_failure();
+    return false;
+}
+
+function record_login_failure(): void
+{
     $ip = client_ip();
     db()->prepare('INSERT INTO login_attempts (ip, attempts) VALUES (?, 1)
                    ON CONFLICT(ip) DO UPDATE SET attempts = attempts + 1')->execute([$ip]);
@@ -91,6 +97,43 @@ function attempt_login(string $username, string $password): bool
             ->execute([time() + LOGIN_LOCK_SECONDS, $ip]);
         log_activity('Login locked for 15 minutes after too many wrong passwords');
     }
+}
+
+/* ---------- terminal lock ---------- */
+
+const TERMINAL_UNLOCK_SECONDS = 900; // 15 minutes without use
+
+function terminal_unlocked(): bool
+{
+    start_session();
+    return (int) ($_SESSION['term_until'] ?? 0) > time();
+}
+
+function terminal_touch(): void
+{
+    start_session();
+    $_SESSION['term_until'] = time() + TERMINAL_UNLOCK_SECONDS;
+}
+
+function terminal_lock(): void
+{
+    start_session();
+    unset($_SESSION['term_until']);
+}
+
+/** Re-check the admin password before opening the terminal. */
+function terminal_unlock(int $adminId, string $password): bool
+{
+    $st = db()->prepare('SELECT pass_hash FROM admins WHERE id = ?');
+    $st->execute([$adminId]);
+    if (password_verify($password, (string) $st->fetchColumn())) {
+        db()->prepare('DELETE FROM login_attempts WHERE ip = ?')->execute([client_ip()]);
+        terminal_touch();
+        log_activity('Terminal unlocked');
+        return true;
+    }
+    record_login_failure();
+    log_activity('Wrong password when opening the terminal');
     return false;
 }
 

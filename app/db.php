@@ -76,7 +76,27 @@ function migrate(PDO $pdo): void
             ts      INTEGER NOT NULL,
             message TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS commands (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            server_id   INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+            cmd         TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'queued',
+            output      TEXT,
+            exit_code   INTEGER,
+            duration_ms INTEGER,
+            created_at  INTEGER NOT NULL,
+            started_at  INTEGER,
+            finished_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_commands_server ON commands(server_id, id);
     ");
+
+    // Columns added after the first release.
+    $cols = array_column($pdo->query('PRAGMA table_info(servers)')->fetchAll(), 'name');
+    if (!in_array('terminal_enabled', $cols, true)) {
+        $pdo->exec('ALTER TABLE servers ADD COLUMN terminal_enabled INTEGER NOT NULL DEFAULT 1');
+    }
 }
 
 function log_activity(string $message): void

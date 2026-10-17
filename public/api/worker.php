@@ -102,6 +102,23 @@ foreach ($mine as $id => $row) {
     }
 }
 
+// 2b) Save terminal command results.
+$fin = db()->prepare("UPDATE commands SET status = 'done', output = ?, exit_code = ?, duration_ms = ?, finished_at = ?
+                      WHERE id = ? AND server_id = ? AND status IN ('queued', 'running')");
+foreach ((array) ($in['command_results'] ?? []) as $r) {
+    if (!is_array($r)) {
+        continue;
+    }
+    $fin->execute([
+        substr((string) ($r['output'] ?? ''), 0, 70000),
+        isset($r['exit_code']) ? (int) $r['exit_code'] : null,
+        isset($r['duration_ms']) ? (int) $r['duration_ms'] : null,
+        $now,
+        (int) ($r['id'] ?? 0),
+        $sid,
+    ]);
+}
+
 // 3) Tell the worker what should be running.
 $q   = qualities();
 $out = [];
@@ -124,4 +141,21 @@ foreach ($mine as $id => $row) {
     ];
 }
 
-echo json_encode(['ok' => true, 'poll_seconds' => 5, 'run' => $out]);
+// 4) Terminal commands waiting for this server.
+$cmds = [];
+if ((int) ($server['terminal_enabled'] ?? 1) === 1) {
+    $st = db()->prepare("SELECT id, cmd FROM commands WHERE server_id = ? AND status = 'queued' ORDER BY id LIMIT 5");
+    $st->execute([$sid]);
+    $mark = db()->prepare("UPDATE commands SET status = 'running', started_at = ? WHERE id = ?");
+    foreach ($st->fetchAll() as $c) {
+        $mark->execute([$now, $c['id']]);
+        $cmds[] = ['id' => (int) $c['id'], 'cmd' => $c['cmd']];
+    }
+}
+
+// Check in faster while the terminal is being used.
+$st = db()->prepare('SELECT MAX(created_at) FROM commands WHERE server_id = ?');
+$st->execute([$sid]);
+$poll = ((int) $st->fetchColumn() > $now - 600) ? 2 : 5;
+
+echo json_encode(['ok' => true, 'poll_seconds' => $poll, 'run' => $out, 'commands' => $cmds]);

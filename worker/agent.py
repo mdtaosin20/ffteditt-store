@@ -24,7 +24,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
@@ -251,8 +251,81 @@ def machine_info():
     return info
 
 
-def call_panel(panel, token, reports):
-    body = json.dumps({"token": token, "info": machine_info(), "streams": reports}).encode()
+CMD_TIMEOUT = 60
+CMD_MAX_OUTPUT = 64 * 1024
+
+
+class CommandRunner:
+    """Runs terminal commands sent from the admin panel, one thread each."""
+
+    def __init__(self, wake):
+        self.wake = wake            # threading.Event: send results to the panel right away
+        self.lock = threading.Lock()
+        self.active = set()         # command ids running now
+        self.results = []           # finished, not yet sent
+
+    def submit(self, cmd_id, text):
+        with self.lock:
+            if cmd_id in self.active:
+                return
+            self.active.add(cmd_id)
+        threading.Thread(target=self._run, args=(cmd_id, text), daemon=True).start()
+
+    def _run(self, cmd_id, text):
+        log("[terminal] running command #%d" % cmd_id)
+        start = time.time()
+        code = None
+        try:
+            p = subprocess.Popen(
+                ["/bin/bash", "-lc", text],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                cwd="/root" if os.path.isdir("/root") else "/",
+                env=dict(os.environ, TERM="dumb", COLUMNS="100", LINES="40", SYSTEMD_PAGER="", PAGER="cat"),
+                start_new_session=True,
+            )
+            try:
+                out, _ = p.communicate(timeout=CMD_TIMEOUT)
+                code = p.returncode
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(p.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+                out, _ = p.communicate()
+                out = (out or b"") + ("\n[Stopped: took longer than %d seconds]" % CMD_TIMEOUT).encode()
+                code = 124
+            text_out = (out or b"").decode("utf-8", "replace")
+        except Exception as ex:
+            text_out = "Could not run the command: %s" % ex
+            code = 127
+        if len(text_out) > CMD_MAX_OUTPUT:
+            text_out = text_out[:CMD_MAX_OUTPUT] + "\n[Output cut: too long]"
+        text_out = redact(text_out)
+        with self.lock:
+            self.results.append({
+                "id": cmd_id, "output": text_out, "exit_code": code,
+                "duration_ms": int((time.time() - start) * 1000),
+            })
+        self.wake.set()
+
+    def take_results(self):
+        with self.lock:
+            r, self.results = self.results, []
+            return r
+
+    def put_back(self, results):
+        with self.lock:
+            self.results = results + self.results
+
+    def done(self, ids):
+        with self.lock:
+            for i in ids:
+                self.active.discard(i)
+
+
+def call_panel(panel, token, reports, cmd_results=None):
+    body = json.dumps({"token": token, "info": machine_info(), "streams": reports,
+                       "command_results": cmd_results or []}).encode()
     req = urllib.request.Request(
         panel.rstrip("/") + "/api/worker.php",
         data=body,
@@ -275,23 +348,33 @@ def main():
     retry_delay = {}    # id -> current backoff seconds
     poll = 5
     running = {"on": True}
+    wake = threading.Event()
+    runner = CommandRunner(wake)
 
     def shutdown(*_):
         running["on"] = False
+        wake.set()
 
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
 
     while running["on"]:
+        wake.clear()
         reports = [s.report() for s in streams.values()]
+        results = runner.take_results()
         try:
-            resp = call_panel(panel, token, reports)
-            poll = max(3, min(30, int(resp.get("poll_seconds", 5))))
+            resp = call_panel(panel, token, reports, results)
+            runner.done([r["id"] for r in results])
+            poll = max(1, min(30, int(resp.get("poll_seconds", 5))))
             wanted = {int(c["id"]): c for c in resp.get("run", [])}
+            for c in resp.get("commands", []):
+                runner.submit(int(c["id"]), str(c["cmd"]))
         except urllib.error.HTTPError as ex:
+            runner.put_back(results)
             log("Panel said HTTP %s - %s" % (ex.code, "token wrong or server removed?" if ex.code == 401 else ""))
             wanted = None
         except Exception as ex:
+            runner.put_back(results)
             log("Panel not reachable (%s) - keeping current streams running" % ex)
             wanted = None
 
@@ -330,10 +413,8 @@ def main():
                 elif s.status == "live" and s.started_at and now - s.started_at > 300:
                     retry_delay.pop(sid, None)  # stable for 5 min: reset backoff
 
-        for _ in range(poll * 4):
-            if not running["on"]:
-                break
-            time.sleep(0.25)
+        # sleep until the next check-in, or earlier when a command finishes
+        wake.wait(timeout=poll)
 
     log("Shutting down, stopping all streams")
     for s in streams.values():

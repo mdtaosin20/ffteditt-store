@@ -34,6 +34,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         db()->prepare('DELETE FROM servers WHERE id = ?')->execute([$id]);
         log_activity('Server removed');
         flash('Server removed. Its streams were stopped and need a new server.');
+    } elseif ($do === 'term_toggle' && $id) {
+        $on = ($_POST['to'] ?? '') === 'on' ? 1 : 0;
+        db()->prepare('UPDATE servers SET terminal_enabled = ? WHERE id = ?')->execute([$on, $id]);
+        $st = db()->prepare('SELECT name FROM servers WHERE id = ?');
+        $st->execute([$id]);
+        log_activity('Terminal switched ' . ($on ? 'on' : 'off') . ' for ' . (string) $st->fetchColumn());
     } elseif ($do === 'rename' && $id) {
         $name = trim((string) ($_POST['name'] ?? ''));
         if ($name !== '' && mb_strlen($name) <= 40) {
@@ -103,6 +109,7 @@ page_start('Servers', 'servers', $admin);
     <dl class="meta">
       <div><dt>Last check-in</dt><dd><?= e(ago((int) $srv['last_seen'])) ?></dd></div>
       <div><dt>Streams</dt><dd><?= (int) $c['live'] ?> live / <?= (int) $c['n'] ?> assigned</dd></div>
+      <div><dt>Terminal</dt><dd><?= (int) $srv['terminal_enabled'] === 1 ? 'On' : 'Off' ?></dd></div>
       <?php if ($info): ?>
       <div><dt>Machine</dt><dd><?= e($info['hostname'] ?? '?') ?> · <?= (int) ($info['cpus'] ?? 0) ?> CPU</dd></div>
       <div><dt>CPU load</dt><dd><?= e($info['load1'] ?? '—') ?></dd></div>
@@ -110,6 +117,13 @@ page_start('Servers', 'servers', $admin);
       <?php endif; ?>
     </dl>
     <div class="stream-actions">
+      <?php $termOn = (int) $srv['terminal_enabled'] === 1; ?>
+      <a class="btn btn-ghost" href="terminal.php?server=<?= (int) $sid ?>">Terminal</a>
+      <form method="post">
+        <?= csrf_field() ?><input type="hidden" name="do" value="term_toggle"><input type="hidden" name="id" value="<?= (int) $sid ?>">
+        <input type="hidden" name="to" value="<?= $termOn ? 'off' : 'on' ?>">
+        <button class="btn btn-ghost" type="submit"><?= $termOn ? 'Turn terminal off' : 'Turn terminal on' ?></button>
+      </form>
       <form method="post" onsubmit="return confirm('Make a new token? The old one stops working and you must run the install line again.')">
         <?= csrf_field() ?><input type="hidden" name="do" value="rotate"><input type="hidden" name="id" value="<?= (int) $sid ?>">
         <button class="btn btn-ghost" type="submit">New token</button>
