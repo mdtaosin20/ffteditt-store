@@ -67,9 +67,12 @@ function chat_ingest(array $mine, array $batches): void
             }
             db()->commit();
         }
-        db()->prepare('UPDATE streams SET chat_status = ?, chat_seen = CASE WHEN ? > 0 THEN ? ELSE chat_seen END,
-                       chat_count = chat_count + ? WHERE id = ?')
-            ->execute([chat_clean((string) ($b['status'] ?? ''), 160), count($items), time(), count($items), $sid]);
+        $n = count($items);
+        db()->prepare('UPDATE streams SET chat_status = ?, chat_count = chat_count + ? WHERE id = ?')
+            ->execute([chat_clean((string) ($b['status'] ?? ''), 160), $n, $sid]);
+        if ($n > 0) {
+            db()->prepare('UPDATE streams SET chat_seen = ? WHERE id = ?')->execute([time(), $sid]);
+        }
     }
     // keep the table small: last 400 events per stream, nothing older than a day
     if (random_int(1, 20) === 1) {
