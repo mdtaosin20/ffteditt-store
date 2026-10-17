@@ -36,7 +36,8 @@ async function loadConfig() {
 const $ = (id) => document.getElementById(id);
 
 function fitStage() {
-  const s = Math.min(innerWidth / 1080, innerHeight / 1920);
+  const vw = document.documentElement.clientWidth || innerWidth, vh = document.documentElement.clientHeight || innerHeight;
+  const s = Math.min(vw / 1080, vh / 1920);
   const stage = $('stage');
   stage.style.transform = `scale(${s}) translate(-50%, -50%)`;
   stage.style.transform = `translate(-50%, -50%) scale(${s})`;

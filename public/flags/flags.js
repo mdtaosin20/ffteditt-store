@@ -19,7 +19,8 @@ async function fetchConfig() {
 }
 
 function fitStage() {
-  const s = Math.min(innerWidth / 1080, innerHeight / 1920);
+  const vw = document.documentElement.clientWidth || innerWidth, vh = document.documentElement.clientHeight || innerHeight;
+  const s = Math.min(vw / 1080, vh / 1920);
   $('stage').style.transform = `translate(-50%, -50%) scale(${s})`;
 }
 
