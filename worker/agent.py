@@ -28,7 +28,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.4.1"
+VERSION = "1.5.0"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
@@ -661,10 +661,217 @@ class CommandRunner:
                 self.active.discard(i)
 
 
-def call_panel(panel, token, reports, cmd_results=None, voice_results=None, voice_error=None):
+# ---------------------------------------------------------------- live chat reader
+YT_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+
+
+def yt_request(url, body=None, timeout=15):
+    headers = {"User-Agent": YT_UA, "Accept-Language": "en-US,en;q=0.9", "Cookie": "CONSENT=YES+cb; SOCS=CAI"}
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode()
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST" if body is not None else "GET")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", "replace")
+
+
+def find_key(obj, key, depth=0):
+    """First value of `key` anywhere inside nested dicts/lists."""
+    if depth > 40:
+        return None
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj[key]
+        for v in obj.values():
+            r = find_key(v, key, depth + 1)
+            if r is not None:
+                return r
+    elif isinstance(obj, list):
+        for v in obj:
+            r = find_key(v, key, depth + 1)
+            if r is not None:
+                return r
+    return None
+
+
+def page_json(html, name):
+    m = re.search(r'(?:window\["%s"\]|var %s|%s)\s*=\s*(\{.+?\})\s*;\s*(?:</script>|var |window\[|\n)' % (name, name, name), html, re.S)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(1))
+    except ValueError:
+        return None
+
+
+def runs_text(msg):
+    out = []
+    for r in (msg or {}).get("runs", []):
+        if "text" in r:
+            out.append(r["text"])
+        elif "emoji" in r:
+            e = r["emoji"]
+            if not e.get("isCustomEmoji") and e.get("emojiId") and len(e["emojiId"]) <= 12:
+                out.append(e["emojiId"])
+    return "".join(out) or (msg or {}).get("simpleText", "")
+
+
+def chat_item(item):
+    """One chat action from YouTube -> small dict for the panel (or None)."""
+    for key, kind in (("liveChatTextMessageRenderer", "chat"), ("liveChatPaidMessageRenderer", "super"),
+                      ("liveChatPaidStickerRenderer", "super"), ("liveChatMembershipItemRenderer", "member")):
+        r = item.get(key)
+        if not r:
+            continue
+        author = (r.get("authorName") or {}).get("simpleText", "")
+        text = runs_text(r.get("message"))
+        if kind == "member" and not text:
+            text = runs_text(r.get("headerSubtext"))
+        amount = (r.get("purchaseAmountText") or {}).get("simpleText", "")
+        try:
+            ts = int(r.get("timestampUsec", "0")) / 1e6
+        except ValueError:
+            ts = 0
+        return {"id": r.get("id", ""), "k": kind, "a": author, "t": text[:200], "amt": amount, "ts": ts}
+    return None
+
+
+class ChatReader:
+    """Reads one live chat with YouTube's own web-page requests (no API key, no daily limit)."""
+
+    def __init__(self, sid):
+        self.sid = sid
+        self.lock = threading.Lock()
+        self.items = []
+        self.status = "Starting..."
+        self.target = None          # {"video": "...", "channel": "..."}
+        self.wake = threading.Event()
+        self.stopped = False
+        self.count = 0
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def set_target(self, target):
+        if target != self.target:
+            self.target = target
+            self.wake.set()
+
+    def stop(self):
+        self.stopped = True
+        self.wake.set()
+
+    def take(self):
+        with self.lock:
+            items, self.items = self.items, []
+            return {"id": self.sid, "items": items, "status": self.status}
+
+    def put_back(self, batch):
+        with self.lock:
+            self.items = batch["items"] + self.items
+            self.items = self.items[-300:]
+
+    def _set(self, status):
+        self.status = status
+
+    def _video_of_channel(self, url):
+        html = yt_request(url.rstrip("/") + "/live")
+        m = re.search(r'<link rel="canonical" href="https://www\.youtube\.com/watch\?v=([\w-]{11})"', html)
+        return m.group(1) if m else ""
+
+    def _open(self, video):
+        html = yt_request("https://www.youtube.com/live_chat?is_popout=1&v=" + video)
+        key = re.search(r'"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"', html)
+        ver = re.search(r'"INNERTUBE_CLIENT_VERSION"\s*:\s*"([^"]+)"', html) or re.search(r'"clientVersion"\s*:\s*"([\d.]+)"', html)
+        data = page_json(html, "ytInitialData")
+        if not data:
+            raise RuntimeError("chat page not readable")
+        renderer = find_key(data, "liveChatRenderer") or {}
+        if not renderer:
+            raise RuntimeError("chat is off or the video is not live")
+        cont = None
+        # "Live chat" (all messages) instead of "Top chat"
+        sub = find_key(renderer.get("header", {}), "subMenuItems") or []
+        if len(sub) > 1:
+            cont = find_key(sub[1], "continuation")
+        if not cont:
+            cont = find_key(renderer.get("continuations", []), "continuation")
+        if not cont:
+            raise RuntimeError("no chat continuation")
+        while isinstance(cont, dict):
+            cont = find_key(cont, "continuation")
+        if not isinstance(cont, str) or not cont:
+            raise RuntimeError("no chat continuation")
+        return (key.group(1) if key else ""), (ver.group(1) if ver else "2.20240101.00.00"), cont
+
+    def _loop(self):
+        while not self.stopped:
+            t = self.target
+            if not t:
+                self._set("Waiting for the live video")
+                self.wake.wait(30)
+                self.wake.clear()
+                continue
+            try:
+                video = t.get("video") or ""
+                if not video and t.get("channel"):
+                    video = self._video_of_channel(t["channel"])
+                if not video:
+                    raise RuntimeError("live video not found yet")
+                key, ver, cont = self._open(video)
+                started = time.time() - 5     # only messages from now on (the first answer repeats old ones)
+                self._set("Reading chat of %s" % video)
+                log("[stream %d] reading live chat of %s" % (self.sid, video))
+                fails = 0
+                while not self.stopped and self.target == t:
+                    try:
+                        raw = yt_request("https://www.youtube.com/youtubei/v1/live_chat/get_live_chat?prettyPrint=false" + ("&key=" + key if key else ""),
+                                         {"context": {"client": {"clientName": "WEB", "clientVersion": ver, "hl": "en", "gl": "US"}},
+                                          "continuation": cont})
+                        fails = 0
+                    except (urllib.error.URLError, socket.timeout, OSError) as ex:
+                        fails += 1
+                        if fails >= 5:
+                            raise RuntimeError("chat requests failing (%s)" % ex)
+                        self.wake.wait(3)
+                        continue
+                    j = json.loads(raw)
+                    lcc = (j.get("continuationContents") or {}).get("liveChatContinuation")
+                    if not lcc:
+                        raise RuntimeError("live chat ended")
+                    new = []
+                    for a in lcc.get("actions", []) or []:
+                        it = (a.get("addChatItemAction") or {}).get("item")
+                        if not it:
+                            continue
+                        c = chat_item(it)
+                        if c and c["a"] and c["ts"] >= started:
+                            new.append(c)
+                    if new:
+                        self.count += len(new)
+                        with self.lock:
+                            self.items.extend(new)
+                            self.items = self.items[-300:]
+                    self._set("Reading chat (%d new since start)" % self.count)
+                    nxt = (lcc.get("continuations") or [{}])[0]
+                    info = next((v for v in nxt.values() if isinstance(v, dict) and v.get("continuation")), None)
+                    if not info:
+                        raise RuntimeError("live chat ended")
+                    cont = info["continuation"]
+                    wait = int(info.get("timeoutMs", 2000)) / 1000.0
+                    self.wake.wait(max(1.5, min(5.0, wait)))
+                    self.wake.clear()
+            except Exception as ex:
+                self._set("Chat not readable: %s - retrying" % str(ex)[:90])
+                log("[stream %d] live chat: %s" % (self.sid, ex))
+                self.wake.wait(20)
+                self.wake.clear()
+
+
+def call_panel(panel, token, reports, cmd_results=None, voice_results=None, voice_error=None, chat=None):
     body = json.dumps({"token": token, "info": machine_info(), "streams": reports,
                        "command_results": cmd_results or [], "voice_results": voice_results or [],
-                       "voice_error": voice_error}).encode()
+                       "voice_error": voice_error, "chat": chat or []}).encode()
     req = urllib.request.Request(
         panel.rstrip("/") + "/api/worker.php",
         data=body,
@@ -690,6 +897,7 @@ def main():
     wake = threading.Event()
     runner = CommandRunner(wake)
     voices = VoiceMaker()
+    readers = {}        # id -> ChatReader
 
     def shutdown(*_):
         running["on"] = False
@@ -703,8 +911,9 @@ def main():
         reports = [s.report() for s in streams.values()]
         results = runner.take_results()
         vres, verr = voices.take()
+        chat = [r.take() for r in readers.values()]
         try:
-            resp = call_panel(panel, token, reports, results, vres, verr)
+            resp = call_panel(panel, token, reports, results, vres, verr, chat)
             runner.done([r["id"] for r in results])
             voices.submit(resp.get("voice_jobs") or [])
             poll = max(1, min(30, int(resp.get("poll_seconds", 5))))
@@ -714,15 +923,31 @@ def main():
         except urllib.error.HTTPError as ex:
             runner.put_back(results)
             voices.put_back(vres)
+            for b in chat:
+                if b["id"] in readers:
+                    readers[b["id"]].put_back(b)
             log("Panel said HTTP %s - %s" % (ex.code, "token wrong or server removed?" if ex.code == 401 else ""))
             wanted = None
         except Exception as ex:
             runner.put_back(results)
             voices.put_back(vres)
+            for b in chat:
+                if b["id"] in readers:
+                    readers[b["id"]].put_back(b)
             log("Panel not reachable (%s) - keeping current streams running" % ex)
             wanted = None
 
         if wanted is not None:
+            # live chat readers: one per live stream that has a chat target
+            for sid in list(readers):
+                if sid not in wanted or not wanted[sid].get("chat"):
+                    readers.pop(sid).stop()
+            for sid, cfg in wanted.items():
+                if cfg.get("chat"):
+                    if sid not in readers:
+                        readers[sid] = ChatReader(sid)
+                    readers[sid].set_target(cfg["chat"])
+
             # stop streams that should not run (or whose settings changed)
             for sid in list(streams):
                 s = streams[sid]

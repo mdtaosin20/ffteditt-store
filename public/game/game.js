@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
 import { Sfx, Commentator, holdScreen, PACE, reporter } from './audio.js?v=12';
+import { liveChat } from './chat.js?v=1';
 
 /* ------------------------------------------------------------------ config */
 const DEFAULTS = {
@@ -1003,6 +1004,58 @@ async function main() {
   sfx.resume();
   setTimeout(() => { if (sfx.ok && !sfx.running) soundBtn.hidden = false; }, 1500);
 
+  // live chat: viewers pick a side (M / R), team fans, robot host
+  const initials = P.map((p) => p.name.trim()[0].toLowerCase());
+  const sameInitial = initials[0] === initials[1];
+  const TEAM_WORDS = [['messi', 'leo', 'lionel', 'la pulga', 'মেসি'], ['ronaldo', 'cristiano', 'cr7', 'siu', 'siuu', 'siuuu', 'রোনালদো']];
+  const teamOf = (text) => {
+    const t = ' ' + String(text || '').toLowerCase().replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim() + ' ';
+    if (!sameInitial) for (let i = 0; i < 2; i++) if (t.trim() === initials[i]) return String(i);
+    for (let i = 0; i < 2; i++) {
+      const words = [P[i].name.toLowerCase(), ...(P[i].name === ['MESSI', 'RONALDO'][i] ? TEAM_WORDS[i] : [])];
+      if (words.some((w) => t.includes(' ' + w + ' ') || ((w.length > 4 || /[^a-z0-9 ]/.test(w)) && t.includes(w)))) return String(i);
+    }
+    return null;
+  };
+  const avatar = (k) => { const im = document.createElement('img'); im.className = 'lc-av'; im.src = $(`p${Number(k) + 1}-avatar`).src; im.style.borderColor = P[k].color; return im; };
+  const pickHint = sameInitial ? `${P[0].name} OR ${P[1].name}` : `${initials[0].toUpperCase()} FOR ${P[0].name} OR ${initials[1].toUpperCase()} FOR ${P[1].name}`;
+  const standing = () => { const l = leader(); return l < 0 ? `IT'S ${score[0]}–${score[1]}, ALL LEVEL!` : `${P[l].name} LEADS ${score[l]}–${score[1 - l]}!`; };
+  const cheer = (k, name) => {
+    const c = document.createElement('div'); c.className = 'lc-cheer'; c.textContent = '+ ' + name.toUpperCase();
+    c.style.left = (k === '0' ? 270 : 810) + 'px'; c.style.top = '540px'; c.style.color = P[k].color;
+    $('stage').append(c); setTimeout(() => c.remove(), 2700);
+  };
+  const isGreeting = (t) => /\b(hi|hii+|hello|hey|salam|salaam|assalam\w*|asalam\w*)\b|হাই|হ্যালো|সালাম|আসসালামু/i.test(t);
+  const isSalam = (t) => /salam|salaam|assalam|asalam|সালাম|আসসালামু/i.test(t);
+  const chat = liveChat({
+    game: 'ball', rows: 3,
+    match: teamOf,
+    badge: avatar,
+    fansLabel: 'TEAM FANS:', fanLabel: (k) => P[k].name, fansMax: 2,
+    busy: () => !$('winner').hidden,
+    sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
+    onFan: cheer,
+    emptyHint: `Type ${pickHint.toLowerCase().replace(/ for /g, ' for ')} to cheer!`,
+    idleLines: [
+      [`WHO WINS THIS ROUND? TYPE ${pickHint} IN CHAT!`],
+      ['PICK YOUR SIDE IN CHAT — EVERY FAN COUNTS ON THE SCOREBOARD!'],
+      ['SUBSCRIBE AND YOUR NAME APPEARS RIGHT HERE ON THE SCREEN!'],
+    ],
+    welcome: (name, k, text) => {
+      const hi = isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'WELCOME ';
+      if (k === null) return [hi, { name }, `! WHO DO YOU SUPPORT? TYPE ${pickHint}!`];
+      const n = chat.counts.get(k) || 1;
+      return [hi, { name }, `! ${P[k].name} HAS A NEW FAN — ${n} ${n === 1 ? 'FAN' : 'FANS'} NOW!`];
+    },
+    reply: (name, k, text) => {
+      if (k !== null) return [{ name }, ` IS BACKING ${P[k].name}! ${standing()}`];
+      if (/who.*(win|lead)|score|kon|কে জিতবে/i.test(text)) return ['RIGHT NOW, ', { name }, ': ' + standing()];
+      if (isGreeting(text)) return [isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'HELLO AGAIN ', { name }, `! TYPE ${pickHint}!`];
+      return Math.random() < 0.25 ? ['THANKS FOR CHATTING, ', { name }, `! ${standing()}`] : null;
+    },
+    demoTexts: ['M', 'R', 'Messi 🐐', 'Ronaldo siuuu', 'hello', 'who will win?', 'CR7', 'assalamu alaikum', 'Leo forever', 'মেসি', 'nice game', 'r'],
+  });
+
   // game flow
   let phase = 'start', phaseT = 0, roundWinner = -1, gameT = 0;
   let nextCall = 25 + Math.random() * 15, nextSub = 200 + Math.random() * 100;
@@ -1115,7 +1168,7 @@ async function main() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__fft = { balls, score: () => score, match: () => ({ won, roundNo, timeLeft, golden, phase }), skip: (t) => { timeLeft = t; }, mode: gfx.mode, sfx, voice, tubes }; // for testing
+  window.__fft = { chat, balls, score: () => score, match: () => ({ won, roundNo, timeLeft, golden, phase }), skip: (t) => { timeLeft = t; }, mode: gfx.mode, sfx, voice, tubes }; // for testing
 }
 
 main();

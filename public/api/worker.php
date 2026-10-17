@@ -131,6 +131,9 @@ foreach ($mine as $id => $row) {
     }
 }
 
+// 2a) Live chat messages read by the worker.
+chat_ingest($mine, (array) ($in['chat'] ?? []));
+
 // 2b) Save terminal command results.
 $fin = db()->prepare("UPDATE commands SET status = 'done', output = ?, exit_code = ?, duration_ms = ?, finished_at = ?
                       WHERE id = ? AND server_id = ? AND status IN ('queued', 'running')");
@@ -185,6 +188,7 @@ foreach ($mine as $id => $row) {
         'kbps'         => $preset['kbps'],
         'fps'          => (int) $row['fps'],
         'auto_restart' => (bool) $row['auto_restart'],
+        'chat'         => $row['status'] === 'live' ? chat_target($row) : null,
     ];
 }
 
@@ -204,6 +208,11 @@ if ((int) ($server['terminal_enabled'] ?? 1) === 1) {
 $st = db()->prepare('SELECT MAX(created_at) FROM commands WHERE server_id = ?');
 $st->execute([$sid]);
 $poll = ((int) $st->fetchColumn() > $now - 600) ? 2 : 5;
+
+// Check in faster while the live chat is being read, so messages reach the screen quickly.
+foreach ($out as $o) {
+    if (!empty($o['chat'])) $poll = min($poll, 3);
+}
 
 $voiceJobs = array_slice(voice_missing(voice_state(), game_config()), 0, 4);
 if ($voiceJobs) {

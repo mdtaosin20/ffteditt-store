@@ -124,6 +124,12 @@ function migrate(PDO $pdo): void
     $add('streams', 'yt_msg_ok', 'INTEGER NOT NULL DEFAULT 0');
     $add('streams', 'yt_fails', 'INTEGER NOT NULL DEFAULT 0');
     $add('streams', 'yt_fail_start', 'INTEGER NOT NULL DEFAULT 0');
+    $add('streams', 'yt_video_start', 'INTEGER NOT NULL DEFAULT 0');
+    $add('streams', 'yt_find_at', 'INTEGER NOT NULL DEFAULT 0');
+    // Live chat (read by the VPS worker) — see app/chat.php
+    $add('streams', 'chat_status', "TEXT NOT NULL DEFAULT ''");
+    $add('streams', 'chat_seen', 'INTEGER NOT NULL DEFAULT 0');
+    $add('streams', 'chat_count', 'INTEGER NOT NULL DEFAULT 0');
 
     // The Ball Drop game moved from the home page to /ball/ (the home page is now the games website).
     $done = $pdo->query("SELECT value FROM settings WHERE key = 'mig_ball_path'")->fetchColumn();
@@ -153,6 +159,19 @@ function migrate(PDO $pdo): void
             bytes     INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (server_id, month)
         );
+
+        CREATE TABLE IF NOT EXISTS chat_events (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            stream_id INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
+            ts        INTEGER NOT NULL,
+            kind      TEXT NOT NULL DEFAULT 'chat',
+            msg_id    TEXT NOT NULL DEFAULT '',
+            author    TEXT NOT NULL DEFAULT '',
+            text      TEXT NOT NULL DEFAULT '',
+            amount    TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat ON chat_events(stream_id, id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_msg ON chat_events(stream_id, msg_id);
 
         CREATE TABLE IF NOT EXISTS schedules (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,

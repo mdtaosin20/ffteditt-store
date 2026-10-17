@@ -21,9 +21,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('Saved. Now press "Connect YouTube" next to a channel.');
         }
     }
+    if (($_POST['do'] ?? '') === 'chat_cfg') {
+        $name = mb_strtoupper(trim(preg_replace('/[^\p{L}\p{N} .!-]/u', '', (string) ($_POST['robot_name'] ?? '')) ?? ''));
+        chat_save([
+            'enabled'    => isset($_POST['enabled']),
+            'robot'      => isset($_POST['robot']),
+            'box'        => isset($_POST['box']),
+            'subs'       => isset($_POST['subs']),
+            'idle'       => isset($_POST['idle']),
+            'robot_name' => mb_substr($name !== '' ? $name : 'ROBO HOST', 0, 20),
+        ]);
+        log_activity('Live chat & robot settings saved', 'ok');
+        flash('Saved. The game pages pick it up within a few seconds.');
+    }
     redirect('youtube.php');
 }
 
+$chat = chat_cfg();
 $ready   = yt_ready();
 $client  = yt_client();
 $streams = db()->query('SELECT * FROM streams ORDER BY id')->fetchAll();
@@ -64,6 +78,41 @@ page_start('YouTube Manager', 'youtube', $admin);
           <?php endif; ?>
           <a class="btn btn-ghost btn-sm" href="yt_live.php?id=<?= $sid ?>"><?= icon('pencil') ?>Title &amp; thumbnail</a>
         </div></td>
+      </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="panel">
+  <div class="ph"><h2><?= icon('bell') ?>Live chat &amp; robot host</h2>
+    <?= $chat['enabled'] ? '<span class="tag tag-green">On</span>' : '<span class="tag tag-gray">Off</span>' ?></div>
+  <p class="muted small">The VPS reads your live chat. Viewers who write a country get their name on that flag (Ball Drop: “M” or “R”), the busiest countries show as Top Fans, and the robot host welcomes and answers people on screen.</p>
+  <form method="post" class="form" style="max-width:none">
+    <?= csrf_field() ?><input type="hidden" name="do" value="chat_cfg">
+    <div class="row2">
+      <label class="check"><input type="checkbox" name="enabled" <?= $chat['enabled'] ? 'checked' : '' ?>> Read the live chat</label>
+      <label class="check"><input type="checkbox" name="robot" <?= $chat['robot'] ? 'checked' : '' ?>> Robot host talks on screen</label>
+      <label class="check"><input type="checkbox" name="box" <?= $chat['box'] ? 'checked' : '' ?>> Show the chat box</label>
+      <label class="check"><input type="checkbox" name="subs" <?= $chat['subs'] ? 'checked' : '' ?>> New subscriber banner</label>
+      <label class="check"><input type="checkbox" name="idle" <?= $chat['idle'] ? 'checked' : '' ?>> Robot asks for comments when chat is quiet</label>
+      <label class="field"><span>Robot name</span><input name="robot_name" maxlength="20" value="<?= e($chat['robot_name']) ?>"></label>
+    </div>
+    <div class="form-actions"><button class="btn btn-blue" type="submit">Save</button>
+      <a class="btn btn-ghost" href="/flags/?chatdemo=1" target="_blank" rel="noopener">Preview Flag Battle</a>
+      <a class="btn btn-ghost" href="/ball/?chatdemo=1" target="_blank" rel="noopener">Preview Ball Drop</a></div>
+  </form>
+  <div class="tbl-wrap" style="margin-top:14px"><table class="tbl tbl-sm">
+    <thead><tr><th>Channel</th><th>Chat reader (on the VPS)</th><th>Messages</th><th>Last message</th></tr></thead>
+    <tbody>
+    <?php foreach ($streams as $s): ?>
+      <tr>
+        <td><span class="cell-game"><?= game_badge(game_of_url($s['page_url'])) ?><?= e($s['channel_name'] ?: $s['name']) ?></span></td>
+        <td class="small"><?php if ($s['status'] !== 'live'): ?><span class="muted">Starts when the stream is live</span>
+            <?php elseif ($s['chat_status'] === ''): ?><span class="muted">Waiting for the live video…<?= $s['yt_refresh'] === '' && $s['channel_url'] === '' ? ' (connect YouTube or add the channel link)' : '' ?></span>
+            <?php else: ?><span class="<?= str_starts_with($s['chat_status'], 'Reading') ? 'ok-text' : 'warn-text' ?>"><?= e($s['chat_status']) ?></span><?php endif; ?></td>
+        <td><?= (int) $s['chat_count'] ?></td>
+        <td class="small muted"><?= $s['chat_seen'] ? e(ago((int) $s['chat_seen'])) : '—' ?></td>
       </tr>
     <?php endforeach; ?>
     </tbody>

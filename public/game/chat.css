@@ -1,0 +1,91 @@
+/* Live chat on the stream: chat box, top fans, subscriber banner, robot host (see /game/chat.js). */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@600;700&family=Noto+Color+Emoji&display=swap");
+
+.lc { --lc-font: "Rajdhani", "Oswald", "Noto Sans Bengali", "Noto Color Emoji", system-ui, sans-serif; position: absolute; inset: 0; pointer-events: none; z-index: 30; }
+.lc[hidden], .lc [hidden] { display: none !important; }
+.lc .flag { display: inline-block; vertical-align: middle; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .3); }
+
+/* ---------- new subscriber ---------- */
+.lc-sub {
+  z-index: 2;
+  position: absolute; left: 60px; right: 60px; top: 404px; height: 84px; display: flex; align-items: center; justify-content: center; gap: 0;
+  border-radius: 999px; border: 4px solid #fff; background: linear-gradient(90deg, #ff1744, #ff3d3d 55%, #ff6a2b);
+  box-shadow: 0 0 34px rgba(255, 40, 60, .75); font-family: var(--display, "Oswald"), var(--lc-font); font-weight: 700; color: #fff;
+  font-size: 38px; letter-spacing: 1px; white-space: nowrap; overflow: hidden; padding: 0 30px;
+}
+.lc-sub.in { animation: lc-sub 6.5s ease-in-out forwards; }
+@keyframes lc-sub { 0% { transform: scale(.5); opacity: 0; } 6% { transform: scale(1.06); opacity: 1; } 10%, 90% { transform: none; opacity: 1; } 100% { transform: translateY(-20px); opacity: 0; } }
+.lc-sub-bell { width: 40px; height: 40px; margin-right: 14px; flex: 0 0 auto; border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #ffe27a, #ffb300 60%, #c77800); box-shadow: 0 0 14px #ffd54a; }
+.lc-sub b { color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .25); max-width: 430px; overflow: hidden; text-overflow: ellipsis; }
+.lc-sub-t { font-size: 30px; opacity: .95; margin-left: 6px; }
+
+/* ---------- top fans ---------- */
+.lc-fans {
+  position: absolute; left: 50%; transform: translateX(-50%); top: 526px; height: 54px; display: flex; align-items: center; gap: 22px;
+  padding: 0 30px; border-radius: 999px; border: 3px solid #ffc93a; background: rgba(8, 10, 24, .86); box-shadow: 0 0 24px rgba(255, 190, 40, .35);
+  font-family: var(--lc-font); font-weight: 700; font-size: 30px; color: #ffc93a; white-space: nowrap;
+}
+.lc-fans-k { letter-spacing: 1px; }
+.lc-fans-k::before { content: ""; display: inline-block; width: 18px; height: 26px; margin-right: 10px; vertical-align: -3px;
+  background: radial-gradient(ellipse at 50% 80%, #ffd54a 0 30%, #ff7a00 55%, transparent 72%); border-radius: 50% 50% 45% 45%; }
+.lc-fan { display: inline-flex; align-items: center; gap: 8px; color: #fff; }
+.lc-fan b { color: #ffc93a; font-size: 32px; }
+.lc-fan-l { color: #fff; }
+
+/* ---------- chat box ---------- */
+.lc-box {
+  position: absolute; right: 26px; top: 1100px; width: 400px; padding: 14px 18px 10px; border-radius: 22px;
+  border: 3px solid #5a8cff; background: rgba(6, 10, 26, .82); box-shadow: 0 0 26px rgba(90, 140, 255, .45);
+  font-family: var(--lc-font); color: #fff;
+}
+.lc-box-h { font-weight: 700; font-size: 26px; letter-spacing: 3px; color: #8fb4ff; padding-bottom: 6px; border-bottom: 2px solid rgba(90, 140, 255, .35); }
+.lc-box-h::before { content: ""; display: inline-block; width: 24px; height: 18px; margin-right: 10px; border-radius: 8px 8px 8px 2px; background: #8fb4ff; vertical-align: -1px; }
+.lc-row { display: flex; align-items: center; gap: 8px; font-size: 25px; font-weight: 600; line-height: 1.25; padding: 7px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .08); white-space: nowrap; animation: lc-row .35s ease-out; }
+.lc-row b { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+.lc-row .lc-t { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lc-row > .flag, .lc-row > .lc-av { flex: 0 0 auto; }
+.lc-row:last-child { border-bottom: 0; }
+.lc-row b { color: #ffc93a; }
+.lc-row.lc-empty { color: #9fb2dc; white-space: normal; }
+@keyframes lc-row { from { transform: translateX(26px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ---------- robot host ---------- */
+.lc-robot {
+  position: absolute; left: 26px; right: 26px; top: 1540px; min-height: 230px; display: flex; align-items: center; gap: 26px;
+  padding: 18px 30px; border-radius: 34px; border: 5px solid #46e39a; background: rgba(4, 10, 16, .95);
+  box-shadow: 0 0 40px rgba(70, 227, 154, .5); font-family: var(--lc-font);
+}
+.lc-robot.in { animation: lc-rb .4s cubic-bezier(.2, 1.3, .4, 1); }
+@keyframes lc-rb { from { transform: translateY(40px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+.lc-rb-face { width: 150px; flex: 0 0 auto; }
+.lc-rb-face svg { width: 100%; display: block; animation: lc-bob 2.4s ease-in-out infinite; }
+@keyframes lc-bob { 50% { transform: translateY(-6px); } }
+.lc-robot.talk .rb-mouth { animation: lc-talk .18s ease-in-out infinite alternate; transform-origin: 60px 77px; }
+@keyframes lc-talk { from { transform: scaleY(.5); } to { transform: scaleY(2.4); } }
+.rb-eyes { animation: lc-blink 4s infinite; transform-origin: 60px 60px; }
+@keyframes lc-blink { 0%, 92%, 100% { transform: none; } 95% { transform: scaleY(.1); } }
+.lc-rb-body { min-width: 0; flex: 1; }
+.lc-rb-name { font-weight: 700; font-size: 28px; letter-spacing: 4px; color: #46e39a; }
+.lc-rb-text { font-family: var(--display, "Oswald"), var(--lc-font); font-weight: 700; font-size: 44px; line-height: 1.12; color: #fff; text-transform: uppercase; overflow-wrap: anywhere; }
+.lc-rb-text.long { font-size: 36px; }
+.lc-rb-text em { font-style: normal; color: #ffc93a; }
+.lc-rb-text .flag { margin: 0 6px; vertical-align: -4px; }
+
+/* while the robot talks it takes the commentator's caption spot (the commentator's voice keeps playing) */
+#stage:has(.lc-robot:not([hidden])) .caption { visibility: hidden; }
+
+/* ---------- Ball Drop positions ---------- */
+.lc-ball .lc-sub { top: 456px; }
+.lc-ball .lc-fans { top: auto; bottom: 34px; height: 66px; min-width: 640px; justify-content: center; background: #0d0718; z-index: 1; }
+#stage:has(.lc-ball .lc-fans:not([hidden])) .footer { visibility: hidden; }
+.lc-ball .lc-box { top: 1296px; right: 18px; width: 360px; }
+.lc-ball .lc-box .lc-row { font-size: 23px; }
+.lc-ball .lc-robot { top: auto; bottom: 110px; }
+.lc-team { font-weight: 700; }
+.lc-cheer { position: absolute; font-family: var(--display, "Oswald"), var(--lc-font); font-weight: 700; font-size: 34px; color: #fff; white-space: nowrap;
+  padding: 4px 16px; border-radius: 999px; background: rgba(0, 0, 0, .7); border: 3px solid currentColor; animation: lc-cheer 2.6s ease-out forwards; }
+@keyframes lc-cheer { 0% { transform: translate(-50%, 20px) scale(.6); opacity: 0; } 12% { transform: translate(-50%, 0) scale(1.05); opacity: 1; } 75% { opacity: 1; } 100% { transform: translate(-50%, -90px); opacity: 0; } }
+.lc-av { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 3px solid #fff; vertical-align: middle; }
+.lc-row .lc-av { width: 30px; height: 30px; }

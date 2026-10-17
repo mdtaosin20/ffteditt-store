@@ -215,6 +215,44 @@ function yt_texts(array $s): array
 /* ---------------------------------------------------------------- apply to the live video */
 
 /**
+ * The live video this stream is sending to right now ('' if none yet). About 2 units.
+ * Remembered per live session (yt_video_start = the stream's started_at).
+ */
+function yt_find_video(array $s, string $tok): string
+{
+    // Which YouTube "stream" uses our stream key? (so the right live video is used when a channel has several)
+    $boundId = '';
+    $r = yt_get($tok, 'liveStreams', ['part' => 'id,cdn', 'mine' => 'true', 'maxResults' => 50]);
+    if ($r[0] === 200) {
+        foreach ($r[1]['items'] ?? [] as $ls) {
+            if (($ls['cdn']['ingestionInfo']['streamName'] ?? '') === $s['stream_key']) {
+                $boundId = (string) $ls['id'];
+            }
+        }
+    }
+    $video = '';
+    foreach (['active', 'upcoming'] as $status) {
+        $r = yt_get($tok, 'liveBroadcasts', ['part' => 'id,contentDetails', 'broadcastStatus' => $status, 'broadcastType' => 'all', 'maxResults' => 25]);
+        if ($r[0] !== 200) throw new RuntimeException(yt_err($r));
+        $items = $r[1]['items'] ?? [];
+        foreach ($items as $b) {
+            if ($boundId !== '' && ($b['contentDetails']['boundStreamId'] ?? '') === $boundId) {
+                $video = (string) $b['id'];
+                break 2;
+            }
+        }
+        if ($status === 'active' && count($items) === 1 && $boundId === '') {
+            $video = (string) $items[0]['id'];
+            break;
+        }
+    }
+    if ($video !== '') {
+        db()->prepare('UPDATE streams SET yt_video = ?, yt_video_start = COALESCE(started_at, 0) WHERE id = ?')->execute([$video, $s['id']]);
+    }
+    return $video;
+}
+
+/**
  * Finds the live video this stream is sending to and sets title, description and thumbnail.
  * Uses ~103 of the 10,000 daily YouTube "units" (title 50 + thumbnail 50 + lookups).
  */
@@ -224,33 +262,7 @@ function yt_apply(array $s): array
     try {
         $tok = yt_token($s);
 
-        // Which YouTube "stream" uses our stream key? (so the right live video is changed)
-        $boundId = '';
-        $r = yt_get($tok, 'liveStreams', ['part' => 'id,cdn', 'mine' => 'true', 'maxResults' => 50]);
-        if ($r[0] === 200) {
-            foreach ($r[1]['items'] ?? [] as $ls) {
-                if (($ls['cdn']['ingestionInfo']['streamName'] ?? '') === $s['stream_key']) {
-                    $boundId = (string) $ls['id'];
-                }
-            }
-        }
-
-        $video = '';
-        foreach (['active', 'upcoming'] as $status) {
-            $r = yt_get($tok, 'liveBroadcasts', ['part' => 'id,contentDetails', 'broadcastStatus' => $status, 'broadcastType' => 'all', 'maxResults' => 25]);
-            if ($r[0] !== 200) throw new RuntimeException(yt_err($r));
-            $items = $r[1]['items'] ?? [];
-            foreach ($items as $b) {
-                if ($boundId !== '' && ($b['contentDetails']['boundStreamId'] ?? '') === $boundId) {
-                    $video = (string) $b['id'];
-                    break 2;
-                }
-            }
-            if ($status === 'active' && count($items) === 1 && $boundId === '') {
-                $video = (string) $items[0]['id'];
-                break;
-            }
-        }
+        $video = yt_find_video($s, $tok);
         if ($video === '') {
             throw new RuntimeException('No live video found on this channel yet. Start the stream and try again in a minute.');
         }
@@ -282,8 +294,8 @@ function yt_apply(array $s): array
             $note .= $r[0] === 200 ? ', thumbnail set' : '. Thumbnail failed: ' . yt_err($r);
         }
 
-        db()->prepare('UPDATE streams SET yt_video = ?, yt_done_rev = yt_rev, yt_done_start = COALESCE(started_at, 0) WHERE id = ?')
-            ->execute([$video, $s['id']]);
+        db()->prepare('UPDATE streams SET yt_done_rev = yt_rev, yt_done_start = COALESCE(started_at, 0) WHERE id = ?')
+            ->execute([$s['id']]);
         $msg = $note . ' (' . date('d M, h:i A') . ').';
         $mark->execute([$msg, 1, time(), $s['id']]);
         db()->prepare('UPDATE streams SET yt_fails = 0 WHERE id = ?')->execute([$s['id']]);
@@ -317,6 +329,67 @@ function yt_tick(int $serverId): void
         $c->execute([$now, $s['id'], $s['yt_try_at']]);
         if ($c->rowCount() === 1) {
             yt_apply($s);
+        }
+    }
+
+    // Live chat needs the video of this live session (if the title step above did not find it already).
+    if (chat_cfg()['enabled']) {
+        $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_refresh != ''
+                             AND yt_video_start != COALESCE(started_at, 0) AND COALESCE(started_at, 0) > 0
+                             AND started_at < ? AND yt_find_at < ?");
+        $st->execute([$serverId, $now - 40, $now - 120]);
+        foreach ($st->fetchAll() as $s) {
+            db()->prepare('UPDATE streams SET yt_find_at = ? WHERE id = ?')->execute([$now, $s['id']]);
+            try {
+                yt_find_video($s, yt_token($s));
+            } catch (Throwable $e) {
+                // tried again in 2 minutes
+            }
+        }
+        yt_subscribers_tick($serverId);
+    }
+}
+
+/**
+ * New subscribers (only people whose subscriptions are public). 1 unit per check,
+ * every 2 minutes per channel while it is live (~720 units a day).
+ */
+function yt_subscribers_tick(int $serverId): void
+{
+    if (!chat_cfg()['subs']) return;
+    $now = time();
+    $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_refresh != '' ORDER BY id");
+    $st->execute([$serverId]);
+    $byChannel = [];
+    foreach ($st->fetchAll() as $s) {
+        $byChannel[md5($s['yt_refresh'])][] = $s;   // one check per YouTube channel
+    }
+    foreach ($byChannel as $key => $list) {
+        $last = (int) (setting_get('yt_sub_at_' . $key) ?? 0);
+        if ($last > $now - 120) continue;
+        setting_set('yt_sub_at_' . $key, (string) $now);
+        try {
+            $r = yt_get(yt_token($list[0]), 'subscriptions', ['part' => 'subscriberSnippet', 'myRecentSubscribers' => 'true', 'maxResults' => 20]);
+            if ($r[0] !== 200) continue;
+            $seenRaw = setting_get('yt_sub_seen_' . $key);
+            $seen = json_decode((string) $seenRaw, true) ?: [];
+            $first = $seenRaw === null;
+            $new = [];
+            foreach (array_reverse($r[1]['items'] ?? []) as $it) {
+                $cid = (string) ($it['subscriberSnippet']['channelId'] ?? $it['id'] ?? '');
+                if ($cid === '' || in_array($cid, $seen, true)) continue;
+                $seen[] = $cid;
+                if (!$first) $new[] = (string) ($it['subscriberSnippet']['title'] ?? '');
+            }
+            setting_set('yt_sub_seen_' . $key, json_encode(array_slice($seen, -200)));
+            foreach ($new as $name) {
+                if ($name === '') continue;
+                foreach ($list as $s) {
+                    chat_add((int) $s['id'], ['k' => 'sub', 'a' => $name, 't' => '', 'id' => 'sub:' . md5($name . $now)]);
+                }
+            }
+        } catch (Throwable $e) {
+            // try again next time
         }
     }
 }

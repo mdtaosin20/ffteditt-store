@@ -2,6 +2,7 @@
 // 195 flags bounce inside a turning ring with a gap. A flag that slips out is eliminated;
 // the last flag left qualifies for the final. When the final is full, the final round finds the champion.
 import { Sfx, Commentator, holdScreen, PACE, reporter } from '/game/audio.js?v=12';
+import { liveChat, countryMatcher } from '/game/chat.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -370,12 +371,33 @@ async function main() {
       if (phase === 'spawn') { s = clamp((phaseT - f.delay) / 0.3, 0, 1); if (s <= 0) continue; }
       if (f.state === 'out') { alpha = clamp(1 - f.t, 0, 1); s = 1 + f.t * 0.3; }
       if (phase === 'won' && f === winner) s = 1 + clamp(phaseT / 0.8, 0, 1) * 0.9;
+      const tag = f.state === 'in' && tags.get(f.i);
+      if (tag) s *= 1.5;
       const cs = Math.cos(f.rot) * s * k, sn = Math.sin(f.rot) * s * k;
       c.setTransform(cs, sn, -sn, cs, f.x * k, f.y * k);
       c.globalAlpha = alpha;
       c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(-w / 2 + 2, -h / 2 + 3, w, h);
       c.drawImage(atlas, (f.i % COLS) * FW, Math.floor(f.i / COLS) * FH, FW, FH, -w / 2, -h / 2, w, h);
-      if (phase === 'won' && f === winner) { c.lineWidth = 4; c.strokeStyle = '#ffc93a'; c.strokeRect(-w / 2, -h / 2, w, h); }
+      if ((phase === 'won' && f === winner) || tag) { c.lineWidth = tag ? 3 : 4; c.strokeStyle = '#ffc93a'; c.strokeRect(-w / 2, -h / 2, w, h); }
+    }
+    // viewers' names under their flags (glow + gold name tag)
+    if (tags.size) {
+      const now = performance.now();
+      c.setTransform(k, 0, 0, k, 0, 0);
+      c.font = '700 22px Rajdhani, Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      for (const f of flags) {
+        const t = tags.get(f.i);
+        if (!t) continue;
+        if (t.until < now) { tags.delete(f.i); continue; }
+        if (f.state !== 'in' || phase === 'spawn') continue;
+        const pulse = 0.55 + 0.45 * Math.sin(now / 180);
+        c.globalAlpha = 0.35 * pulse; c.fillStyle = '#ffc93a';
+        c.beginPath(); c.arc(f.x, f.y, w * 0.95, 0, TAU); c.fill(); c.globalAlpha = 1;
+        const label = '★ ' + t.name, tw = c.measureText(label).width + 20, y = f.y - h * 0.75 - 18; // above the flag (country names go below)
+        c.fillStyle = '#ffc93a'; c.beginPath(); c.roundRect(f.x - tw / 2, y - 15, tw, 30, 15); c.fill();
+        c.fillStyle = '#1a1200'; c.fillText(label, f.x, y + 1);
+      }
+      c.textBaseline = 'alphabetic';
     }
     c.globalAlpha = 1;
     if (showNames) {
@@ -389,6 +411,64 @@ async function main() {
       }
     }
   };
+
+  /* ---------- live chat: viewers' names on their flags, top fans, robot host ---------- */
+  const tags = new Map();   // country index -> { name, until }
+  const aliveIdx = () => new Set(flags.filter((f) => f.state === 'in').map((f) => f.i));
+  const flagNode = (code, w = 40) => { const d = document.createElement('span'); d.className = 'flag'; sprite(d, byCode.get(code), w); return d; };
+  const CN = (code) => C[byCode.get(code)].name.toUpperCase();
+  const isGreeting = (t) => /\b(hi|hii+|hello|hey|helo|salam|salaam|assalam\w*|asalam\w*)\b|হাই|হ্যালো|সালাম|আসসালামু/i.test(t);
+  const isSalam = (t) => /salam|salaam|assalam|asalam|সালাম|আসসালামু/i.test(t);
+  const isQuestion = (t) => /who.*win|winner|kon|কে জিতবে|predict/i.test(t);
+  // what is happening to a country right now (for the robot)
+  const flagState = (code) => {
+    if (aliveIdx().has(byCode.get(code))) return "YOUR FLAG IS SHINING NOW — LET'S GO!";
+    if (!isFinal && st.qualified.includes(code)) return 'IT IS ALREADY IN THE GRAND FINAL!';
+    if (isFinal) return st.qualified.includes(code) ? 'IT IS OUT OF THIS FINAL — NEXT CUP STARTS SOON!' : 'IT DID NOT REACH THIS FINAL — NEXT CUP STARTS SOON!';
+    return 'IT IS OUT THIS ROUND, BUT IT COMES BACK NEXT ROUND!';
+  };
+  const favourite = () => {
+    const alive = aliveIdx();
+    const fav = [...chat.counts.entries()].filter(([code]) => alive.has(byCode.get(code))).sort((a, b) => b[1] - a[1])[0];
+    if (fav) return fav[0];
+    const a = [...alive]; return a.length ? C[a[Math.floor(Math.random() * a.length)]].code : null;
+  };
+  const chat = liveChat({
+    game: 'flags',
+    match: countryMatcher(C),
+    badge: (code) => flagNode(code, 34),
+    busy: () => !$('win').hidden,
+    sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
+    onFan: (code, name) => { tags.set(byCode.get(code), { name: name.toUpperCase().slice(0, 12), until: performance.now() + 25000 }); },
+    emptyHint: 'Type your country in chat — your name goes on its flag!',
+    idleLines: [
+      ['TYPE YOUR COUNTRY IN CHAT — I WILL PUT YOUR NAME ON ITS FLAG!'],
+      ['WHERE ARE YOU WATCHING FROM? COMMENT YOUR COUNTRY NOW!'],
+      ['WHICH FLAG WINS THIS ROUND? WRITE YOUR GUESS IN CHAT!'],
+      ['SUBSCRIBE AND YOUR NAME APPEARS RIGHT HERE ON THE SCREEN!'],
+    ],
+    welcome: (name, code, text) => {
+      const hi = isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'WELCOME ';
+      if (!code) return [hi, { name }, '! TYPE YOUR COUNTRY IN CHAT AND I PUT YOUR NAME ON ITS FLAG!'];
+      return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + '! ', flagState(code)];
+    },
+    reply: (name, code, text) => {
+      if (code) {
+        const n = chat.counts.get(code) || 1;
+        if (!aliveIdx().has(byCode.get(code))) return [{ name }, ' IS CHEERING FOR ', { node: flagNode(code) }, CN(code) + '! ' + flagState(code)];
+        return Math.random() < 0.5
+          ? [{ name }, ' IS CHEERING FOR ', { node: flagNode(code) }, CN(code) + `! ${n} ${n === 1 ? 'FAN' : 'FANS'} NOW!`]
+          : [{ node: flagNode(code) }, CN(code) + ' HAS A NEW FAN: ', { name }, '! KEEP IT IN THE RING!'];
+      }
+      if (isQuestion(text)) {
+        const f = favourite();
+        return f ? ['MY PICK, ', { name }, ': ', { node: flagNode(f) }, CN(f) + '! BUT IN THIS RING ANYTHING CAN HAPPEN!'] : null;
+      }
+      if (isGreeting(text)) return [isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'HELLO AGAIN ', { name }, '! WHICH COUNTRY ARE YOU CHEERING FOR?'];
+      return Math.random() < 0.25 ? ['THANKS FOR CHATTING, ', { name }, '! WRITE YOUR COUNTRY TO PUT YOUR NAME ON ITS FLAG!'] : null;
+    },
+    demoTexts: ['Bangladesh 🇧🇩', 'India will win!', 'Brasil 🔥', 'Go Pakistan', 'hello', '🇧🇩🇧🇩', 'who will win?', 'USA', 'assalamu alaikum', 'Nepal', 'Saudi Arabia', 'Morocco ❤️', 'বাংলাদেশ', 'nice game'],
+  });
 
   /* ---------- settings from the admin panel ---------- */
   setInterval(async () => {
@@ -433,7 +513,7 @@ async function main() {
   };
   requestAnimationFrame(frame);
 
-  window.__flags = { st, cfg, phase: () => phase, alive: () => alive, roundT: () => roundT, flags: () => flags, voice, sfx };
+  window.__flags = { chat, tags, st, cfg, phase: () => phase, alive: () => alive, roundT: () => roundT, flags: () => flags, voice, sfx };
 }
 
 main();
