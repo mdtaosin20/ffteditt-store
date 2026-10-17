@@ -24,13 +24,16 @@ if (($in['game'] ?? '') === 'ball') {
     $b['updated'] = $now;
     $b['score'] = [max(0, (int) ($in['score'][0] ?? 0)), max(0, (int) ($in['score'][1] ?? 0))];
     $b['names'] = [$name($in['names'][0] ?? ''), $name($in['names'][1] ?? '')];
+    $b['rounds'] = [max(0, (int) ($in['rounds'][0] ?? 0)), max(0, (int) ($in['rounds'][1] ?? 0))];
+    $b['round'] = max(0, (int) ($in['round'] ?? 0));
     if (isset($in['winner'])) {
         $w = (int) $in['winner'] === 1 ? 1 : 0;
         $b['count'] = (int) ($b['count'] ?? 0) + 1;
         $b['games'] = (array) ($b['games'] ?? []);
+        $fin = isset($in['final']) && is_array($in['final']) ? [(int) ($in['final'][0] ?? 0), (int) ($in['final'][1] ?? 0)] : $b['score'];
         array_unshift($b['games'], [
             'n' => $b['count'], 'w' => $b['names'][$w], 'wi' => $w,
-            'score' => $b['score'][$w] . ' – ' . $b['score'][1 - $w], 't' => $now,
+            'score' => $fin[$w] . ' – ' . $fin[1 - $w], 't' => $now,
         ]);
         $b['games'] = array_slice($b['games'], 0, 10);
     }

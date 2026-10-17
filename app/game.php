@@ -7,14 +7,17 @@ const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 function game_defaults(): array
 {
     return [
-        'target'   => 20,
+        'target'   => 20,        // (old "first to N" rule, no longer used)
+        'round_secs' => 120,     // length of one round
+        'rounds'     => 3,       // best of N rounds
+        'ball_style' => 'football', // football | face
         'autoplay' => true,      // false = the page shows "be right back" instead of playing
         'pace'     => 'normal',  // slow | normal | fast
         'rev'      => '1',
         'reset'   => '1',
         'players' => [
-            ['name' => 'MESSI',   'team' => 'PINK TEAM', 'color' => '#ff2f9e', 'number' => '10', 'photo' => '', 'ball' => ''],
-            ['name' => 'RONALDO', 'team' => 'GOLD TEAM', 'color' => '#ffd21a', 'number' => '7',  'photo' => '', 'ball' => ''],
+            ['name' => 'MESSI',   'team' => 'PINK TEAM', 'color' => '#ff2f9e', 'number' => '10', 'flag' => 'ar', 'photo' => '', 'ball' => ''],
+            ['name' => 'RONALDO', 'team' => 'GOLD TEAM', 'color' => '#ffd21a', 'number' => '7',  'flag' => 'pt', 'photo' => '', 'ball' => ''],
         ],
     ];
 }

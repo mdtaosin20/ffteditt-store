@@ -5,12 +5,32 @@ import { Sfx, Commentator, holdScreen, PACE, reporter } from './audio.js?v=12';
 
 /* ------------------------------------------------------------------ config */
 const DEFAULTS = {
-  target: 20,
+  round_secs: 120,
+  rounds: 3,
+  ball_style: 'football',
   players: [
-    { name: 'MESSI',   team: 'PINK TEAM', color: '#ff2f9e', number: '10', photo: '/game/img/p1-hero.jpg', face: '/game/img/p1-face.jpg', ball: '' },
-    { name: 'RONALDO', team: 'GOLD TEAM', color: '#ffd21a', number: '7',  photo: '/game/img/p2-hero.jpg', face: '/game/img/p2-face.jpg', ball: '' },
+    { name: 'MESSI',   team: 'PINK TEAM', color: '#ff2f9e', number: '10', flag: 'ar', photo: '/game/img/p1-hero.jpg', face: '/game/img/p1-face.jpg', ball: '' },
+    { name: 'RONALDO', team: 'GOLD TEAM', color: '#ffd21a', number: '7',  flag: 'pt', photo: '/game/img/p2-hero.jpg', face: '/game/img/p2-face.jpg', ball: '' },
   ],
 };
+let BALL_STYLE = 'football'; // 'football' (like a real ball, tinted in the team colour) or 'face' (player photo)
+
+/* country flags (same picture sheet as the Flag Battle game) */
+const FLAGS = { img: null, idx: {}, cols: 16, w: 80, h: 60 };
+async function loadFlags() {
+  try {
+    const j = await (await fetch('/flags/flags.json')).json();
+    j.countries.forEach((c, i) => { FLAGS.idx[c.code] = i; });
+    FLAGS.cols = j.cols; FLAGS.w = j.w; FLAGS.h = j.h;
+    FLAGS.img = await new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = '/flags/flags.png'; });
+  } catch (e) { /* flags are optional */ }
+}
+function drawFlag(c, code, x, y, w, h) {
+  const i = FLAGS.idx[code];
+  if (!FLAGS.img || i === undefined) return false;
+  c.drawImage(FLAGS.img, (i % FLAGS.cols) * FLAGS.w, Math.floor(i / FLAGS.cols) * FLAGS.h, FLAGS.w, FLAGS.h, x, y, w, h);
+  return true;
+}
 
 async function fetchConfig() {
   try {
@@ -220,6 +240,12 @@ function bandTexture(players, emissive) {
   // u = 0.5 is the front of the bowl (facing the camera)
   panel(4096 * 0.41, players[0].color, players[0].name, -0.25);
   panel(4096 * 0.59, players[1].color, players[1].name, 0.25);
+  if (!emissive) {
+    drawFlag(c, players[0].flag, 4096 * 0.41 - 320 - 150, 78, 132, 99);
+    drawFlag(c, players[1].flag, 4096 * 0.59 + 320 + 18, 78, 132, 99);
+  }
+  c.font = '110px serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = emissive ? '#ffd21a55' : '#ffd21a';
+  [0.27, 0.73].forEach((u) => c.fillText('♛', 4096 * u, 130));
   // football emblem in the middle
   const ex = 2048, ey = 128;
   c.fillStyle = emissive ? '#223' : '#0c0a14'; c.strokeStyle = '#8fa8ff'; c.lineWidth = 8;
@@ -263,6 +289,21 @@ function glowTexture(color) {
 function ballTexture(p, img) {
   const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 512;
   const c = cv.getContext('2d');
+  if (BALL_STYLE === 'football') {
+    // football panels, tinted in the team colour
+    const base = new THREE.Color('#ffffff').lerp(new THREE.Color(p.color), 0.45);
+    c.fillStyle = '#' + base.getHexString(); c.fillRect(0, 0, 1024, 512);
+    c.fillStyle = '#1b1222';
+    const pent = (cx, cy, r, sx) => {
+      c.beginPath();
+      for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5; c.lineTo(cx + r * sx * Math.cos(a), cy + r * Math.sin(a)); }
+      c.closePath(); c.fill();
+    };
+    for (let k = 0; k < 5; k++) { pent(k * 205 + 50, 150, 52, 1); pent(k * 205 + 152, 362, 52, 1); }
+    pent(512, 20, 60, 6); pent(512, 492, 60, 6);
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    return t;
+  }
   const base = new THREE.Color(p.color);
   const g = c.createLinearGradient(0, 0, 0, 512);
   g.addColorStop(0, '#' + base.clone().lerp(new THREE.Color('#ffffff'), 0.35).getHexString());
@@ -408,6 +449,18 @@ class Ball {
 
 // Draws a shiny ball with a face, used by the 2D mode and by the tubes.
 function paintBall(ctx, x, y, R, hex, img) {
+  if (BALL_STYLE === 'football') {
+    drawFootball(ctx, x, y, R);
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.clip();
+    ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = 0.6; ctx.fillStyle = hex; ctx.fillRect(x - R, y - R, R * 2, R * 2);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    const shine = ctx.createRadialGradient(x - R * 0.4, y - R * 0.45, 0, x - R * 0.4, y - R * 0.45, R * 0.7);
+    shine.addColorStop(0, 'rgba(255,255,255,.7)'); shine.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = shine; ctx.fillRect(x - R, y - R, R * 2, R * 2);
+    ctx.restore();
+    ctx.lineWidth = Math.max(1.5, R * 0.07); ctx.strokeStyle = hex; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.stroke();
+    return;
+  }
   const c0 = new THREE.Color(hex);
   const bg = ctx.createRadialGradient(x - R * 0.35, y - R * 0.4, R * 0.1, x, y, R);
   bg.addColorStop(0, '#' + c0.clone().lerp(new THREE.Color('#ffffff'), 0.6).getHexString());
@@ -542,6 +595,11 @@ async function main() {
   const pace = PACE[cfg.pace] || 1;
   const report = reporter('ball');
   const P = cfg.players;
+  BALL_STYLE = cfg.ball_style === 'face' ? 'face' : 'football';
+  const ROUND_SECS = Math.max(20, Number(cfg.round_secs) || 120);
+  const ROUNDS = [1, 3, 5].includes(Number(cfg.rounds)) ? Number(cfg.rounds) : 3;
+  const NEED = Math.ceil(ROUNDS / 2); // rounds needed to win the match
+  await loadFlags();
 
   // texts and photos
   P.forEach((p, i) => {
@@ -552,7 +610,13 @@ async function main() {
     $(`p${n}-name`).textContent = p.name; $(`p${n}-team`).textContent = p.team;
     $(`p${n}-title`).textContent = p.name; $(`p${n}-foot`).textContent = p.name;
   });
-  $('target').innerHTML = `FIRST TO <b>${cfg.target}</b> WINS`;
+  P.forEach((p, i) => {
+    const el = $(`p${i + 1}-flag`), k = FLAGS.idx[(p.flag || '').toLowerCase()];
+    if (k === undefined || !FLAGS.img) return;
+    el.hidden = false;
+    el.style.backgroundSize = `${FLAGS.cols * 56}px ${Math.ceil(Object.keys(FLAGS.idx).length / FLAGS.cols) * 42}px`;
+    el.style.backgroundPosition = `${-(k % FLAGS.cols) * 56}px ${-Math.floor(k / FLAGS.cols) * 42}px`;
+  });
   // Shrink text that is too wide (long names, or before the font has loaded).
   const fitAll = () => {
     const h1 = document.querySelector('h1');
@@ -573,12 +637,19 @@ async function main() {
 
   // scores survive a page reload (the stream browser restarting)
   // Scores survive a page reload; the admin "Reset scores" button changes cfg.reset.
-  let score = [0, 0];
+  // A match = rounds of ROUND_SECS seconds. Most goals in a round wins it (a draw goes to a golden goal).
+  // Whoever wins NEED rounds wins the match.
+  let score = [0, 0], won = [0, 0], roundNo = 1, timeLeft = ROUND_SECS, golden = false;
   try {
-    const s = JSON.parse(localStorage.getItem('fft_score') || 'null');
-    if (s && Array.isArray(s.score) && s.reset === cfg.reset) score = s.score;
+    const s = JSON.parse(localStorage.getItem('fft_match') || 'null');
+    if (s && s.reset === cfg.reset && s.rs === ROUND_SECS && s.rounds === ROUNDS) {
+      score = s.score; won = s.won; roundNo = s.roundNo; timeLeft = Math.max(5, s.timeLeft); golden = !!s.golden;
+    }
   } catch (e) {}
-  const saveScore = () => { try { localStorage.setItem('fft_score', JSON.stringify({ score, reset: cfg.reset })); } catch (e) {} };
+  const saveScore = () => {
+    try { localStorage.setItem('fft_match', JSON.stringify({ score, won, roundNo, timeLeft, golden, reset: cfg.reset, rs: ROUND_SECS, rounds: ROUNDS })); } catch (e) {}
+  };
+  const resetMatch = () => { score = [0, 0]; won = [0, 0]; roundNo = 1; timeLeft = ROUND_SECS; golden = false; saveScore(); };
   saveScore();
 
   // Every 20 s: reload when the admin changed names/photos, reset when asked.
@@ -586,12 +657,22 @@ async function main() {
     const c = await fetchConfig();
     if (!c) return;
     if (c.reset !== cfg.reset) {
-      cfg.reset = c.reset; score = [0, 0]; saveScore(); showScore();
+      cfg.reset = c.reset; resetMatch(); showScore();
       $('winner').hidden = true;
     }
     if (c.rev !== cfg.rev) location.reload();
   }, 20000);
+  const fmt = (t) => { t = Math.max(0, Math.ceil(t)); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+  const showClock = () => {
+    const el = $('mid-t');
+    if (golden) { $('mid-k').textContent = 'DRAW!'; el.textContent = 'GOLDEN GOAL'; el.className = 'mid-t golden'; }
+    else { $('mid-k').textContent = 'TIME LEFT'; el.textContent = fmt(timeLeft); el.className = 'mid-t' + (timeLeft <= 10 ? ' hurry' : ''); }
+    $('mid-r').textContent = `ROUND ${roundNo}/${ROUNDS}`;
+  };
   const showScore = (bump) => {
+    showClock();
+    $('match-score').textContent = `${won[0]} – ${won[1]}`;
+    $('target').lastElementChild.previousSibling.textContent = ` · BEST OF ${ROUNDS} `;
     $('p1-score').textContent = score[0]; $('p2-score').textContent = score[1];
     $('p1-crown').classList.toggle('on', score[0] > score[1]);
     $('p2-crown').classList.toggle('on', score[1] > score[0]);
@@ -605,8 +686,8 @@ async function main() {
   // drawn with plain 2D canvas, so the game always runs (e.g. on servers without 3D support).
   const canvas = $('three');
   const camera = new THREE.PerspectiveCamera(30, 1080 / 860, 0.1, 100);
-  camera.position.set(0, 11.6, 15.6);
-  camera.lookAt(0, -0.9, 0);
+  camera.position.set(0, 13.6, 19.6);
+  camera.lookAt(0, -3.0, 0);
   camera.updateMatrixWorld();
   const Q = Math.min(2, Math.max(0.3, parseFloat(new URLSearchParams(location.search).get('q')) || 1));
   const DPR = Math.min(devicePixelRatio || 1, 1.5);
@@ -752,6 +833,21 @@ async function main() {
       };
       panel(Math.PI / 2 + 0.55, P[0].color, P[0].name);
       panel(Math.PI / 2 - 0.55, P[1].color, P[1].name);
+      const onBand = (ang, draw) => {
+        const [x, y] = proj(5.35 * Math.cos(ang), -0.85, 5.35 * Math.sin(ang));
+        const [ax, ay] = proj(5.35 * Math.cos(ang - 0.05), -0.85, 5.35 * Math.sin(ang - 0.05));
+        const [bx, by] = proj(5.35 * Math.cos(ang + 0.05), -0.85, 5.35 * Math.sin(ang + 0.05));
+        let rot = Math.atan2(by - ay, bx - ax); if (Math.abs(rot) > Math.PI / 2) rot += Math.PI;
+        c.save(); c.translate(x, y); c.rotate(rot); draw(); c.restore();
+      };
+      const fw = 64 * S, fh = 48 * S;
+      onBand(Math.PI / 2 + 1.0, () => drawFlag(c, P[0].flag, -fw / 2, -fh / 2, fw, fh));
+      onBand(Math.PI / 2 - 1.0, () => drawFlag(c, P[1].flag, -fw / 2, -fh / 2, fw, fh));
+      c.font = `${Math.round(52 * S)}px serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#ffd21a';
+      c.shadowColor = '#ffb800'; c.shadowBlur = 12 * S;
+      onBand(Math.PI / 2 + 1.32, () => c.fillText('♛', 0, 0));
+      onBand(Math.PI / 2 - 1.32, () => c.fillText('♛', 0, 0));
+      c.shadowBlur = 0;
       const [ex, ey] = proj(0, -0.85, 5.4);
       c.fillStyle = '#0c0a14'; c.strokeStyle = '#8fa8ff'; c.lineWidth = 4 * S;
       c.beginPath(); c.ellipse(ex, ey, 46 * S, 36 * S, 0, 0, Math.PI * 2); c.fill(); c.stroke();
@@ -869,21 +965,22 @@ async function main() {
     phase = 'play'; phaseT = 0; roundWinner = -1;
     voice.say('drop', { chance: 0.2 });
   };
+  const names = () => P.map((p) => p.name);
   const onGoal = (w) => {
     const before = leader();
-    score[w]++; saveScore(); showScore(w); popup(w);
-    report({ score, names: P.map((p) => p.name), ...(score[w] >= cfg.target ? { winner: w } : {}) });
+    score[w]++; saveScore(); showScore(w); popup(w, 'SCORES!', '+1 GOAL');
+    report({ score, rounds: won, round: roundNo, names: names() });
     sfx.goal();
-    if (score[w] >= cfg.target) return; // the winner line plays on the winner screen
+    if (golden) return; // the round-winner line follows
     voice.say('goal_p' + (w + 1), { chance: 0.8 });
     const after = leader();
-    if (score[w] === cfg.target - 1) voice.say('close');
-    else if (after === -1) voice.say('tie', { chance: 0.7 });
+    if (after === -1) voice.say('tie', { chance: 0.7 });
     else if (after === w && before !== w) voice.say('lead_p' + (w + 1));
   };
   setTimeout(() => voice.say('intro'), 2500);
-  const popup = (i) => {
-    const p = $('popup'); $('popup-name').textContent = P[i].name;
+  const popup = (i, what = 'SCORES!', sub = '+1 GOAL') => {
+    const p = $('popup'); $('popup-name').textContent = P[i].name; $('popup-what').textContent = what; $('popup-sub').textContent = sub;
+    p.firstElementChild.classList.toggle('long', what.length > 9);
     p.className = 'popup p' + (i + 1); p.hidden = false;
     const inner = p.firstElementChild; inner.style.animation = 'none'; void inner.offsetWidth; inner.style.animation = '';
   };
@@ -891,11 +988,25 @@ async function main() {
     const w = $('winner'); w.className = 'winner p' + (i + 1); w.hidden = false;
     $('winner-photo').src = P[i].face || P[i].photo || placeholderPhoto(P[i].color, P[i].number, false);
     $('winner-name').textContent = P[i].name;
-    $('winner-score').textContent = `${score[i]} – ${score[1 - i]}`;
+    $('winner-score').textContent = `${won[i]} – ${won[1 - i]} IN ROUNDS`;
     sfx.win();
     voice.say('win_p' + (i + 1), { urgent: true });
   };
 
+  const endRound = () => {
+    if (score[0] === score[1]) { // draw: next goal wins the round
+      if (!golden) { golden = true; saveScore(); showScore(); voice.say('golden', { urgent: true }); }
+      newRound(); return;
+    }
+    const w = score[0] > score[1] ? 0 : 1;
+    won[w]++; golden = false; saveScore(); showScore();
+    const matchOver = won[w] >= NEED;
+    report({ score, rounds: won, round: roundNo, names: names(), ...(matchOver ? { winner: w, final: won } : {}) });
+    popup(w, `WINS ROUND ${roundNo}!`, `${score[w]} – ${score[1 - w]}`);
+    sfx.win();
+    if (!matchOver) voice.say('round_p' + (w + 1), { urgent: true });
+    phase = 'roundend'; phaseT = 0;
+  };
   const clock = new THREE.Clock();
   let acc = 0;
   const FIXED = 1 / 120;
@@ -922,13 +1033,22 @@ async function main() {
       balls.forEach((b) => b.step(dt));
       if (phaseT > 2.0) {
         balls.forEach((b) => b.hide());
-        if (score[roundWinner] >= cfg.target) { showWinner(roundWinner); phase = 'winner'; phaseT = 0; }
-        else newRound();
+        if (timeLeft <= 0 || golden) endRound(); else newRound();
       }
-    } else if (phase === 'winner' && phaseT > 8) {
-      $('winner').hidden = true; score = [0, 0]; saveScore(); showScore(); newRound();
-      report({ score, names: P.map((p) => p.name) });
+    } else if (phase === 'roundend' && phaseT > 4.5) {
+      if (won[0] >= NEED || won[1] >= NEED) { showWinner(won[0] >= NEED ? 0 : 1); phase = 'winner'; phaseT = 0; }
+      else { roundNo++; score = [0, 0]; timeLeft = ROUND_SECS; golden = false; saveScore(); showScore(); newRound(); voice.say('next_round', { chance: 0.7 }); }
+    } else if (phase === 'winner' && phaseT > 9) {
+      $('winner').hidden = true; resetMatch(); showScore(); newRound();
+      report({ score, rounds: won, round: roundNo, names: names() });
       voice.say('new_game', { urgent: true });
+    }
+    // the round clock runs while balls are dropping
+    if (!golden && timeLeft > 0 && (phase === 'play' || phase === 'after' || phase === 'start')) {
+      const was = timeLeft;
+      timeLeft = Math.max(0, timeLeft - dt);
+      if (was > 10 && timeLeft <= 10) voice.say('close', { urgent: true });
+      if (Math.ceil(was) !== Math.ceil(timeLeft)) { showClock(); if (Math.ceil(timeLeft) % 5 === 0) saveScore(); }
     }
     // invite comments now and then
     if (phase === 'play' && voice.idle && gameT > nextCall) { voice.say('call'); nextCall = gameT + 30 + Math.random() * 25; }
@@ -945,7 +1065,7 @@ async function main() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__fft = { balls, score: () => score, mode: gfx.mode, sfx, voice, tubes }; // for testing
+  window.__fft = { balls, score: () => score, match: () => ({ won, roundNo, timeLeft, golden, phase }), skip: (t) => { timeLeft = t; }, mode: gfx.mode, sfx, voice, tubes }; // for testing
 }
 
 main();

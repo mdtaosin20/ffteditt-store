@@ -47,7 +47,7 @@ function games_list(): array
         'ball'  => ['id' => 1, 'key' => 'ball',  'name' => 'Ball Drop',      'url' => '/ball/',  'settings' => 'game.php',
                     'title' => ucwords(strtolower($ball['players'][0]['name'])) . ' vs ' . ucwords(strtolower($ball['players'][1]['name'])), 'category' => 'football',
                     'tags' => ['football', 'battle', 'arcade'], 'thumb' => '/assets/site/ball.jpg',
-                    'desc' => 'Two balls drop into the bowl — first into the hole scores. First to ' . (int) $ball['target'] . ' wins!',
+                    'desc' => 'Two balls drop into the bowl — first into the hole scores. ' . intdiv((int) $ball['round_secs'], 60) . '-minute rounds, best of ' . (int) $ball['rounds'] . '!',
                     'autoplay' => (bool) $ball['autoplay'],  'pace' => (string) $ball['pace'],
                     'detail' => $ball['players'][0]['name'] . ' vs ' . $ball['players'][1]['name']],
         'flags' => ['id' => 2, 'key' => 'flags', 'name' => 'Flag Battle', 'url' => '/flags/', 'settings' => 'flags.php',

@@ -18,12 +18,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $new = $cfg;
-    $t = (int) ($_POST['target'] ?? 0);
-    if ($t < 1 || $t > 999) {
-        $errors[] = 'Points to win must be between 1 and 999.';
+    $rs = (int) ($_POST['round_secs'] ?? 0);
+    if ($rs < 30 || $rs > 1800) {
+        $errors[] = 'Round length must be between 30 and 1800 seconds.';
     } else {
-        $new['target'] = $t;
+        $new['round_secs'] = $rs;
     }
+    $rn = (int) ($_POST['rounds'] ?? 3);
+    $new['rounds'] = in_array($rn, [1, 3, 5], true) ? $rn : 3;
+    $new['ball_style'] = ($_POST['ball_style'] ?? '') === 'face' ? 'face' : 'football';
 
     foreach ([0, 1] as $i) {
         $n     = $i + 1;
@@ -31,6 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $team  = strtoupper(trim((string) ($_POST["p{$n}_team"] ?? '')));
         $color = strtolower(trim((string) ($_POST["p{$n}_color"] ?? '')));
         $num   = trim((string) ($_POST["p{$n}_number"] ?? ''));
+        $flag  = strtolower(trim((string) ($_POST["p{$n}_flag"] ?? '')));
+        if (!preg_match('/^([a-z]{2})?$/', $flag)) $errors[] = "Player {$n}: country code must be 2 letters (e.g. ar, pt, bd) or empty.";
+        $new['players'][$i]['flag'] = $flag;
 
         if ($name === '' || mb_strlen($name) > 16) $errors[] = "Player {$n}: name is needed (max 16 letters).";
         if (mb_strlen($team) > 20) $errors[] = "Player {$n}: team is too long (max 20 letters).";
@@ -106,6 +112,10 @@ page_start('Game', 'game', $admin);
         <label class="field"><span>Shirt number</span>
           <input name="p<?= $n ?>_number" maxlength="3" value="<?= e($p['number']) ?>">
         </label>
+        <label class="field"><span>Country flag (2-letter code)</span>
+          <input name="p<?= $n ?>_flag" maxlength="2" value="<?= e($p['flag']) ?>" placeholder="ar">
+          <small class="muted">ar = Argentina, pt = Portugal, br = Brazil, bd = Bangladesh. Empty = no flag.</small>
+        </label>
       </div>
 
       <?php foreach (['photo' => ['Photo', 'Replaces the built-in picture in the header, score card, ball and winner screen. A portrait works best.'],
@@ -134,8 +144,21 @@ page_start('Game', 'game', $admin);
   </div>
 
   <section class="card form-inline">
-    <label class="field"><span>Points to win a game</span>
-      <input name="target" type="number" min="1" max="999" required value="<?= (int) $cfg['target'] ?>">
+    <label class="field"><span>Round length (seconds)</span>
+      <input name="round_secs" type="number" min="30" max="1800" required value="<?= (int) $cfg['round_secs'] ?>">
+    </label>
+    <label class="field"><span>Match</span>
+      <select name="rounds">
+        <?php foreach ([1 => 'Just 1 round', 3 => 'Best of 3 rounds', 5 => 'Best of 5 rounds'] as $k => $l): ?>
+          <option value="<?= $k ?>" <?= (int) $cfg['rounds'] === $k ? 'selected' : '' ?>><?= $l ?></option>
+        <?php endforeach; ?>
+      </select>
+    </label>
+    <label class="field"><span>Ball look</span>
+      <select name="ball_style">
+        <option value="football" <?= $cfg['ball_style'] !== 'face' ? 'selected' : '' ?>>Football (team colour)</option>
+        <option value="face" <?= $cfg['ball_style'] === 'face' ? 'selected' : '' ?>>Player photo</option>
+      </select>
     </label>
     <button class="btn btn-pink" type="submit">Save settings</button>
   </section>
@@ -144,7 +167,7 @@ page_start('Game', 'game', $admin);
 <section class="card form-inline">
   <div>
     <h2>Scores</h2>
-    <p class="muted" style="margin:4px 0 0">Start every live game again from 0 – 0.</p>
+    <p class="muted" style="margin:4px 0 0">Start a new match on every live stream (round 1, 0 – 0).</p>
   </div>
   <form method="post" onsubmit="return confirm('Reset the score on all live games to 0 – 0?')">
     <?= csrf_field() ?><input type="hidden" name="do" value="reset">
