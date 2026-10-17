@@ -55,7 +55,7 @@ function migrate(PDO $pdo): void
             name         TEXT NOT NULL,
             stream_key   TEXT NOT NULL DEFAULT '',
             rtmp_url     TEXT NOT NULL DEFAULT 'rtmp://a.rtmp.youtube.com/live2',
-            page_url     TEXT NOT NULL DEFAULT 'https://ffteditt.store/game/',
+            page_url     TEXT NOT NULL DEFAULT 'https://ffteditt.store/',
             server_id    INTEGER REFERENCES servers(id) ON DELETE SET NULL,
             quality      TEXT NOT NULL DEFAULT '480p-v',
             fps          INTEGER NOT NULL DEFAULT 20,

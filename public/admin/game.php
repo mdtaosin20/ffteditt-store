@@ -78,7 +78,7 @@ page_start('Game', 'game', $admin);
     <p class="muted">Names, colours and photos for the Ball Drop game. Changes reach every live stream within about 20 seconds.</p>
   </div>
   <div class="head-actions">
-    <a class="btn btn-ghost" href="/game/" target="_blank" rel="noopener">Open game ↗</a>
+    <a class="btn btn-ghost" href="/" target="_blank" rel="noopener">Open site ↗</a>
   </div>
 </div>
 

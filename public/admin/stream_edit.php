@@ -21,7 +21,7 @@ if ($id) {
 $defaults = [
     'name'         => '',
     'rtmp_url'     => 'rtmp://a.rtmp.youtube.com/live2',
-    'page_url'     => 'https://ffteditt.store/game/',
+    'page_url'     => 'https://ffteditt.store/',
     'server_id'    => $servers ? array_key_first($servers) : null,
     'quality'      => '480p-v',
     'fps'          => 20,

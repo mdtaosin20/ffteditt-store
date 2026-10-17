@@ -6,8 +6,8 @@ import { RoomEnvironment } from './vendor/RoomEnvironment.js';
 const DEFAULTS = {
   target: 20,
   players: [
-    { name: 'MESSI',   team: 'PINK TEAM', color: '#ff2f9e', number: '10', photo: 'img/p1-hero.jpg', face: 'img/p1-face.jpg', ball: '' },
-    { name: 'RONALDO', team: 'GOLD TEAM', color: '#ffd21a', number: '7',  photo: 'img/p2-hero.jpg', face: 'img/p2-face.jpg', ball: '' },
+    { name: 'MESSI',   team: 'PINK TEAM', color: '#ff2f9e', number: '10', photo: '/game/img/p1-hero.jpg', face: '/game/img/p1-face.jpg', ball: '' },
+    { name: 'RONALDO', team: 'GOLD TEAM', color: '#ffd21a', number: '7',  photo: '/game/img/p2-hero.jpg', face: '/game/img/p2-face.jpg', ball: '' },
   ],
 };
 
