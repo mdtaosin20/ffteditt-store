@@ -160,12 +160,19 @@ function yt_defaults(string $game): array
 {
     if ($game === 'war') {
         return [
-            'title' => '🔴 LIVE Territory War 🌍 Which Country Conquers the World? Comment Your Country! 🏆',
-            'desc'  => "🌍 Countries fight for the map square by square. Only one takes the whole world!\n"
-                . "👇 COMMENT YOUR COUNTRY to give its ball a speed boost and help it win!\n"
-                . "🔔 Subscribe and turn on notifications so you never miss a war.\n\n"
-                . "🇧🇩 Bangladesh 🇮🇳 India 🇵🇰 Pakistan 🇺🇸 USA 🇧🇷 Brazil 🇦🇷 Argentina 🇸🇦 Saudi Arabia 🇹🇷 Turkey 🇨🇳 China 🇷🇺 Russia\n\n"
-                . "#territorywar #countryballs #worldwar #countries #flags #marblerace #satisfying #live #game #geography",
+            'title' => '🔴 LIVE Territory War 🌍 16 Countries, Only 1 Conquers the World! Comment Your Country 🏆',
+            'desc'  => "🌍 TERRITORY WAR — 16 countries fight for the whole world, square by square!\n"
+                . "Every country has a flag ball. Bigger countries get bigger armies… but one comment can change everything!\n\n"
+                . "👇 COMMENT YOUR COUNTRY to give its ball a SPEED BOOST and see your name on the map!\n"
+                . "🎙️ LUNA, our live host, reads every comment and answers you live.\n"
+                . "🏆 The last country standing becomes CHAMPION OF THE WORLD — then a new war begins!\n\n"
+                . "⏱️ One war ≈ 1 hour · Live 24/7\n"
+                . "🔔 Subscribe and turn on notifications so you never miss a war\n"
+                . "👍 Like and share with friends from your country!\n\n"
+                . "Countries in this war:\n"
+                . "🇧🇩 Bangladesh 🇮🇳 India 🇵🇰 Pakistan 🇺🇸 USA 🇧🇷 Brazil 🇦🇷 Argentina 🇸🇦 Saudi Arabia 🇹🇷 Türkiye\n"
+                . "🇮🇩 Indonesia 🇳🇬 Nigeria 🇷🇺 Russia 🇨🇳 China 🇯🇵 Japan 🇩🇪 Germany 🇫🇷 France 🇬🇧 UK\n\n"
+                . "#territorywar #countryballs #worldwar #countries #flags #marblerace #satisfying #live #gaming #geography #bangladesh #india #pakistan #usa #brazil",
         ];
     }
     if ($game === 'flags') {
