@@ -31,7 +31,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newThumb = $thumb;
     }
     $up = $_FILES['image'] ?? null;
-    if ($up && ($up['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+    $small = (string) ($_POST['image_data'] ?? '');   // already made 1280 x 720 JPG by the browser
+    if ($small !== '' && preg_match('#^data:image/jpeg;base64,([A-Za-z0-9+/=]+)$#', $small, $mm)) {
+        $bin = base64_decode($mm[1], true);
+        $si = $bin !== false ? @getimagesizefromstring($bin) : false;
+        if (!$si || $si[2] !== IMAGETYPE_JPEG || strlen($bin) > 2 * 1024 * 1024) {
+            $errors[] = 'Could not read the picture. Try another one.';
+        } else {
+            foreach (['jpg', 'png'] as $old) @unlink(yt_thumb_dir() . "/thumb_{$id}.{$old}");
+            if (file_put_contents(yt_thumb_dir() . "/thumb_{$id}.jpg", $bin) !== false) {
+                $newThumb = 'jpg';
+                $up = ['error' => UPLOAD_ERR_OK, 'via' => 'browser'];
+            } else {
+                $errors[] = 'Could not save the picture. Try again.';
+            }
+        }
+    } elseif ($up && ($up['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
         $info = $up['error'] === UPLOAD_ERR_OK ? @getimagesize($up['tmp_name']) : false;
         if (in_array($up['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
             $errors[] = 'This picture is too big for the server to receive. Use one under ' . ini_get('upload_max_filesize') . 'B.';
@@ -121,6 +136,7 @@ page_start('Title & thumbnail', 'youtube', $admin);
           <label><input type="radio" name="thumb" value="none" <?= $thumbChoice === 'none' ? 'checked' : '' ?>> Don’t change the thumbnail</label>
         </div>
         <input type="file" name="image" id="image" accept="image/jpeg,image/png,image/webp">
+        <input type="hidden" name="image_data" id="image_data" value="">
         <small class="muted">JPG, PNG or WEBP, best 1280 × 720. Big pictures are made smaller by the panel. Custom thumbnails need a phone-verified channel (youtube.com/verify).</small>
       </div>
       <label class="check"><input type="checkbox" name="auto" <?= $s['yt_auto'] ? 'checked' : '' ?>> Put these on the live video automatically every time the stream starts</label>
