@@ -43,6 +43,7 @@ function games_list(): array
 {
     $ball  = game_config();
     $flags = flags_config();
+    $war   = war_config();
     return [
         'ball'  => ['id' => 1, 'key' => 'ball',  'name' => 'Ball Drop',      'url' => '/ball/',  'settings' => 'game.php',
                     'title' => ucwords(strtolower($ball['players'][0]['name'])) . ' vs ' . ucwords(strtolower($ball['players'][1]['name'])), 'category' => 'football',
@@ -56,6 +57,12 @@ function games_list(): array
                     'desc' => 'Flags bounce in a turning ring. The last flag left goes to the final!',
                     'autoplay' => (bool) $flags['autoplay'], 'pace' => (string) $flags['pace'],
                     'detail' => '195 countries · final of ' . (int) $flags['target']],
+        'war'   => ['id' => 3, 'key' => 'war', 'name' => 'Territory War', 'url' => '/war/', 'settings' => 'war.php',
+                    'title' => 'Territory War', 'category' => 'countries',
+                    'tags' => ['countries', 'battle', 'strategy'], 'thumb' => '/assets/site/war.jpg',
+                    'desc' => 'Flag balls conquer the map square by square. The last country standing takes the world!',
+                    'autoplay' => (bool) $war['autoplay'], 'pace' => (string) $war['pace'],
+                    'detail' => count($war['teams']) . ' countries · map ' . (int) $war['grid']],
     ];
 }
 
@@ -72,7 +79,9 @@ function ball_rules_text(array $b): string
 
 function game_of_url(string $url): string
 {
-    return preg_match('#/flags/?(\?|$)#', (string) parse_url($url, PHP_URL_PATH) . '?') ? 'flags' : 'ball';
+    $path = (string) parse_url($url, PHP_URL_PATH) . '?';
+    if (preg_match('#/war/?(\?|$)#', $path)) return 'war';
+    return preg_match('#/flags/?(\?|$)#', $path) ? 'flags' : 'ball';
 }
 
 function paces(): array

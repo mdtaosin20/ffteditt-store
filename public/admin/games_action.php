@@ -16,8 +16,8 @@ if (!isset($games[$key])) {
     redirect($back);
 }
 $name = $games[$key]['name'];
-$cfg  = $key === 'flags' ? flags_config() : game_config();
-$save = fn (array $c) => $key === 'flags' ? flags_save($c) : game_save($c);
+$cfg  = match ($key) { 'flags' => flags_config(), 'war' => war_config(), default => game_config() };
+$save = fn (array $c) => match ($key) { 'flags' => flags_save($c), 'war' => war_save($c), default => game_save($c) };
 
 if ($do === 'autoplay') {
     $cfg['autoplay'] = ($_POST['to'] ?? '') === 'on';

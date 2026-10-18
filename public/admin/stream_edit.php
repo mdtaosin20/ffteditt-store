@@ -160,6 +160,7 @@ page_start($stream ? 'Edit stream' : 'Add stream', 'streams', $admin);
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/ball/">Ball Drop</button>
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/ball/?mode=2d">Ball Drop (2D, light)</button>
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/flags/">Country Flag Battle</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/war/">Territory War</button>
     </span>
     <small class="muted">The game page the server opens and sends to YouTube. Tap a game to fill it in.</small>
     <script>document.querySelectorAll('[data-page]').forEach(function (b) { b.addEventListener('click', function () { document.getElementById('page_url').value = b.dataset.page; }); });</script>

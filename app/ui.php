@@ -57,6 +57,9 @@ function icon(string $name, string $class = 'ic'): string
 /** Small coloured picture for each game in tables. */
 function game_badge(string $key): string
 {
+    if ($key === 'war') {
+        return '<span class="gicon gi-war" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="10" height="10" fill="#3b82f6"/><rect x="12" y="2" width="10" height="10" fill="#f59e0b"/><rect x="2" y="12" width="10" height="10" fill="#22c55e"/><rect x="12" y="12" width="10" height="10" fill="#ef4444"/><circle cx="12" cy="12" r="4" fill="#fff"/></svg></span>';
+    }
     if ($key === 'flags') {
         return '<span class="gicon gi-flags" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" fill="#16a34a"/><circle cx="10" cy="12" r="4" fill="#ef4444"/></svg></span>';
     }

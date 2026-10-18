@@ -1,0 +1,440 @@
+// FFTEdit · Territory War. Runs by itself, made for 24/7 vertical live streams.
+// Every country has a flag ball that bounces inside its own land. When the ball hits a square of
+// another country it takes that square and bounces back. A country whose land gets too small is out
+// and its land goes to the country that beat it. The last country left wins the world.
+import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
+import { liveChat, countryMatcher } from '/game/chat.js?v=3';
+
+const $ = (id) => document.getElementById(id);
+const QS = new URLSearchParams(location.search);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const FAST = clamp(Number(QS.get('fast')) || 1, 1, 400); // testing only: run the war faster
+
+const DEF = { title: 'TERRITORY WAR', teams: ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'ru', 'cn', 'jp', 'de', 'fr', 'gb'],
+  grid: 40, speed: 100, sudden: 60, boost: true, rev: '', reset: '' };
+
+// clear, different colours for the countries' land (in team order, shuffled each war)
+const PALETTE = ['#ff9f1c', '#3c5bd6', '#2ec4b6', '#e63946', '#f4d21b', '#74b9ff', '#9b5de5', '#06d6a0', '#ff5a8a', '#8ac926',
+  '#b30000', '#1e8f4e', '#ffffff', '#555c6e', '#00b3a4', '#8a1538', '#c77dff', '#ffb4a2', '#4cc9f0', '#fb5607',
+  '#80b918', '#3a0ca3', '#ffd166', '#118ab2', '#ef476f', '#7f5539', '#90e0ef', '#d00000', '#fcbf49', '#2b9348', '#e0aaff', '#a3b18a'];
+
+const MAP_W = 1000, MAP_H = 960, FIXED = 1 / 120;
+const SUDDEN_EVERY = 90;            // seconds between Sudden Death eliminations
+const BOOST_SECS = 8, BOOST_MULT = 1.5;
+// Bigger countries get more balls and move a bit faster, and that edge grows as the war goes on,
+// so countries fall one by one (tuned with a simulator: the first country falls after ~5–10 min, a 16-country war lasts ~1 hour with Sudden Death at 60).
+const ARMY_STEP = 0.5, ARMY_MAX = 4;   // one more ball for every half "fair share" above it (max 4)
+const EDGE_START = 0.08, EDGE_GROW = 0.4, EDGE_MINUTES = 45;
+
+async function fetchConfig() {
+  try { const r = await fetch('/api/war.php', { cache: 'no-store' }); if (r.ok) return await r.json(); } catch (e) { /* offline */ }
+  return null;
+}
+function fitStage() {
+  const vw = document.documentElement.clientWidth || innerWidth, vh = document.documentElement.clientHeight || innerHeight;
+  $('stage').style.transform = `translate(-50%, -50%) scale(${Math.min(vw / 1080, vh / 1920)})`;
+}
+const fmtTime = (s) => {
+  s = Math.max(0, Math.floor(s));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(x).padStart(2, '0');
+};
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+class WarSfx extends Sfx {
+  take() { if (!this.running || !this.limit('take', 260)) return; this.tone({ freq: 520 + Math.random() * 260, type: 'sine', dur: 0.05, vol: 0.025 }); }
+  out() { if (!this.running) return; this.tone({ freq: 700, to: 120, type: 'sawtooth', dur: 0.6, vol: 0.06 }); this.tone({ freq: 90, type: 'sine', dur: 0.5, vol: 0.12, delay: 0.05 }); }
+  alarm() { if (!this.running) return; [0, 0.25, 0.5].forEach((d) => this.tone({ freq: 880, to: 660, type: 'square', dur: 0.18, vol: 0.05, delay: d })); }
+}
+
+async function main() {
+  fitStage(); addEventListener('resize', fitStage);
+  const [remote, atlasInfo] = await Promise.all([fetchConfig(), fetch('/flags/flags.json').then((r) => r.json())]);
+  const cfg = { ...DEF, ...(remote || {}) };
+  if (cfg.autoplay === false) { holdScreen('/api/war.php', cfg.rev); return; }
+  const pace = PACE[cfg.pace] || 1;
+  const atlas = new Image(); atlas.src = '/flags/flags.png';
+  await atlas.decode().catch(() => {});
+
+  const C = atlasInfo.countries, FW = atlasInfo.w, FH = atlasInfo.h, COLS_A = atlasInfo.cols, ROWS_A = Math.ceil(C.length / COLS_A);
+  const byCode = new Map(C.map((c, i) => [c.code, i]));
+  const TEAMS = cfg.teams.filter((c) => byCode.has(c)).slice(0, 32);
+  if (TEAMS.length < 2) TEAMS.splice(0, TEAMS.length, ...DEF.teams);
+  const N = TEAMS.length;
+  const NAME = (t) => C[byCode.get(TEAMS[t])].name.toUpperCase().replace('UNITED ARAB EMIRATES', 'UAE').replace('UNITED KINGDOM', 'UK').replace('UNITED STATES', 'USA');
+
+  const GC = clamp(Math.round(cfg.grid) || 40, 20, 70);
+  const CELL = MAP_W / GC, GR = Math.floor(MAP_H / CELL), CH = MAP_H / GR;
+  const TOTAL = GC * GR;
+  const ELIM = Math.max(4, Math.round(TOTAL / N * 0.3));  // land smaller than 30% of a fair share = out
+  const R = clamp(CELL * 0.95, 12, 30);                   // ball radius
+
+  const flagCss = (i, w) => { const h = w * 0.75; return `width:${w}px;height:${h}px;background-size:${COLS_A * w}px ${ROWS_A * h}px;background-position:${-(i % COLS_A) * w}px ${-Math.floor(i / COLS_A) * h}px`; };
+  const flagHTML = (t, w) => `<span class="flag" style="${flagCss(byCode.get(TEAMS[t]), w)}"></span>`;
+  const flagNode = (code, w = 40) => { const d = document.createElement('span'); d.className = 'flag'; d.style.cssText = flagCss(byCode.get(code), w); return d; };
+
+  $('title').textContent = cfg.title;
+  $('sub').textContent = `${N} COUNTRIES · ONLY ONE TAKES THE WORLD`;
+
+  /* ---------- war state (saved, so a page reload continues the war) ---------- */
+  const KEY = 'fft_war';
+  freshRun('war', [KEY, 'fft_fans_war']);
+  const sig = 'v2|' + cfg.reset + '|' + TEAMS.join(',') + '|' + GC;
+  let W = null;
+  try { W = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { /* private mode */ }
+  if (!W || W.sig !== sig || typeof W.g !== 'string' || W.g.length !== TOTAL) W = null;
+
+  let g = new Int8Array(TOTAL), cnt = new Int32Array(N), lastBy = new Int16Array(N).fill(-1);
+  let balls = [], alive = N, simT = 0, warNo = 1, lastSudden = 0, colorOf = [], phase = 'play', phaseT = 0, champion = -1;
+  let outOrder = [];   // countries in the order they were knocked out
+  const teamAlive = new Uint8Array(N), boostUntil = new Float64Array(N), tagText = new Array(N).fill(''), tagUntil = new Float64Array(N);
+
+  const speedBase = () => 260 * (cfg.speed / 100);
+  const startBall = (t, x, y) => { const a = Math.random() * Math.PI * 2; return { t, x, y, vx: Math.cos(a), vy: Math.sin(a) }; };
+
+  const newWar = () => {
+    const order = shuffle([...Array(N).keys()]);
+    const cols = Math.max(1, Math.round(Math.sqrt(N * MAP_W / MAP_H))), rows = Math.ceil(N / cols);
+    const seeds = [];
+    for (let k = 0; k < N; k++) {
+      const row = Math.floor(k / cols), inRow = row === rows - 1 ? N - row * cols : cols, col = k % cols;
+      const cx = (col + 0.5) / inRow * MAP_W + (Math.random() - 0.5) * MAP_W / inRow * 0.3;
+      const cy = (row + 0.5) / rows * MAP_H + (Math.random() - 0.5) * MAP_H / rows * 0.3;
+      seeds.push([cx, cy, order[k]]);
+    }
+    for (let y = 0; y < GR; y++) for (let x = 0; x < GC; x++) {
+      const px = (x + 0.5) * CELL, py = (y + 0.5) * CH;
+      let best = 0, bd = Infinity;
+      seeds.forEach((s, i) => { const d = (s[0] - px) ** 2 + (s[1] - py) ** 2; if (d < bd) { bd = d; best = i; } });
+      g[y * GC + x] = seeds[best][2];
+    }
+    balls = seeds.map(([x, y, t]) => startBall(t, x, y));
+    colorOf = shuffle(PALETTE.slice(0, Math.max(N, 1)));
+    teamAlive.fill(1); boostUntil.fill(0); tagUntil.fill(0); outOrder = [];
+    alive = N; simT = 0; lastSudden = 0; phase = 'play'; phaseT = 0; champion = -1; lastBy.fill(-1);
+  };
+
+  if (W) {
+    for (let k = 0; k < TOTAL; k++) g[k] = W.g.charCodeAt(k) - 65;
+    balls = W.balls.map((b) => ({ ...startBall(b[0], b[1], b[2]), vx: b[3], vy: b[4] }));
+    colorOf = W.colors; simT = W.simT; warNo = W.warNo || 1; lastSudden = W.lastSudden || 0;
+    W.alive.forEach((a, t) => { teamAlive[t] = a; });
+    outOrder = Array.isArray(W.outs) ? W.outs : [];
+    alive = W.alive.filter(Boolean).length;
+  } else newWar();
+  const recount = () => { cnt.fill(0); for (let k = 0; k < TOTAL; k++) cnt[g[k]]++; };
+  recount();
+  const save = () => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ sig, warNo, simT, lastSudden, colors: colorOf,
+        g: String.fromCharCode(...Array.from(g, (v) => v + 65)),
+        alive: Array.from(teamAlive), outs: outOrder,
+        balls: balls.map((b) => [b.t, Math.round(b.x), Math.round(b.y), +b.vx.toFixed(3), +b.vy.toFixed(3)]) }));
+    } catch (e) { /* ignore */ }
+  };
+
+  /* ---------- drawing the land (kept on its own canvas; only changed squares are redrawn) ---------- */
+  const cv = $('map'), c = cv.getContext('2d');
+  const land = document.createElement('canvas'), lc = land.getContext('2d');
+  let k = 1;
+  const drawCell = (idx) => {
+    const x = idx % GC, y = (idx - x) / GC;
+    const px = Math.floor(x * CELL * k), py = Math.floor(y * CH * k), pw = Math.ceil((x + 1) * CELL * k) - px, ph = Math.ceil((y + 1) * CH * k) - py;
+    lc.fillStyle = colorOf[g[idx]]; lc.fillRect(px, py, pw, ph);
+    lc.fillStyle = 'rgba(0,0,0,.16)'; lc.fillRect(px, py, pw, 1); lc.fillRect(px, py, 1, ph);
+  };
+  const redrawLand = () => { for (let i = 0; i < TOTAL; i++) drawCell(i); };
+  const resize = () => {
+    const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 1.5);
+    cv.width = land.width = Math.max(1, Math.round(r.width * dpr)); cv.height = land.height = Math.max(1, Math.round(r.height * dpr));
+    k = cv.width / MAP_W; redrawLand();
+  };
+  resize(); addEventListener('resize', resize);
+
+  /* ---------- sound ---------- */
+  const sfx = new WarSfx();
+  const soundBtn = $('sound-btn');
+  const unlock = () => { sfx.resume(); soundBtn.hidden = true; };
+  soundBtn.addEventListener('click', unlock); addEventListener('pointerdown', unlock); sfx.resume();
+  setTimeout(() => { if (sfx.ok && !sfx.running) soundBtn.hidden = false; }, 1500);
+
+  /* ---------- live chat: a comment with a country boosts its ball ---------- */
+  const teamOf = (code) => TEAMS.indexOf(code);
+  const CN = (code) => C[byCode.get(code)].name.toUpperCase();
+  const leaderT = () => { let b = -1; for (let t = 0; t < N; t++) if (teamAlive[t] && (b < 0 || cnt[t] > cnt[b])) b = t; return b; };
+  const pct = (t) => (cnt[t] / TOTAL * 100);
+  const state = (code) => {
+    const t = teamOf(code);
+    if (t < 0) return 'notin';
+    return teamAlive[t] ? 'alive' : 'out';
+  };
+  const isGreeting = (s) => /\b(hi|hii+|hello|hey|salam|salaam|assalam\w*|asalam\w*)\b|হাই|হ্যালো|সালাম|আসসালামু/i.test(s);
+  const isSalam = (s) => /salam|salaam|assalam|asalam|সালাম|আসসালামু/i.test(s);
+  const chat = liveChat({
+    game: 'war', rows: 3,
+    match: countryMatcher(C),
+    badge: (code) => flagNode(code, 34),
+    duck: (on) => sfx.duck(on),
+    sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
+    onFan: (code, name) => {
+      const t = teamOf(code);
+      if (t < 0 || !teamAlive[t]) return;
+      tagText[t] = name.toUpperCase().slice(0, 12); tagUntil[t] = simT + BOOST_SECS + 4;
+      if (cfg.boost) boostUntil[t] = simT + BOOST_SECS;
+    },
+    emptyHint: 'Type a country from the map — its ball gets a speed boost!',
+    hints: ['TYPE A COUNTRY FROM THE MAP TO BOOST ITS BALL!', 'DROP A LIKE IF YOU ARE ENJOYING THE WAR!', 'WHICH COUNTRY WILL TAKE THE WORLD? TELL ME IN CHAT!'],
+    idleLines: [
+      ['TYPE YOUR COUNTRY IN CHAT — ITS BALL GETS A SPEED BOOST AND CONQUERS FASTER!'],
+      ['WHICH COUNTRY WILL TAKE THE WHOLE WORLD? COMMENT YOUR PICK!'],
+      ['YOUR COMMENTS CHANGE THE WAR — CHEER FOR YOUR COUNTRY NOW!'],
+    ],
+    welcome: (name, code, text) => {
+      const hi = isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'WELCOME ';
+      if (!code) return [hi, { name }, '! TYPE A COUNTRY FROM THE MAP TO BOOST ITS BALL!'];
+      const s = state(code);
+      if (s === 'alive') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + `! ${cfg.boost ? 'SPEED BOOST ON — WATCH IT CONQUER!' : 'YOUR COUNTRY IS FIGHTING NOW!'}`];
+      if (s === 'out') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + '! IT WAS CONQUERED THIS WAR — CHEER IT IN THE NEXT ONE!'];
+      return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + `! IT IS NOT IN THIS WAR — PICK ONE OF THE ${N} COUNTRIES ON THE MAP!`];
+    },
+    reply: (name, code, text) => {
+      if (code) {
+        const s = state(code), t = teamOf(code);
+        if (s === 'alive') return [{ name }, ' BOOSTS ', { node: flagNode(code) }, CN(code) + `! IT HOLDS ${pct(t).toFixed(1)}% OF THE WORLD!`];
+        if (s === 'out') return [{ node: flagNode(code) }, CN(code) + ' IS ALREADY OUT, ', { name }, '… NEXT WAR STARTS SOON!'];
+        return null;
+      }
+      if (/who.*(win|lead)|winner|kon|কে জিতবে/i.test(text)) {
+        const l = leaderT();
+        return l >= 0 ? ['RIGHT NOW ', { node: flagNode(TEAMS[l]) }, NAME(l) + ` LEADS WITH ${pct(l).toFixed(1)}%, `, { name }, '!'] : null;
+      }
+      if (isGreeting(text)) return [isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'HELLO AGAIN ', { name }, '! WHICH COUNTRY ARE YOU CHEERING FOR?'];
+      return null;
+    },
+    demoTexts: ['Bangladesh 🇧🇩', 'India!', 'Brasil 🔥', 'Go Pakistan', 'hello', 'USA USA', 'who will win?', 'China', 'assalamu alaikum', 'Nepal', 'Saudi Arabia', 'Japan ❤️', 'বাংলাদেশ', 'nice game'],
+  });
+  const host = (parts, prio = 2) => { if (chat.active) chat.say(parts, prio); };
+
+  /* ---------- the war ---------- */
+  const feed = (html) => {
+    const f = $('feed'); f.innerHTML = html; f.style.fontSize = '';
+    for (let size = 32; f.scrollWidth > 1050 && size > 18; size -= 2) f.style.fontSize = size + 'px'; // long names: smaller text
+    f.classList.remove('pop'); void f.offsetWidth; f.classList.add('pop');
+  };
+  const banner = (text, small, red) => {
+    const b = $('banner'), t = $('banner-text');
+    t.className = 'banner-in' + (red ? ' red' : ''); t.innerHTML = `${text}<small>${small}</small>`;
+    b.hidden = false; t.style.animation = 'none'; void t.offsetWidth; t.style.animation = '';
+    clearTimeout(banner.timer); banner.timer = setTimeout(() => { b.hidden = true; }, 3100);
+  };
+
+  const neighbourOf = (o) => { // the country that touches o's land the most
+    const touch = new Int32Array(N);
+    for (let k2 = 0; k2 < TOTAL; k2++) {
+      if (g[k2] !== o) continue;
+      const x = k2 % GC;
+      for (const n of [x > 0 ? k2 - 1 : -1, x < GC - 1 ? k2 + 1 : -1, k2 - GC, k2 + GC]) if (n >= 0 && n < TOTAL && g[n] !== o) touch[g[n]]++;
+    }
+    let best = -1; for (let t = 0; t < N; t++) if (t !== o && teamAlive[t] && (best < 0 || touch[t] > touch[best])) best = t;
+    return best;
+  };
+
+  const eliminate = (o, by) => {
+    if (!teamAlive[o] || alive <= 1) return;
+    if (by < 0 || !teamAlive[by]) by = neighbourOf(o);
+    teamAlive[o] = 0; alive--; outOrder.push(o);
+    balls = balls.filter((b) => b.t !== o);
+    for (let k2 = 0; k2 < TOTAL; k2++) if (g[k2] === o) { g[k2] = by; drawCell(k2); }
+    cnt[by] += cnt[o]; cnt[o] = 0;
+    feed(`💥 ${flagHTML(o, 40)}<span>${NAME(o)} IS OUT — CONQUERED BY</span>${flagHTML(by, 40)}<span>${NAME(by)}</span>`);
+    sfx.out();
+    host([{ node: flagNode(TEAMS[o]) }, NAME(o) + ' IS OUT! CONQUERED BY ', { node: flagNode(TEAMS[by]) }, NAME(by) + `! ${alive} COUNTRIES LEFT!`], 2);
+    if (alive === 1) crown(by);
+    else if (alive === 2) {
+      const two = [...Array(N).keys()].filter((t) => teamAlive[t]);
+      banner('FINAL BATTLE', `${NAME(two[0])} VS ${NAME(two[1])}`);
+      sfx.alarm();
+      host(['FINAL BATTLE! ', { node: flagNode(TEAMS[two[0]]) }, NAME(two[0]) + ' AGAINST ', { node: flagNode(TEAMS[two[1]]) }, NAME(two[1]) + '! WHO TAKES THE WORLD? COMMENT NOW!'], 3);
+    }
+    save();
+  };
+
+  const crown = (t) => {
+    champion = t; phase = 'won'; phaseT = 0;
+    for (let k2 = 0; k2 < TOTAL; k2++) if (g[k2] !== t) { g[k2] = t; drawCell(k2); }
+    recount();
+    const w = $('win'); $('win-flag').style.cssText = flagCss(byCode.get(TEAMS[t]), 300);
+    $('win-name').textContent = NAME(t); $('win-sub').textContent = `WAR #${warNo} · ${fmtTime(simT)}`;
+    w.hidden = false; sfx.win();
+    host(['WE HAVE A WORLD CHAMPION! ', { node: flagNode(TEAMS[t]) }, NAME(t) + ` CONQUERED THE WHOLE WORLD IN ${Math.max(1, Math.round(simT / 60))} MINUTES! CONGRATULATIONS!`], 3);
+  };
+
+  const capture = (idx, t) => {
+    const o = g[idx];
+    g[idx] = t; cnt[o]--; cnt[t]++; lastBy[o] = t;
+    drawCell(idx); sfx.take();
+    if (cnt[o] < ELIM) eliminate(o, t);
+  };
+
+  const step = (dt) => {
+    const base = speedBase() * (simT > cfg.sudden * 60 ? 1.25 : 1);
+    const edge = EDGE_START + EDGE_GROW * Math.min(1.5, simT / 60 / EDGE_MINUTES);
+    for (const b of balls) {
+      if (!teamAlive[b.t]) continue;
+      const strength = Math.max(0.35, 1 + edge * Math.min(3, cnt[b.t] / TOTAL * alive - 1));
+      const sp = base * strength * (boostUntil[b.t] > simT ? BOOST_MULT : 1) * CELL / 25;
+      const m = Math.hypot(b.vx, b.vy) || 1; b.vx /= m; b.vy /= m;
+      // x
+      let nx = b.x + b.vx * sp * dt;
+      if (nx < R || nx > MAP_W - R) { b.vx = -b.vx; nx = clamp(nx, R, MAP_W - R); }
+      let cx = Math.floor((nx + Math.sign(b.vx) * R * 0.55) / CELL), cy = Math.floor(b.y / CH);
+      cx = clamp(cx, 0, GC - 1); cy = clamp(cy, 0, GR - 1);
+      if (g[cy * GC + cx] !== b.t) { capture(cy * GC + cx, b.t); b.vx = -b.vx; } else b.x = nx;
+      // y
+      let ny = b.y + b.vy * sp * dt;
+      if (ny < R || ny > MAP_H - R) { b.vy = -b.vy; ny = clamp(ny, R, MAP_H - R); }
+      cx = clamp(Math.floor(b.x / CELL), 0, GC - 1); cy = clamp(Math.floor((ny + Math.sign(b.vy) * R * 0.55) / CH), 0, GR - 1);
+      if (g[cy * GC + cx] !== b.t) { capture(cy * GC + cx, b.t); b.vy = -b.vy; } else b.y = ny;
+      if (phase === 'won') return;
+    }
+  };
+
+  const suddenDeath = () => {
+    if (alive <= 1 || simT < cfg.sudden * 60) return;
+    if (!lastSudden) {
+      lastSudden = simT;
+      banner('SUDDEN DEATH', `SMALLEST COUNTRY OUT EVERY ${SUDDEN_EVERY} SECONDS`, true); sfx.alarm();
+      host(['SUDDEN DEATH! FROM NOW ON THE SMALLEST COUNTRY IS OUT EVERY 90 SECONDS — BOOST YOUR COUNTRY IN CHAT!'], 3);
+      return;
+    }
+    if (simT - lastSudden < SUDDEN_EVERY) return;
+    lastSudden = simT;
+    let s = -1; for (let t = 0; t < N; t++) if (teamAlive[t] && (s < 0 || cnt[t] < cnt[s])) s = t;
+    if (s >= 0) eliminate(s, neighbourOf(s));
+  };
+
+  /* ---------- armies: bigger countries get more balls ---------- */
+  const armies = () => {
+    const have = new Int32Array(N);
+    for (const b of balls) have[b.t]++;
+    for (let t = 0; t < N; t++) {
+      if (!teamAlive[t]) continue;
+      const want = clamp(1 + Math.floor((cnt[t] / TOTAL * N - 1) / ARMY_STEP), 1, ARMY_MAX);
+      if (have[t] < want) { // new ball on a random square of its own land
+        for (let tries = 0; tries < 80; tries++) {
+          const idx = Math.floor(Math.random() * TOTAL);
+          if (g[idx] !== t) continue;
+          const x = idx % GC, y = (idx - x) / GC;
+          balls.push(startBall(t, clamp((x + 0.5) * CELL, R, MAP_W - R), clamp((y + 0.5) * CH, R, MAP_H - R)));
+          break;
+        }
+      } else if (have[t] > want) {
+        const i = balls.map((b) => b.t).lastIndexOf(t);
+        if (i >= 0) balls.splice(i, 1);
+      }
+    }
+  };
+
+  /* ---------- drawing ---------- */
+  const draw = () => {
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.drawImage(land, 0, 0);
+    c.setTransform(k, 0, 0, k, 0, 0);
+    const now = simT;
+    for (const b of balls) {
+      const i = byCode.get(TEAMS[b.t]);
+      const boosted = boostUntil[b.t] > now;
+      if (boosted) { // glow while boosted
+        c.globalAlpha = 0.35 + 0.25 * Math.sin(now * 12);
+        c.fillStyle = '#ffd166'; c.beginPath(); c.arc(b.x, b.y, R * 1.7, 0, 7); c.fill(); c.globalAlpha = 1;
+      }
+      c.save(); c.beginPath(); c.arc(b.x, b.y, R, 0, 7); c.closePath();
+      c.fillStyle = '#fff'; c.fill(); c.clip();
+      c.drawImage(atlas, (i % COLS_A) * FW, Math.floor(i / COLS_A) * FH, FW, FH, b.x - R * 1.36, b.y - R, R * 2.72, R * 2);
+      c.restore();
+      c.lineWidth = boosted ? 5 : 4; c.strokeStyle = boosted ? '#ffd166' : '#fff';
+      c.beginPath(); c.arc(b.x, b.y, R, 0, 7); c.stroke();
+    }
+    // viewers' names over their boosted balls
+    c.font = '700 22px Rajdhani, Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    const tagged = new Set();
+    for (const b of balls) {
+      if (tagged.has(b.t) || !tagText[b.t] || tagUntil[b.t] < now) continue;
+      tagged.add(b.t);
+      const label = '★ ' + tagText[b.t], tw = c.measureText(label).width + 20, y = b.y - R - 20;
+      c.fillStyle = '#ffc93a'; c.beginPath(); c.roundRect(b.x - tw / 2, y - 15, tw, 30, 15); c.fill();
+      c.fillStyle = '#1a1200'; c.fillText(label, b.x, y + 1);
+    }
+    c.textBaseline = 'alphabetic';
+  };
+
+  /* ---------- scoreboard ---------- */
+  let lastLeader = -1, lastLeaderTalk = 0;
+  const updateUI = () => {
+    $('st-time').textContent = fmtTime(simT);
+    $('st-left').textContent = `${alive} / ${N}`;
+    const order = [...Array(N).keys()].filter((t) => teamAlive[t]).sort((a, b) => cnt[b] - cnt[a]);
+    const lead = order[0];
+    $('st-lead').textContent = lead >= 0 ? NAME(lead) : '—';
+    // living countries by size, then the latest knocked-out ones (greyed)
+    const rows = order.map((t) => [t, true]).concat(outOrder.slice().reverse().map((t) => [t, false])).slice(0, 8);
+    $('board').innerHTML = rows.map(([t, on], n) => {
+      const p = pct(t);
+      return `<div class="r${n === 0 && on ? ' top' : ''}${on ? '' : ' out'}"><span class="n">${on ? '#' + (n + 1) : '✖'}</span>${flagHTML(t, 48)}<span class="nm">${NAME(t)}</span>` +
+        `<span class="bar"><i style="width:${on ? Math.min(100, p * 100 / Math.max(1, pct(lead))) : 0}%;background:${colorOf[t]}"></i></span><span class="p">${on ? p.toFixed(1) + '%' : 'OUT'}</span></div>`;
+    }).join('');
+    const ph = $('phase');
+    if (phase === 'play' && alive === 2) { ph.hidden = false; ph.className = 'phase final'; ph.textContent = '⚔ FINAL BATTLE'; }
+    else if (phase === 'play' && simT > cfg.sudden * 60) { ph.hidden = false; ph.className = 'phase'; ph.textContent = `☠ SUDDEN DEATH · NEXT OUT IN ${Math.max(0, Math.ceil(SUDDEN_EVERY - (simT - lastSudden)))}s`; }
+    else ph.hidden = true;
+    // the host mentions a new leader now and then
+    if (phase === 'play' && lead !== lastLeader && lead >= 0 && simT - lastLeaderTalk > 150) {
+      if (lastLeader >= 0) host([{ node: flagNode(TEAMS[lead]) }, NAME(lead) + ` TAKES THE LEAD WITH ${pct(lead).toFixed(1)}% OF THE WORLD!`], 1);
+      lastLeaderTalk = simT;
+    }
+    lastLeader = lead;
+  };
+
+  /* ---------- settings from the admin panel ---------- */
+  setInterval(async () => {
+    const n = await fetchConfig();
+    if (!n) return;
+    if (n.reset !== cfg.reset) { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } location.reload(); return; }
+    if (n.rev !== cfg.rev && phase !== 'won') { save(); location.reload(); }
+  }, 20000);
+
+  /* ---------- game loop ---------- */
+  if (!W) setTimeout(() => { banner(`WAR #${warNo}`, `${N} COUNTRIES · 1 WINNER`); host([`WELCOME TO TERRITORY WAR! ${N} COUNTRIES FIGHT FOR THE WORLD. TYPE YOUR COUNTRY IN CHAT TO BOOST ITS BALL!`], 2); }, 1200);
+  let lastArmy = 0;
+  let last = performance.now(), acc = 0, lastDraw = 0, lastUI = 0, lastSave = performance.now();
+  const frame = (now) => {
+    const dt = Math.min(0.1, (now - last) / 1000) * FAST * pace; last = now;
+    acc += dt;
+    if (phase === 'play') {
+      let n = 0;
+      while (acc >= FIXED && n < 4000) {
+        step(FIXED); simT += FIXED; acc -= FIXED; n++;
+        if (phase !== 'play') break;
+        suddenDeath();
+        if (simT - lastArmy > 0.5) { armies(); lastArmy = simT; }
+      }
+      if (n >= 4000) acc = 0;
+    } else {
+      acc = 0; phaseT += dt / FAST;
+      if (phaseT > 14) { // next war
+        $('win').hidden = true; warNo++; newWar(); recount(); redrawLand(); save();
+        banner(`WAR #${warNo}`, `${N} COUNTRIES · 1 WINNER`);
+        host([`A NEW WAR BEGINS! ${N} COUNTRIES, ONE WORLD. COMMENT YOUR COUNTRY TO BOOST IT!`], 2);
+      }
+    }
+    if (now - lastUI > 1000) { updateUI(); lastUI = now; }
+    if (now - lastSave > 5000) { save(); lastSave = now; }
+    if (now - lastDraw >= 31) { draw(); lastDraw = now; } // ~30 frames a second is plenty for a stream
+    requestAnimationFrame(frame);
+  };
+  updateUI();
+  requestAnimationFrame(frame);
+  window.__war = { cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat };
+}
+
+main();

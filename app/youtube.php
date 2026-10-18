@@ -158,6 +158,16 @@ function yt_revoke(string $refresh): void
 
 function yt_defaults(string $game): array
 {
+    if ($game === 'war') {
+        return [
+            'title' => '🔴 LIVE Territory War 🌍 Which Country Conquers the World? Comment Your Country! 🏆',
+            'desc'  => "🌍 Countries fight for the map square by square. Only one takes the whole world!\n"
+                . "👇 COMMENT YOUR COUNTRY to give its ball a speed boost and help it win!\n"
+                . "🔔 Subscribe and turn on notifications so you never miss a war.\n\n"
+                . "🇧🇩 Bangladesh 🇮🇳 India 🇵🇰 Pakistan 🇺🇸 USA 🇧🇷 Brazil 🇦🇷 Argentina 🇸🇦 Saudi Arabia 🇹🇷 Turkey 🇨🇳 China 🇷🇺 Russia\n\n"
+                . "#territorywar #countryballs #worldwar #countries #flags #marblerace #satisfying #live #game #geography",
+        ];
+    }
     if ($game === 'flags') {
         return [
             'title' => '🔴 LIVE Country Flag Battle 🌍 195 Countries, Only 1 Winner! Comment Your Country 🏆',
@@ -196,7 +206,7 @@ function yt_thumb_file(array $s): ?array
         $t = 'default';
     }
     if ($t === 'default') {
-        $f = APP_DIR . '/yt/' . (game_of_url($s['page_url']) === 'flags' ? 'flags' : 'ball') . '.jpg';
+        $f = APP_DIR . '/yt/' . game_of_url($s['page_url']) . '.jpg';
         return is_file($f) ? [$f, 'image/jpeg'] : null;
     }
     return null;

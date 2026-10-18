@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Territory War · Which Country Conquers the World?</title>
+<link rel="stylesheet" href="/war/war.css?v=1">
+<link rel="stylesheet" href="/game/chat.css?v=3">
+</head>
+<body>
+<div id="stage">
+  <h1 id="title">TERRITORY WAR</h1>
+  <div class="sub" id="sub">16 COUNTRIES · ONLY ONE TAKES THE WORLD</div>
+  <div class="stats">
+    <div><span>TIME</span><b id="st-time">0:00</b></div>
+    <div><span>COUNTRIES LEFT</span><b class="g" id="st-left">16 / 16</b></div>
+    <div><span>LEADER</span><b id="st-lead">—</b></div>
+  </div>
+
+  <canvas id="map" aria-label="Map of squares owned by countries"></canvas>
+  <div class="phase" id="phase" hidden></div>
+
+  <div class="feed" id="feed"></div>
+  <div class="board" id="board"></div>
+
+  <div class="banner" id="banner" hidden><div class="banner-in" id="banner-text"></div></div>
+
+  <div class="win" id="win" hidden>
+    <div class="win-in">
+      <div class="crown" aria-hidden="true">♛</div>
+      <div class="t">CHAMPION OF THE WORLD</div>
+      <div class="flag big" id="win-flag"></div>
+      <div class="c" id="win-name">BANGLADESH</div>
+      <div class="q2" id="win-sub">WAR #1 · 42:10</div>
+    </div>
+  </div>
+
+  <button class="sound-btn" id="sound-btn" type="button" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    TAP FOR SOUND
+  </button>
+</div>
+<script type="module" src="/war/war.js?v=1"></script>
+</body>
+</html>
