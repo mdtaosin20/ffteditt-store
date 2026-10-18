@@ -70,6 +70,9 @@ async function main() {
   const R = clamp(CELL * 0.95, 12, 30);                   // ball radius
 
   const flagCss = (i, w) => { const h = w * 0.75; return `width:${w}px;height:${h}px;background-size:${COLS_A * w}px ${ROWS_A * h}px;background-position:${-(i % COLS_A) * w}px ${-Math.floor(i / COLS_A) * h}px`; };
+  // Flags with holy writing (the Kalima, Allahu Akbar) are not drawn on the land or the balls,
+  // where they would be "run over" and conquered: those countries get a plain colour instead.
+  const PLAIN = { sa: ['#006c35', 'KSA'], af: ['#007a36', 'AFG'], iq: ['#ce1126', 'IRQ'] };
   const flagHTML = (t, w) => `<span class="flag" style="${flagCss(byCode.get(TEAMS[t]), w)}"></span>`;
   const flagNode = (code, w = 40) => { const d = document.createElement('span'); d.className = 'flag'; d.style.cssText = flagCss(byCode.get(code), w); return d; };
 
@@ -162,8 +165,9 @@ async function main() {
     const s = Math.max(w / FW, h / FH), fx = bx0[t] * CELL + (w - FW * s) / 2, fy = by0[t] * CH + (h - FH * s) / 2;
     const fi = byCode.get(TEAMS[t]);
     const sx = (fi % COLS_A) * FW + clamp((x * CELL - fx) / s, 0, FW - 0.5), sy = Math.floor(fi / COLS_A) * FH + clamp((y * CH - fy) / s, 0, FH - 0.5);
-    lc.fillStyle = colorOf[t]; lc.fillRect(px, py, pw, ph);
-    if (atlas.naturalWidth) lc.drawImage(atlas, sx, sy, Math.max(0.5, CELL / s), Math.max(0.5, CH / s), px, py, pw, ph);
+    const plain = PLAIN[TEAMS[t]];
+    lc.fillStyle = plain ? plain[0] : colorOf[t]; lc.fillRect(px, py, pw, ph);
+    if (!plain && atlas.naturalWidth) lc.drawImage(atlas, sx, sy, Math.max(0.5, CELL / s), Math.max(0.5, CH / s), px, py, pw, ph);
     lc.fillStyle = 'rgba(0,0,0,.10)'; lc.fillRect(px, py, pw, 1); lc.fillRect(px, py, 1, ph);
     // borders with other countries
     const bw = Math.max(2, Math.round(3 * k));
@@ -398,9 +402,13 @@ async function main() {
         c.globalAlpha = 0.35 + 0.25 * Math.sin(now * 12);
         c.fillStyle = '#ffd166'; c.beginPath(); c.arc(b.x, b.y, R * 1.7, 0, 7); c.fill(); c.globalAlpha = 1;
       }
+      const plain = PLAIN[TEAMS[b.t]];
       c.save(); c.beginPath(); c.arc(b.x, b.y, R, 0, 7); c.closePath();
-      c.fillStyle = '#fff'; c.fill(); c.clip();
-      c.drawImage(atlas, (i % COLS_A) * FW, Math.floor(i / COLS_A) * FH, FW, FH, b.x - R * 1.36, b.y - R, R * 2.72, R * 2);
+      c.fillStyle = plain ? plain[0] : '#fff'; c.fill(); c.clip();
+      if (plain) {
+        c.fillStyle = '#fff'; c.font = `700 ${Math.round(R * 0.72)}px Oswald, Rajdhani, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText(plain[1], b.x, b.y + 1); c.textBaseline = 'alphabetic';
+      } else c.drawImage(atlas, (i % COLS_A) * FW, Math.floor(i / COLS_A) * FH, FW, FH, b.x - R * 1.36, b.y - R, R * 2.72, R * 2);
       c.restore();
       c.lineWidth = boosted ? 5 : 4; c.strokeStyle = boosted ? '#ffd166' : '#fff';
       c.beginPath(); c.arc(b.x, b.y, R, 0, 7); c.stroke();
