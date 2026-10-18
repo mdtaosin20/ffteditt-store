@@ -7,7 +7,8 @@ function flags_defaults(): array
     return [
         'title'    => 'FLAG ARENA',
         'count'    => 64,      // countries in one round
-        'minutes'  => 55,      // about how long one round lasts
+        'gap'      => 5,       // seconds between the black hole's openings (longer = longer rounds)
+        'minutes'  => 55,      // (old setting, not used)
         'shield'   => 20,      // chats for a country -> it gets a shield
         'revive'   => 40,      // chats for a country that is out -> it comes back
         'revives'  => 5,       // revives allowed in one round

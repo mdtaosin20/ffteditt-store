@@ -15,7 +15,7 @@ const FAST = clamp(Number(QS.get('fast')) || 1, 1, 200);   // testing only
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-const DEF = { music: true, music_style: 'upbeat', music_vol: 35, title: 'FLAG ARENA', count: 64, minutes: 55, shield: 20, revive: 40, revives: 5, likes: 50, viewers: 100, events: true, rev: '', reset: '' };
+const DEF = { gap: 5, music: true, music_style: 'upbeat', music_vol: 35, title: 'FLAG ARENA', count: 64, minutes: 55, shield: 20, revive: 40, revives: 5, likes: 50, viewers: 100, events: true, rev: '', reset: '' };
 // countries that are always in a round (most viewers come from these)
 const CORE = ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'eg', 'ma', 'my', 'np', 'ph', 'mx', 'gb', 'fr', 'de', 'ru',
   'cn', 'jp', 'ca', 'es', 'it', 'dz', 'iq', 'af', 'lk', 'vn', 'th', 'kr'];
@@ -25,11 +25,11 @@ const PLAIN = { sa: ['#006c35', 'KSA'], af: ['#007a36', 'AFG'], iq: ['#ce1126', 
 /* ---------------------------------------------------------------- arena geometry (canvas units) */
 const W = 1080, H = 680;                 // canvas size (stage y 408 … 1088)
 const CX = 540, CY = 335, RW = 322;      // arena centre and inner wall radius
-const HOLE = 44;                         // black centre of the hole
+const HOLE = 30;                         // black centre of the hole when fully open (about a flag)
 const RING = 92;                         // the pink ring around it (flags roll over it)
 // Like the arena games on YouTube: the hole is closed ~4.4 s, then its iris turns open (0.4 s),
 // stays open 0.8 s and closes (0.4 s) — about every 6 seconds. A flag over the open hole falls in.
-const CYCLE = 4.4, OPEN = 1.6, OPEN_IN = 0.4, OPEN_EFF = 1.0;
+const OPEN = 1.2, OPEN_IN = 0.35;      // the iris opens (0.35 s), stays open, closes (0.35 s)
 const openness = (left) => { const t = OPEN - left; return t < OPEN_IN ? t / OPEN_IN : left < OPEN_IN ? left / OPEN_IN : 1; };
 const BAR_LEN = 118, BAR_W = 8, BARS = 6, BAR_TILT = 0.32;   // six bars fixed to the wall, turning with it
 const FIXED = 1 / 120;
@@ -72,7 +72,8 @@ async function main() {
   const flagNode = (code, w = 40) => { const d = document.createElement('span'); d.className = 'flag'; d.style.cssText = flagCss(code, w); return d; };
   const COUNT = clamp(Math.round(cfg.count) || 64, 16, 100);
   const R = COUNT > 72 ? 24 : COUNT > 48 ? 27 : 31;      // ball radius
-  const SPEED = 150;
+  const SPEED = 135;
+  const CYCLE = clamp(Number(cfg.gap) || 5, 2, 30);   // seconds the hole stays closed between openings
 
   { const [a, b] = cfg.title.split(' '); $('title').innerHTML = b ? `${a} <b>${cfg.title.slice(a.length + 1)}</b>` : a; }
   $('rules').innerHTML = `💬 ${cfg.shield} chats → <b class="s">SHIELD</b><br>💬 ${cfg.revive} chats if out → <b class="r">REVIVE</b><br>🔔 Subscribe → <b class="f">FREE SHIELD</b><br>⭐ Super Chat → <b class="x">BOTH</b>`;
@@ -276,16 +277,12 @@ async function main() {
   }
 
   /* ---------------------------------------------------------------- the draw (black hole) */
-  // How close to the middle a flag must be when the hole opens. Worked out so a round lasts about
-  // `minutes`: with many flags someone is usually on the hole, near the end it takes a while.
-  const AREA = Math.PI * (RW - R) * (RW - R);
-  let HSUM = 0; for (let n = 2; n <= COUNT; n++) HSUM += 1 / n;
-  const pNeed = (CYCLE + OPEN) * HSUM / Math.max(60, cfg.minutes * 60 * 0.78);   // chance per opening, per flag (shields, revives and goals add the rest)
-  const CATCH = (() => { const a = Math.PI, b = 2 * SPEED * OPEN_EFF, cc = -pNeed * AREA; return clamp((-b + Math.sqrt(b * b - 4 * a * cc)) / (2 * a), 4, R * 0.75); })();
+  // A flag falls when at least half of it is over the open black hole (its centre inside the hole).
+  const holeNow = () => HOLE * (openLeft > OPEN ? 1 : openness(openLeft));
 
   const catchFlags = () => { // the hole is open: flags over it fall in (a shield bounces its flag out instead)
     for (const b of balls) {
-      if (b.gone || Math.hypot(b.x - CX, b.y - CY) > CATCH * (openLeft > OPEN ? 1 : openness(openLeft))) continue;
+      if (b.gone || Math.hypot(b.x - CX, b.y - CY) > holeNow()) continue;
       if (shield.has(b.code)) {
         shield.delete(b.code);
         popAt('shd', b.code, 'SHIELD SAVED', NAME(b.code), b.x, b.y - 70);
@@ -478,7 +475,7 @@ async function main() {
     irisO = open ? (openLeft > OPEN ? 1 : openness(openLeft)) : 0;
     irisRot += open ? 0.12 : 0.004;
     c.fillStyle = 'rgba(95,90,170,.55)'; c.beginPath(); c.arc(CX, CY, RING, 0, 7); c.fill();
-    const inner = 4 + (HOLE - 4) * irisO;
+    const inner = Math.max(4, HOLE * irisO);   // same size as the catch area
     for (let q = 0; q < 8; q++) {
       const a0 = irisRot + q * Math.PI / 4, a1 = a0 + Math.PI / 4;
       c.fillStyle = q % 2 ? 'rgba(130,120,200,.55)' : 'rgba(105,95,180,.55)';
@@ -550,7 +547,7 @@ async function main() {
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
-  window.__arena = { cfg, S, alive: () => alive, out: () => out, balls: () => balls, shield, phase: () => phase, simT: () => simT, toNext: () => toNext, CATCH: () => CATCH, onFan, revive, chat };
+  window.__arena = { cfg, S, alive: () => alive, out: () => out, balls: () => balls, shield, phase: () => phase, simT: () => simT, toNext: () => toNext, onFan, revive, chat };
 }
 
 main();

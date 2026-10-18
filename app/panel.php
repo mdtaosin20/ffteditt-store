@@ -57,7 +57,7 @@ function games_list(): array
                     'tags' => ['countries', 'battle', 'chat'], 'thumb' => '/assets/site/flags.jpg',
                     'desc' => 'Flags bounce in the arena and the black hole draws them one by one. Chat to shield or revive your country!',
                     'autoplay' => (bool) $flags['autoplay'], 'pace' => (string) $flags['pace'],
-                    'detail' => (int) $flags['count'] . ' countries · about ' . (int) $flags['minutes'] . ' min a round'],
+                    'detail' => (int) $flags['count'] . ' countries · hole every ' . (int) $flags['gap'] . ' s'],
         'war'   => ['id' => 3, 'key' => 'war', 'name' => 'Territory War', 'url' => '/war/', 'settings' => 'war.php',
                     'title' => 'Territory War', 'category' => 'countries',
                     'tags' => ['countries', 'battle', 'strategy'], 'thumb' => '/assets/site/war.jpg',

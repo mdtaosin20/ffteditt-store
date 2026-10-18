@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $fields = [
         ['count',   'Countries in a round',         16, 100],
-        ['minutes', 'Round length (minutes)',       5, 240],
+        ['gap',     'Hole opens every (seconds)',   2, 30],
         ['shield',  'Chats for a shield',           3, 500],
         ['revive',  'Chats to revive',              3, 1000],
         ['revives', 'Revives in one round',         0, 30],
@@ -91,9 +91,9 @@ page_start('Flag Arena', 'flags', $admin);
         <input name="count" type="number" min="16" max="100" required value="<?= (int) $cfg['count'] ?>">
         <small class="muted">64 = normal. Your viewers' countries are always in; countries people comment join the next round.</small>
       </label>
-      <label class="field"><span>Round length (minutes, about)</span>
-        <input name="minutes" type="number" min="5" max="240" required value="<?= (int) $cfg['minutes'] ?>">
-        <small class="muted">Shields, revives and like goals make it a little longer.</small>
+      <label class="field"><span>Black hole opens every (seconds)</span>
+        <input name="gap" type="number" min="2" max="30" required value="<?= (int) $cfg['gap'] ?>">
+        <small class="muted">5 s ≈ 15 min a round with no chat · 10 s ≈ 27 min · 20 s ≈ 50 min. Chat shields and revives make rounds longer.</small>
       </label>
       <label class="field"><span>Chats for a shield</span>
         <input name="shield" type="number" min="3" max="500" required value="<?= (int) $cfg['shield'] ?>">
