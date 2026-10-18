@@ -1,0 +1,139 @@
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Rajdhani:wght@700&display=swap");
+
+:root {
+  --gold: #ffc93a;
+  --L: #3b82f6;      /* left team */
+  --R: #f97316;      /* right team */
+  --line: #2a4a9a;
+  --display: "Oswald", "Bebas Neue", Impact, "Arial Narrow", sans-serif;
+  --ui: "Rajdhani", "Oswald", system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; background: #03050c; overflow: hidden; }
+body { position: fixed; inset: 0; overflow: clip; }
+
+/* Fixed 1080x1920 stage, scaled to fit the window. Everything that matters sits above y=1230,
+   because on phones YouTube's own chat covers the lower part of the video. */
+#stage {
+  position: absolute; left: 50%; top: 50%; width: 1080px; height: 1920px; transform-origin: 50% 50%; overflow: hidden;
+  color: #fff; font-family: var(--ui);
+  background: radial-gradient(45% 25% at 18% 22%, rgba(59, 130, 246, .28), transparent 70%),
+              radial-gradient(45% 25% at 82% 22%, rgba(249, 115, 22, .26), transparent 70%), #050812;
+}
+.flag { background-image: url("/flags/flags.png"); background-repeat: no-repeat; display: inline-block; flex: 0 0 auto; border-radius: 4px; vertical-align: middle; }
+
+h1 {
+  position: absolute; top: 14px; left: 0; right: 0; text-align: center; font-family: var(--display); font-weight: 700;
+  font-size: 92px; letter-spacing: 5px; line-height: 1;
+  background: linear-gradient(#fff6c2, #ffc93a 60%, #e08a00); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 4px 0 #6a3a00);
+}
+.sub { position: absolute; top: 116px; left: 0; right: 0; text-align: center; font-family: var(--display); font-size: 30px; letter-spacing: 3px; color: #cfe0ff; white-space: nowrap; }
+
+/* ---------- the two countries ---------- */
+.side { position: absolute; top: 166px; width: 400px; text-align: center; }
+.side.left { left: 30px; } .side.right { right: 30px; }
+.flagbox { display: inline-block; padding: 8px; border-radius: 14px; background: rgba(255, 255, 255, .08); transition: transform .15s; }
+.left .flagbox { box-shadow: 0 0 0 5px var(--L), 0 0 50px rgba(59, 130, 246, .6); }
+.right .flagbox { box-shadow: 0 0 0 5px var(--R), 0 0 50px rgba(249, 115, 22, .6); }
+.flagbox.hit { transform: scale(1.06); }
+.side .nm { font-family: var(--display); font-weight: 700; font-size: 58px; line-height: 1.1; margin-top: 8px; white-space: nowrap; overflow: hidden; }
+.side .pulls { font-family: var(--display); font-size: 34px; letter-spacing: 2px; line-height: 1.1; }
+.left .pulls { color: #8ec0ff; } .right .pulls { color: #ffb37d; }
+.pulls b { font-variant-numeric: tabular-nums; }
+
+.mid { position: absolute; top: 180px; left: 430px; width: 220px; text-align: center; }
+.vs { font-family: var(--display); font-weight: 700; font-size: 104px; line-height: 1; color: #ff5a5a; text-shadow: 0 0 30px rgba(255, 0, 0, .8); }
+.clock { margin: 18px auto 0; width: 190px; padding: 6px 0; border-radius: 18px; border: 3px solid var(--line); background: rgba(10, 18, 40, .9);
+  font-family: var(--display); font-size: 58px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.clock.low { color: #ff6b6b; border-color: #ff5a5a; animation: pulse .6s ease-in-out infinite alternate; }
+@keyframes pulse { to { transform: scale(1.07); } }
+.score { margin-top: 14px; font-family: var(--display); font-size: 26px; letter-spacing: 2px; color: var(--gold); white-space: nowrap; }
+
+/* ---------- the rope ---------- */
+.arena { position: absolute; top: 560px; left: 40px; width: 1000px; height: 340px; border-radius: 26px; overflow: hidden;
+  border: 3px solid var(--line);
+  background: linear-gradient(90deg, rgba(59, 130, 246, .22), rgba(10, 18, 40, .7) 40%, rgba(10, 18, 40, .7) 60%, rgba(249, 115, 22, .22)), #0a1124; }
+.zone { position: absolute; top: 0; bottom: 0; width: 140px; }
+.zl { left: 0; background: repeating-linear-gradient(135deg, rgba(59, 130, 246, .35) 0 16px, rgba(59, 130, 246, .12) 16px 32px); }
+.zr { right: 0; background: repeating-linear-gradient(45deg, rgba(249, 115, 22, .35) 0 16px, rgba(249, 115, 22, .12) 16px 32px); }
+.goal { position: absolute; top: 0; bottom: 0; width: 6px; }
+.gl { left: 137px; background: var(--L); box-shadow: 0 0 20px var(--L); }
+.gr { right: 137px; background: var(--R); box-shadow: 0 0 20px var(--R); }
+.center { position: absolute; left: 497px; top: 30px; bottom: 30px; width: 6px; border-radius: 3px; background: rgba(255, 255, 255, .85); }
+.hint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-family: var(--display); font-size: 24px; letter-spacing: 3px; color: rgba(255, 255, 255, .55); }
+
+.rope { position: absolute; top: 0; height: 100%; left: -400px; width: 1800px; will-change: transform; }
+.cord { position: absolute; left: 0; right: 0; top: 156px; height: 28px; border-radius: 14px;
+  background: repeating-linear-gradient(60deg, #d9ae6a 0 18px, #8a6330 18px 36px); box-shadow: 0 6px 12px rgba(0, 0, 0, .5); }
+.knot { position: absolute; left: 852px; top: 122px; width: 96px; height: 96px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff7a7a, #d40000);
+  border: 7px solid #fff; box-shadow: 0 0 40px rgba(255, 30, 30, .9); }
+.team { position: absolute; top: 120px; display: flex; gap: 24px; }
+.tl { left: 424px; } .tr { left: 1060px; }
+.pl { width: 92px; height: 92px; border-radius: 50%; overflow: hidden; border: 5px solid #fff; background: #fff; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .5); }
+.tl .pl { border-color: #cfe3ff; } .tr .pl { border-color: #ffe0c7; }
+.team.tug .pl { animation: tug .35s ease-out; }
+.tl.tug .pl { --dx: -14px; } .tr.tug .pl { --dx: 14px; }
+@keyframes tug { 40% { transform: translateX(var(--dx)) rotate(calc(var(--dx) * -1deg)); } }
+
+/* ---------- strength bar + top pullers ---------- */
+.meter { position: absolute; top: 916px; left: 40px; right: 40px; height: 50px; border-radius: 25px; overflow: hidden; display: flex; border: 3px solid rgba(255, 255, 255, .25); }
+.meter i { display: flex; align-items: center; font-style: normal; font-family: var(--display); font-weight: 700; font-size: 30px; transition: width .5s; white-space: nowrap; overflow: hidden; }
+#meter-l { background: linear-gradient(90deg, #1d4ed8, var(--L)); padding-left: 18px; width: 50%; }
+#meter-r { background: linear-gradient(90deg, var(--R), #c2410c); padding-right: 18px; justify-content: flex-end; flex: 1; }
+.tops { position: absolute; top: 978px; left: 40px; right: 40px; height: 96px; display: flex; gap: 16px; }
+.tops div { flex: 1; min-width: 0; padding: 8px 18px; border-radius: 16px; border: 3px solid var(--line); background: rgba(10, 18, 40, .88); }
+.tops div.r { text-align: right; }
+.tops span { display: block; font-size: 22px; letter-spacing: 3px; color: #8ec0ff; }
+.tops .r span { color: #ffb37d; }
+.tops b { display: block; font-size: 30px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- under the phone-chat line: extras only ---------- */
+.below { position: absolute; top: 1290px; left: 0; right: 0; text-align: center; }
+.cta { white-space: nowrap; font-family: var(--display); font-weight: 700; font-size: 50px; letter-spacing: 3px; color: var(--gold); }
+.cta2 { margin-top: 16px; font-family: var(--display); font-size: 36px; color: #cfe0ff; }
+.next { margin-top: 50px; font-family: var(--display); font-size: 34px; letter-spacing: 2px; color: #9fb2dc; }
+.next .flag { margin: 0 8px; }
+
+/* ---------- winner + banner ---------- */
+.win { position: absolute; left: 0; right: 0; top: 200px; display: flex; justify-content: center; pointer-events: none; z-index: 6; }
+.win[hidden] { display: none; }
+.win-in { width: 900px; padding: 26px 40px 34px; text-align: center; border: 7px solid var(--gold); border-radius: 30px;
+  background: rgba(10, 14, 30, .96); box-shadow: 0 0 120px rgba(255, 190, 40, .8); animation: winin .6s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes winin { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+.win .crown { font-size: 110px; line-height: .9; color: var(--gold); text-shadow: 0 0 30px rgba(255, 200, 60, .8); }
+.win .t { font-family: var(--display); font-weight: 700; font-size: 56px; color: var(--gold); letter-spacing: 6px; }
+.win .flag.big { margin: 18px auto 12px; display: block; box-shadow: 0 0 34px rgba(255, 255, 255, .35); border-radius: 8px; }
+.win .c { font-family: var(--display); font-size: 92px; font-weight: 700; line-height: 1.05; text-transform: uppercase; }
+.win .q2 { font-size: 36px; color: var(--gold); font-weight: 700; letter-spacing: 3px; margin-top: 6px; }
+.win .heroes { margin-top: 16px; font-size: 34px; color: #9fe8ff; letter-spacing: 1px; }
+.win .heroes b { display: block; color: #fff; font-size: 40px; margin-top: 4px; }
+
+.banner { position: absolute; left: 0; right: 0; top: 640px; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
+.banner[hidden] { display: none; }
+.banner-in { font-family: var(--display); font-weight: 700; font-size: 80px; letter-spacing: 3px; line-height: 1; padding: 18px 46px; text-align: center;
+  border-radius: 24px; background: rgba(6, 10, 26, .92); border: 4px solid #5a8cff; box-shadow: 0 0 40px rgba(90, 140, 255, .5);
+  animation: banner 3s ease-in-out forwards; }
+.banner-in small { display: block; font-size: 36px; letter-spacing: 4px; color: var(--gold); margin-top: 10px; }
+.banner-in.red { border-color: #ff5a5a; box-shadow: 0 0 50px rgba(255, 60, 60, .6); }
+@keyframes banner { 0% { transform: scale(.4); opacity: 0; } 12% { transform: scale(1.06); opacity: 1; } 22%, 85% { transform: scale(1); opacity: 1; } 100% { transform: scale(.9); opacity: 0; } }
+
+.sound-btn { position: absolute; right: 30px; top: 30px; display: flex; align-items: center; gap: 14px; padding: 16px 26px; border-radius: 999px;
+  border: 3px solid #fff; background: rgba(0, 0, 0, .7); color: #fff; font-family: var(--ui); font-weight: 700; font-size: 32px; letter-spacing: 2px; cursor: pointer; z-index: 40; }
+.sound-btn svg { width: 42px; height: 42px; }
+.sound-btn[hidden] { display: none; }
+
+/* live chat pieces (from /game/chat.css): LUNA and the chat box side by side above the phone-chat line */
+.lc.lc-tug .lc-sub { top: 470px; }
+.lc.lc-tug .lc-fans { display: none !important; }
+.lc.lc-tug .lc-box { top: 1084px; right: 24px; width: 372px; height: 142px; padding: 6px 14px; overflow: hidden; }
+.lc.lc-tug .lc-box-h { font-size: 18px; padding-bottom: 2px; }
+.lc.lc-tug .lc-box .lc-row { font-size: 21px; padding: 3px 0; }
+.lc.lc-tug .lc-box .lc-row .flag { transform: scale(.8); }
+.lc.lc-tug .lc-robot, .lc.lc-tug .lc-robot.girl { top: 1084px; bottom: auto; left: 24px; right: auto; width: 662px; height: 142px; min-height: 0; padding: 6px 14px 6px 150px; gap: 0; border-width: 4px; border-radius: 24px; overflow: visible; }
+.lc.lc-tug .lc-robot .lc-rb-face { position: absolute; left: 4px; bottom: -4px; width: 140px; }
+.lc.lc-tug .lc-robot.girl .lc-rb-face { width: 150px; }
+.lc.lc-tug .lc-rb-name { font-size: 19px; letter-spacing: 3px; }
+.lc.lc-tug .lc-rb-text { font-size: 28px; line-height: 1.08; max-height: 92px; overflow: hidden; }
+.lc.lc-tug .lc-rb-text .flag { transform: scale(.75); margin: 0 2px; }

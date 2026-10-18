@@ -158,6 +158,20 @@ function yt_revoke(string $refresh): void
 
 function yt_defaults(string $game): array
 {
+    if ($game === 'tug') {
+        return [
+            'title' => '🔴 LIVE Country Tug of War 🪢 Bangladesh vs India, India vs Pakistan! Comment Your Country to Pull 💪',
+            'desc'  => "🪢 COUNTRY TUG OF WAR — two countries, one rope, and YOU are the pulling power!\n"
+                . "Every comment with your country's name = ONE PULL. The country with more fans in chat wins!\n\n"
+                . "👇 COMMENT YOUR COUNTRY NOW to pull the rope to your side!\n"
+                . "🏅 The strongest pullers get their names on screen.\n"
+                . "🎙️ LUNA, our live host, reads every comment and answers you live.\n"
+                . "🔁 A new round every few minutes: 🇧🇩 Bangladesh vs 🇮🇳 India · 🇮🇳 India vs 🇵🇰 Pakistan · 🇧🇷 Brazil vs 🇦🇷 Argentina · 🇺🇸 USA vs 🇷🇺 Russia · 🇮🇩 Indonesia vs 🇲🇾 Malaysia …\n\n"
+                . "📣 Share this live with friends from your country — more people = more power!\n"
+                . "🔔 Subscribe and turn on notifications · 👍 Like if you are pulling with us!\n\n"
+                . "#tugofwar #countryballs #bangladeshvsindia #indiavspakistan #countries #flags #live #interactive #chatgame #bangladesh #india #pakistan #brazil #argentina",
+        ];
+    }
     if ($game === 'war') {
         return [
             'title' => '🔴 LIVE Territory War 🌍 16 Countries, Only 1 Conquers the World! Comment Your Country 🏆',

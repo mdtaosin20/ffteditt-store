@@ -44,6 +44,7 @@ function games_list(): array
     $ball  = game_config();
     $flags = flags_config();
     $war   = war_config();
+    $tug   = tug_config();
     return [
         'ball'  => ['id' => 1, 'key' => 'ball',  'name' => 'Ball Drop',      'url' => '/ball/',  'settings' => 'game.php',
                     'title' => ucwords(strtolower($ball['players'][0]['name'])) . ' vs ' . ucwords(strtolower($ball['players'][1]['name'])), 'category' => 'football',
@@ -63,6 +64,12 @@ function games_list(): array
                     'desc' => 'Flag balls conquer the map square by square. The last country standing takes the world!',
                     'autoplay' => (bool) $war['autoplay'], 'pace' => (string) $war['pace'],
                     'detail' => count($war['teams']) . ' countries · map ' . (int) $war['grid']],
+        'tug'   => ['id' => 4, 'key' => 'tug', 'name' => 'Tug of War', 'url' => '/tug/', 'settings' => 'tug.php',
+                    'title' => 'Country Tug of War', 'category' => 'countries',
+                    'tags' => ['countries', 'battle', 'chat'], 'thumb' => '/assets/site/tug.jpg',
+                    'desc' => 'Two countries, one rope. Every comment is one pull — the country with more fans wins!',
+                    'autoplay' => (bool) $tug['autoplay'], 'pace' => (string) $tug['pace'],
+                    'detail' => count($tug['pairs']) . ' pairs · ' . intdiv((int) $tug['round'], 60) . ':' . str_pad((string) ((int) $tug['round'] % 60), 2, '0', STR_PAD_LEFT) . ' rounds'],
     ];
 }
 
@@ -81,6 +88,7 @@ function game_of_url(string $url): string
 {
     $path = (string) parse_url($url, PHP_URL_PATH) . '?';
     if (preg_match('#/war/?(\?|$)#', $path)) return 'war';
+    if (preg_match('#/tug/?(\?|$)#', $path)) return 'tug';
     return preg_match('#/flags/?(\?|$)#', $path) ? 'flags' : 'ball';
 }
 
