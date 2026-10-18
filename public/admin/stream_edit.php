@@ -159,7 +159,7 @@ page_start($stream ? 'Edit stream' : 'Add stream', 'streams', $admin);
     <span class="pick-row">
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/ball/">Ball Drop</button>
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/ball/?mode=2d">Ball Drop (2D, light)</button>
-      <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/flags/">Country Flag Battle</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/flags/">Flag Arena</button>
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/war/">Territory War</button>
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/tug/">Tug of War</button>
     </span>

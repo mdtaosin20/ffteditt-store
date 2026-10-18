@@ -175,7 +175,7 @@ function site_score_html(): string
     $h .= '<div class="kv"><span>' . e(ucwords(strtolower($p[0]['name']))) . '</span><b style="color:' . e($p[0]['color']) . '">' . ($r['ball']['live'] ? (int) $r['ball']['score'][0] : '–') . '</b></div>';
     $h .= '<div class="kv"><span>' . e(ucwords(strtolower($p[1]['name']))) . '</span><b style="color:' . e($p[1]['color']) . '">' . ($r['ball']['live'] ? (int) $r['ball']['score'][1] : '–') . '</b></div>';
     $f = $r['flags'];
-    $h .= '<div class="kv"><span>Flag Battle</span><b>' . ($f['live'] ? ($f['final'] ? 'Grand Final' : 'Round ' . (int) $f['round']) : '–') . '</b></div>';
+    $h .= '<div class="kv"><span>Flag Arena</span><b>' . ($f['live'] ? 'Round ' . (int) $f['round'] : '–') . '</b></div>';
     $c = $f['champion'];
     $h .= '<div class="kv"><span>Last champion</span><b>' . ($c ? flag_html($c['code'], $c['name']) . ' ' . e($c['name']) : '–') . '</b></div>';
     return $h;
@@ -193,7 +193,7 @@ function site_results_html(): string
     }
     $right = '';
     foreach ($r['flags']['winners'] as $w) {
-        $right .= '<div class="kv"><span>🏳 Flag Battle · Round ' . (int) $w['round'] . ' winner</span><b>' . flag_html($w['code'], $w['name']) . ' ' . e($w['name']) . '</b></div>';
+        $right .= '<div class="kv"><span>🏳 Flag Arena · Round ' . (int) $w['round'] . ' champion</span><b>' . flag_html($w['code'], $w['name']) . ' ' . e($w['name']) . '</b></div>';
     }
     $empty = '<p class="muted small">Results show here while the game is live.</p>';
     return '<div class="box">' . ($left ?: $empty) . '</div><div class="box">' . ($right ?: $empty) . '</div>';

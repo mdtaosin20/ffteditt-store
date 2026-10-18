@@ -194,14 +194,21 @@ function yt_defaults(string $game): array
         ];
     }
     if ($game === 'flags') {
+        $f = flags_config();
         return [
-            'title' => '🔴 LIVE Country Flag Battle 🌍 195 Countries, Only 1 Winner! Comment Your Country 🏆',
-            'desc'  => "🌍 195 countries fight inside a turning ring. Only one flag survives!\n"
-                . "Which country will be the champion today? 🏆\n\n"
-                . "👇 COMMENT YOUR COUNTRY and cheer for your flag!\n"
-                . "🔔 Subscribe and turn on notifications so you never miss a battle.\n\n"
-                . "🇧🇩 Bangladesh 🇮🇳 India 🇵🇰 Pakistan 🇺🇸 USA 🇧🇷 Brazil 🇦🇷 Argentina 🇸🇦 Saudi Arabia 🇹🇷 Turkey 🇮🇩 Indonesia 🇳🇬 Nigeria\n\n"
-                . "#countryballs #flagbattle #marblerace #countries #flags #live #satisfying #game #worldflags #geography",
+            'title' => "🔴 LIVE Flag Arena 🌍 {$f['count']} Countries vs the Black Hole! Type Your Country to SAVE It 🛡️",
+            'desc'  => "🌍 FLAG ARENA — {$f['count']} country flags bounce in the arena… and the BLACK HOLE takes them one by one!\n"
+                . "Only ONE country survives to become the ROUND CHAMPION 🏆\n\n"
+                . "👇 YOU CAN SAVE YOUR COUNTRY:\n"
+                . "💬 {$f['shield']} chats with your country's name = 🛡️ SHIELD (survives the black hole)\n"
+                . "💬 {$f['revive']} chats when it is out = ♻️ REVIVE (it comes back!)\n"
+                . "🔔 Subscribe = FREE SHIELD · ⭐ Super Chat = SHIELD + REVIVE\n"
+                . "👍 Like goals close the black hole · 👀 Viewer goals give free shields\n\n"
+                . "🎙️ LUNA, our live host, reads your comments and answers you live.\n"
+                . "🎁 Mystery boxes: Double Draw, Lucky Shields, Speed Storm, Lucky Comeback!\n"
+                . "⏱️ One round ≈ {$f['minutes']} minutes · Live 24/7\n\n"
+                . "👍 LIKE IF YOU SEE YOUR COUNTRY FLAG and share with friends from your country!\n\n"
+                . "#flagarena #countryballs #flags #countries #marblerace #live #interactive #chatgame #satisfying #geography #bangladesh #india #pakistan #brazil #usa",
         ];
     }
     return [
@@ -455,6 +462,38 @@ function yt_tick(int $serverId): void
 
     if (chat_cfg()['enabled']) {
         yt_subscribers_tick($serverId);
+        yt_stats_tick($serverId);
+    }
+}
+
+/**
+ * Likes and people watching now, for the games' LIKE / VIEWER goals. 1 unit per check,
+ * once a minute per live video (only games that use it: Flag Arena).
+ */
+function yt_stats_tick(int $serverId): void
+{
+    $now = time();
+    $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_refresh != '' AND yt_video != ''
+                         AND yt_video_start = COALESCE(started_at, 0)");
+    $st->execute([$serverId]);
+    foreach ($st->fetchAll() as $s) {
+        if (game_of_url($s['page_url']) !== 'flags') continue;
+        $old = json_decode((string) setting_get('yt_stats_' . $s['id']), true) ?: [];
+        if ((int) ($old['t'] ?? 0) > $now - 60) continue;
+        setting_set('yt_stats_' . $s['id'], json_encode(['t' => $now] + $old));
+        try {
+            $r = yt_get(yt_token($s), 'videos', ['part' => 'statistics,liveStreamingDetails', 'id' => $s['yt_video']]);
+            $it = $r[0] === 200 ? ($r[1]['items'][0] ?? null) : null;
+            if (!$it) continue;
+            setting_set('yt_stats_' . $s['id'], json_encode([
+                't'       => $now,
+                'video'   => $s['yt_video'],
+                'likes'   => (int) ($it['statistics']['likeCount'] ?? 0),
+                'viewers' => (int) ($it['liveStreamingDetails']['concurrentViewers'] ?? 0),
+            ]));
+        } catch (Throwable $e) {
+            // try again next minute
+        }
     }
 }
 

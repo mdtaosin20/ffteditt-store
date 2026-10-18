@@ -94,7 +94,7 @@ page_start('Dashboard', 'dashboard', $admin);
 <div class="modal" id="add-game" hidden role="dialog" aria-modal="true" aria-labelledby="ag-t">
   <div class="modal-in">
     <h2 id="ag-t">Add a new game</h2>
-    <p class="muted">Each game is a page built for live streaming (like Ball Drop and Flag Battle). Tell Claude what game you want — once it is built it shows up here automatically, with Auto Play and Speed controls.</p>
+    <p class="muted">Each game is a page built for live streaming (like Ball Drop and Flag Arena). Tell Claude what game you want — once it is built it shows up here automatically, with Auto Play and Speed controls.</p>
     <button class="btn btn-blue" type="button" data-close>OK</button>
   </div>
 </div>

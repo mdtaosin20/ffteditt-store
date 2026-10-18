@@ -12,52 +12,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($do === 'reset') {
         $cfg['reset'] = bin2hex(random_bytes(4));
         flags_save($cfg);
-        log_activity('Flag Battle tournament restarted');
-        flash('Tournament restarted. Live Flag Battle pages start again from round 1 within about 20 seconds.');
+        log_activity('Flag Arena restarted');
+        flash('New round started. Live Flag Arena pages begin again within about 20 seconds.');
         redirect('flags.php');
     }
 
     $new   = $cfg;
-    $title = strtoupper(trim((string) ($_POST['title'] ?? '')));
-    if ($title === '' || mb_strlen($title) > 28) {
-        $errors[] = 'Title is needed (max 28 letters).';
+    $title = mb_strtoupper(trim((string) ($_POST['title'] ?? '')));
+    if ($title === '' || mb_strlen($title) > 20) {
+        $errors[] = 'Title is needed (max 20 letters).';
     } else {
         $new['title'] = $title;
     }
-    $t = (int) ($_POST['target'] ?? 0);
-    if ($t < 2 || $t > 150) {
-        $errors[] = 'Countries in the final must be between 2 and 150.';
-    } else {
-        $new['target'] = $t;
-    }
-    foreach (['ring' => 'Ring speed', 'speed' => 'Flag speed', 'gap' => 'Gap size'] as $k => $label) {
-        $v = (int) ($_POST[$k] ?? 0);
-        if ($v < 30 || $v > 300) {
-            $errors[] = "{$label} must be between 30 and 300.";
+    $fields = [
+        ['count',   'Countries in a round',         16, 100],
+        ['minutes', 'Round length (minutes)',       5, 240],
+        ['shield',  'Chats for a shield',           3, 500],
+        ['revive',  'Chats to revive',              3, 1000],
+        ['revives', 'Revives in one round',         0, 30],
+        ['likes',   'Like goal step',               5, 5000],
+        ['viewers', 'Viewer goal',                  5, 100000],
+    ];
+    foreach ($fields as [$k, $label, $min, $max]) {
+        $v = (int) ($_POST[$k] ?? -1);
+        if ($v < $min || $v > $max) {
+            $errors[] = "{$label} must be between {$min} and {$max}.";
         } else {
             $new[$k] = $v;
         }
     }
+    $new['events'] = isset($_POST['events']);
 
     if (!$errors) {
+        $newRound = $new['count'] !== $cfg['count'];
         $new['rev'] = bin2hex(random_bytes(4));
+        if ($newRound) $new['reset'] = bin2hex(random_bytes(4));
         flags_save($new);
-        log_activity('Flag Battle settings saved');
-        flash('Saved. Live Flag Battle pages update within about 20 seconds.');
+        log_activity('Flag Arena settings saved');
+        flash('Saved. Live Flag Arena pages update within about 20 seconds' . ($newRound ? ' and start a new round.' : '.'));
         redirect('flags.php');
     }
     $cfg = $new;
 }
 
-page_start('Flag Battle', 'flags', $admin);
+page_start('Flag Arena', 'flags', $admin);
 ?>
 <div class="page-head">
   <div>
-    <h1>Country Flag Battle</h1>
-    <p class="muted">195 country flags bounce inside a turning ring. A flag that slips through the gap is out. The last flag left wins the round and goes to the final. When the final is full, the final round finds the champion, then a new tournament starts.</p>
+    <h1>Flag Arena</h1>
+    <p class="muted">Country flags bounce in a round arena. Every few seconds the black hole in the middle draws the flag nearest to it — that country is out. The live chat saves countries: enough chats give a shield, a country that is out can be revived, a new subscriber gives a free shield and a Super Chat gives both. Like and viewer goals help everyone. The last flag is the round champion, then a new round starts.</p>
   </div>
   <div class="head-actions">
     <a class="btn btn-ghost" href="/flags/" target="_blank" rel="noopener">Open game ↗</a>
+    <a class="btn btn-ghost" href="/flags/?chatdemo=1&amp;fast=10" target="_blank" rel="noopener">Fast preview ↗</a>
   </div>
 </div>
 
@@ -65,46 +72,56 @@ page_start('Flag Battle', 'flags', $admin);
   <div class="flash flash-error" role="alert"><?= e($err) ?></div>
 <?php endforeach; ?>
 
-<div class="callout">To stream this game: <strong>Streams</strong> → edit a stream → <strong>Page to stream</strong> → choose <strong>Country Flag Battle</strong> (<code>https://ffteditt.store/flags/</code>). On a 1-CPU server it runs smoothly.</div>
+<div class="callout">To stream this game: <strong>Live Stream Manager</strong> → edit a stream → <strong>Page to stream</strong> → choose <strong>Flag Arena</strong> (<code>https://ffteditt.store/flags/</code>). Live chat must be on (YouTube Manager). Like and viewer goals need the channel connected to YouTube.</div>
 
 <form method="post" class="form-wide">
   <?= csrf_field() ?>
   <section class="card">
     <div class="row2">
-      <label class="field"><span>Title at the bottom</span>
-        <input name="title" maxlength="28" required value="<?= e($cfg['title']) ?>">
+      <label class="field"><span>Title at the top</span>
+        <input name="title" maxlength="20" required value="<?= e($cfg['title']) ?>">
       </label>
-      <label class="field"><span>Countries in the final</span>
-        <input name="target" type="number" min="2" max="150" required value="<?= (int) $cfg['target'] ?>">
-        <small class="muted">One country qualifies per round (about 1–2 minutes each).</small>
+      <label class="field"><span>Countries in a round</span>
+        <input name="count" type="number" min="16" max="100" required value="<?= (int) $cfg['count'] ?>">
+        <small class="muted">64 = normal. Your viewers' countries are always in; countries people comment join the next round.</small>
       </label>
-      <label class="field"><span>Ring speed (%)</span>
-        <input name="ring" type="number" min="30" max="300" required value="<?= (int) $cfg['ring'] ?>">
-        <small class="muted">100 = normal. Higher turns faster.</small>
+      <label class="field"><span>Round length (minutes, about)</span>
+        <input name="minutes" type="number" min="5" max="240" required value="<?= (int) $cfg['minutes'] ?>">
+        <small class="muted">Shields, revives and like goals make it a little longer.</small>
       </label>
-      <label class="field"><span>Flag speed (%)</span>
-        <input name="speed" type="number" min="30" max="300" required value="<?= (int) $cfg['speed'] ?>">
-        <small class="muted">Higher = flags move faster, rounds end sooner.</small>
+      <label class="field"><span>Chats for a shield</span>
+        <input name="shield" type="number" min="3" max="500" required value="<?= (int) $cfg['shield'] ?>">
       </label>
-      <label class="field"><span>Gap size (%)</span>
-        <input name="gap" type="number" min="30" max="300" required value="<?= (int) $cfg['gap'] ?>">
-        <small class="muted">Bigger gap = flags get out faster, shorter rounds.</small>
+      <label class="field"><span>Chats to revive a country that is out</span>
+        <input name="revive" type="number" min="3" max="1000" required value="<?= (int) $cfg['revive'] ?>">
+      </label>
+      <label class="field"><span>Revives in one round</span>
+        <input name="revives" type="number" min="0" max="30" required value="<?= (int) $cfg['revives'] ?>">
+      </label>
+      <label class="field"><span>Like goal: every … new likes</span>
+        <input name="likes" type="number" min="5" max="5000" required value="<?= (int) $cfg['likes'] ?>">
+        <small class="muted">Each goal closes the black hole for 30 seconds.</small>
+      </label>
+      <label class="field"><span>Viewer goal: every … people watching</span>
+        <input name="viewers" type="number" min="5" max="100000" required value="<?= (int) $cfg['viewers'] ?>">
+        <small class="muted">The top 3 chat countries get free shields.</small>
       </label>
     </div>
+    <label class="check" style="margin-top:10px"><input type="checkbox" name="events" <?= $cfg['events'] ? 'checked' : '' ?>> Mystery boxes every few minutes (Double Draw, Lucky Shields, Speed Storm, Lucky Comeback)</label>
     <div class="form-actions"><button class="btn btn-pink" type="submit">Save settings</button></div>
   </section>
 </form>
 
 <section class="card form-inline">
   <div>
-    <h2>Tournament</h2>
-    <p class="muted" style="margin:4px 0 0">Start again from round 1 with all 195 countries.</p>
+    <h2>New round</h2>
+    <p class="muted" style="margin:4px 0 0">Start a fresh round with all countries back in the arena.</p>
   </div>
-  <form method="post" onsubmit="return confirm('Restart the tournament on all live Flag Battle pages?')">
+  <form method="post" onsubmit="return confirm('Start a new round on all live Flag Arena pages?')">
     <?= csrf_field() ?><input type="hidden" name="do" value="reset">
-    <button class="btn btn-outline-pink" type="submit">Restart tournament</button>
+    <button class="btn btn-outline-pink" type="submit">Start a new round</button>
   </form>
 </section>
 
-<p class="muted small">The commentator lines for this game are on the <a href="voice.php">Voice</a> page under “Country Flag Battle”. Flag pictures: flag-icons (MIT licence).</p>
+<p class="muted small">Flag pictures: flag-icons (MIT licence).</p>
 <?php page_end();

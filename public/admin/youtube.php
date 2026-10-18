@@ -118,7 +118,7 @@ page_start('YouTube Manager', 'youtube', $admin);
       </div>
     </div>
     <div class="form-actions"><button class="btn btn-blue" type="submit">Save</button>
-      <a class="btn btn-ghost" href="/flags/?chatdemo=1" target="_blank" rel="noopener">Preview Flag Battle</a>
+      <a class="btn btn-ghost" href="/flags/?chatdemo=1" target="_blank" rel="noopener">Preview Flag Arena</a>
       <a class="btn btn-ghost" href="/ball/?chatdemo=1" target="_blank" rel="noopener">Preview Ball Drop</a></div>
   </form>
   <div class="tbl-wrap" style="margin-top:14px"><table class="tbl tbl-sm">

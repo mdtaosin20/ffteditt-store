@@ -135,5 +135,9 @@ function chat_feed(int $sid, int $after): array
                             'amt' => $r['amount'], 'old' => $old || (int) $r['ts'] < time() - 90];
     }
     $out['last'] = $last;
+    $stats = json_decode((string) setting_get('yt_stats_' . $sid), true);
+    if (is_array($stats) && isset($stats['likes']) && (int) $stats['t'] > time() - 600) {
+        $out['stats'] = ['likes' => (int) $stats['likes'], 'viewers' => (int) $stats['viewers'], 'video' => (string) ($stats['video'] ?? '')];
+    }
     return $out;
 }

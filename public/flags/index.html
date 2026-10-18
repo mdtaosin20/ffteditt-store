@@ -3,53 +3,58 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Country Flag Battle · 195 Countries, 1 Champion</title>
-<link rel="stylesheet" href="/flags/flags.css?v=2">
+<title>Flag Arena · Type Your Country to Save It</title>
+<link rel="stylesheet" href="/flags/flags.css?v=20">
 <link rel="stylesheet" href="/game/chat.css?v=3">
 </head>
 <body>
 <div id="stage">
-  <!-- top: qualified list + numbers -->
-  <section class="panel qual">
-    <h2 id="qual-title">QUALIFIED FOR FINAL</h2>
-    <div id="qual-rows"></div>
+  <header class="top">
+    <div class="brand"><h1 id="title">FLAG <b>ARENA</b></h1><div class="sub" id="round">ROUND 1 · LIVE 24/7</div></div>
+    <div class="num"><span>COUNTRIES</span><b id="n-all">64</b></div>
+    <div class="num"><span>LEFT</span><b class="g" id="n-left">64</b></div>
+    <div class="clock" id="clock"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="42" class="bg"/><circle cx="50" cy="50" r="42" class="fg" id="clock-arc"/></svg><b id="clock-n">9</b></div>
+  </header>
+
+  <section class="panel power">
+    <h3>🔥 CHAT POWER</h3>
+    <div id="power-rows"></div>
   </section>
-  <section class="panel stats">
-    <div class="k" id="st-k1">ROUND</div><div class="v" id="st-round">1</div>
-    <div class="k">QUALIFIED</div><div class="v"><b id="st-qual">0</b> / <span id="st-target">70</span></div>
-    <div class="k" id="st-k3">SPOTS LEFT</div><div class="v last" id="st-left">70</div>
+  <div class="hook"><span>TYPE YOUR</span><b>COUNTRY</b><em>TO SAVE IT!</em></div>
+  <section class="panel save">
+    <h3>🛡️ SAVE YOUR COUNTRY</h3>
+    <div class="rules" id="rules"></div>
+    <div class="left-rev" id="rev-left">REVIVES LEFT 5/5</div>
   </section>
 
-  <div class="timer" id="timer">FINAL IN <b>--:--</b></div>
-  <div class="feed" id="feed"></div>
+  <div class="goals" id="goals" hidden>
+    <div class="goal"><span id="g-like-t">👍 LIKES 0/50</span><i><u id="g-like"></u></i><small>HOLE CLOSES 30s</small></div>
+    <div class="goal"><span id="g-view-t">👀 WATCHING 0/100</span><i><u id="g-view"></u></i><small>FREE SHIELDS</small></div>
+  </div>
 
-  <canvas id="arena" aria-label="Flags bouncing inside a turning ring"></canvas>
+  <canvas id="arena" aria-label="Flags bouncing in the arena"></canvas>
+  <div class="pops" id="pops"></div>
 
-  <div class="bar"><i id="bar"></i></div>
-  <div class="left" id="left">195 / 195 FLAGS LEFT</div>
-  <div class="grid" id="grid" aria-hidden="true"></div>
+  <div class="grave"><span>OUT:</span><div id="grave"></div></div>
+  <div class="prog"><i id="prog"></i></div>
 
-  <footer class="foot">
-    <div class="r" id="foot-r">ROUND 1 · 70 SPOTS LEFT</div>
-    <h1 id="title">COUNTRY FLAG BATTLE</h1>
-    <div class="m" id="foot-m">ROUND 1 · QUALIFYING</div>
-  </footer>
+  <div class="below">
+    <div class="cta">👍 LIKE IF YOU SEE YOUR COUNTRY FLAG</div>
+    <div class="cta2">✍️ TYPE YOUR COUNTRY · 🔔 SUBSCRIBE = FREE SHIELD</div>
+    <div class="next" id="out-count">0 / 64 ELIMINATED</div>
+  </div>
 
-  <div class="banner" id="banner" hidden><div class="banner-in" id="banner-text">ROUND 1</div></div>
+  <div class="banner" id="banner" hidden><div class="banner-in" id="banner-text"></div></div>
 
   <div class="win" id="win" hidden>
     <div class="win-in">
-      <div class="crown" id="win-crown" aria-hidden="true">♛</div>
-      <div class="t" id="win-t">ROUND WINNER</div>
-      <div class="flag big" id="win-flag"></div>
-      <div class="c" id="win-name">SWEDEN</div>
-      <div class="q2" id="win-sub">QUALIFIED #13 / 70</div>
+      <div class="crown" aria-hidden="true">♛</div>
+      <div class="t" id="win-t">ROUND CHAMPION</div>
+      <span class="flag big" id="win-flag"></span>
+      <div class="c" id="win-name">BANGLADESH</div>
+      <div class="q2" id="win-sub">ROUND 1</div>
+      <div class="heroes" id="win-heroes"></div>
     </div>
-  </div>
-
-  <div class="caption" id="caption" hidden>
-    <div class="mic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
-    <div class="caption-text" id="caption-text"></div>
   </div>
 
   <button class="sound-btn" id="sound-btn" type="button" hidden>
@@ -57,6 +62,6 @@
     TAP FOR SOUND
   </button>
 </div>
-<script type="module" src="/flags/flags.js?v=13"></script>
+<script type="module" src="/flags/flags.js?v=20"></script>
 </body>
 </html>

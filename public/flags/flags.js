@@ -1,531 +1,524 @@
-// FFTEdit · Country Flag Battle. Runs by itself, made for 24/7 vertical live streams.
-// 195 flags bounce inside a turning ring with a gap. A flag that slips out is eliminated;
-// the last flag left qualifies for the final. When the final is full, the final round finds the champion.
-import { Sfx, Commentator, holdScreen, PACE, reporter, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=3';
+// FFTEdit · Flag Arena. Runs by itself, made for 24/7 vertical live streams.
+// 64 flag balls bounce in a round arena with turning bars. Every few seconds the black hole in the
+// middle draws the flag nearest to it: that country is out. The live chat can save countries:
+// enough chats give a SHIELD (survives one draw), a country that is out can be REVIVED, a new
+// subscriber gives a free shield, a Super Chat gives both. Likes and viewers unlock goals for everyone.
+// The last flag left is the round champion, then a new round starts (about an hour a round).
+import { Sfx, holdScreen, PACE, reporter, freshRun } from '/game/audio.js?v=13';
+import { liveChat, countryMatcher } from '/game/chat.js?v=4';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
-const FAST = Math.max(1, Math.min(60, Number(QS.get('fast')) || 1)); // testing only: run the game faster
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const FAST = clamp(Number(QS.get('fast')) || 1, 1, 200);   // testing only
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-/* ---------------------------------------------------------------- settings */
-const DEF = { title: 'COUNTRY FLAG BATTLE', target: 70, ring: 100, speed: 100, gap: 100, rev: '', reset: '', voice: null };
+const DEF = { title: 'FLAG ARENA', count: 64, minutes: 55, shield: 20, revive: 40, revives: 5, likes: 50, viewers: 100, events: true, rev: '', reset: '' };
+// countries that are always in a round (most viewers come from these)
+const CORE = ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'eg', 'ma', 'my', 'np', 'ph', 'mx', 'gb', 'fr', 'de', 'ru',
+  'cn', 'jp', 'ca', 'es', 'it', 'dz', 'iq', 'af', 'lk', 'vn', 'th', 'kr'];
+// flags with holy writing are shown as a plain colour ball (like in Territory War)
+const PLAIN = { sa: ['#006c35', 'KSA'], af: ['#007a36', 'AFG'], iq: ['#ce1126', 'IRQ'] };
+
+/* ---------------------------------------------------------------- arena geometry (canvas units) */
+const W = 1080, H = 680;                 // canvas size (stage y 408 … 1088)
+const CX = 540, CY = 335, RW = 322;      // arena centre and inner wall radius
+const HOLE = 74;                         // black hole radius
+const BAR_IN = 112, BAR_OUT = 250, BAR_W = 9, BARS = 5;
+const FIXED = 1 / 120;
+const DRAW_SECS = 1.3;                   // how long the hole takes to swallow a flag
+const WIN_SECS = 16;
 
 async function fetchConfig() {
-  try {
-    const r = await fetch('/api/flags.php', { cache: 'no-store' });
-    if (r.ok) return await r.json();
-  } catch (e) { /* offline or not set up yet */ }
+  try { const r = await fetch('/api/flags.php', { cache: 'no-store' }); if (r.ok) return await r.json(); } catch (e) { /* offline */ }
   return null;
 }
-
 function fitStage() {
   const vw = document.documentElement.clientWidth || innerWidth, vh = document.documentElement.clientHeight || innerHeight;
-  const s = Math.min(vw / 1080, vh / 1920);
-  $('stage').style.transform = `translate(-50%, -50%) scale(${s})`;
+  $('stage').style.transform = `translate(-50%, -50%) scale(${Math.min(vw / 1080, vh / 1920)})`;
 }
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const TAU = Math.PI * 2;
-const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
-const fmtTime = (s) => {
-  s = Math.max(0, Math.round(s));
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
-  return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(x).padStart(2, '0');
-};
-
-/* ------------------------------------------------------------------ arena */
-const CX = 540, CY = 520;            // ring centre inside the arena canvas (stage y = 960)
-const RING = 430, LINE = 12;
-const RIN = RING - LINE / 2;          // inner edge of the ring line
-const FIXED = 1 / 90;
-
-/* ------------------------------------------------------------------ sounds */
-class FlagSfx extends Sfx {
-  // soft, rare knocks (with many flags they used to play non-stop and sounded like a buzz)
-  wall(s = 1) { if (!this.running || !this.limit('wall', 450)) return; this.tone({ freq: 330 + Math.random() * 80, type: 'sine', dur: 0.08, vol: 0.05 * s }); }
-  hit(s = 1) { if (!this.running || !this.limit('hit', 380)) return; this.tone({ freq: 220 + Math.random() * 60, type: 'sine', dur: 0.07, vol: 0.06 * s }); }
-  out() {
-    if (!this.running || !this.limit('out', 650)) return;
-    this.tone({ freq: 660, to: 220, type: 'sine', dur: 0.3, vol: 0.1 });
-  }
-  spawn() {
-    if (!this.running) return;
-    this.tone({ freq: 220, to: 880, type: 'triangle', dur: 0.8, vol: 0.06 });
-    this.tone({ freq: 330, to: 660, dur: 0.6, vol: 0.08, delay: 0.1 });
-  }
+class ArenaSfx extends Sfx {
+  knock() { if (!this.running || !this.limit('knock', 420)) return; this.tone({ freq: 300 + Math.random() * 90, type: 'sine', dur: 0.06, vol: 0.04 }); }
   tick() { if (this.running) this.tone({ freq: 1250, type: 'square', dur: 0.05, vol: 0.05 }); }
+  draw() { if (!this.running) return; this.tone({ freq: 520, to: 70, type: 'sawtooth', dur: 1.1, vol: 0.07 }); this.tone({ freq: 90, type: 'sine', dur: 0.7, vol: 0.12, delay: 0.5 }); }
+  shield() { if (!this.running) return; this.tone({ freq: 660, to: 1320, type: 'triangle', dur: 0.35, vol: 0.08 }); }
+  revive() { if (!this.running) return; [0, 0.12, 0.24].forEach((d, i) => this.tone({ freq: 523 * (1 + i * 0.25), type: 'sine', dur: 0.25, vol: 0.09, delay: d })); }
 }
 
-/* ------------------------------------------------------------------- main */
 async function main() {
   fitStage(); addEventListener('resize', fitStage);
-
-  const [remote, atlasInfo] = await Promise.all([
-    fetchConfig(),
-    fetch('/flags/flags.json').then((r) => r.json()),
-  ]);
+  const [remote, atlasInfo] = await Promise.all([fetchConfig(), fetch('/flags/flags.json').then((r) => r.json())]);
   const cfg = { ...DEF, ...(remote || {}) };
   if (cfg.autoplay === false) { holdScreen('/api/flags.php', cfg.rev); return; }
   const pace = PACE[cfg.pace] || 1;
-  const report = reporter('flags');
-  const atlas = new Image();
-  atlas.src = '/flags/flags.png';
+  const demo = QS.has('chatdemo');
+  const atlas = new Image(); atlas.src = '/flags/flags.png';
   await atlas.decode().catch(() => {});
 
-  const C = atlasInfo.countries;                    // [{code, name}]
-  const FW = atlasInfo.w, FH = atlasInfo.h, COLS = atlasInfo.cols, ROWS = Math.ceil(C.length / COLS);
+  const C = atlasInfo.countries, FW = atlasInfo.w, FH = atlasInfo.h, COLS_A = atlasInfo.cols, ROWS_A = Math.ceil(C.length / COLS_A);
   const byCode = new Map(C.map((c, i) => [c.code, i]));
-  const NAME = (i) => C[i].name.toUpperCase();
+  const NAME = (code) => C[byCode.get(code)].name.toUpperCase().replace('UNITED ARAB EMIRATES', 'UAE').replace('UNITED KINGDOM', 'UK').replace('UNITED STATES', 'USA').replace('CENTRAL AFRICAN REP.', 'C. AFRICA');
+  const flagCss = (code, w) => { const i = byCode.get(code), h = w * 0.75; return `width:${w}px;height:${h}px;background-size:${COLS_A * w}px ${ROWS_A * h}px;background-position:${-(i % COLS_A) * w}px ${-Math.floor(i / COLS_A) * h}px`; };
+  const flagHTML = (code, w) => `<span class="flag" style="${flagCss(code, w)}"></span>`;
+  const flagNode = (code, w = 40) => { const d = document.createElement('span'); d.className = 'flag'; d.style.cssText = flagCss(code, w); return d; };
+  const COUNT = clamp(Math.round(cfg.count) || 64, 16, 100);
+  const R = COUNT > 72 ? 24 : COUNT > 48 ? 27 : 31;      // ball radius
+  const SPEED = 190;
 
-  const sprite = (el, i, w) => {
-    const h = w * 0.75;
-    el.style.width = w + 'px'; el.style.height = h + 'px';
-    el.style.backgroundSize = `${COLS * w}px ${ROWS * h}px`;
-    el.style.backgroundPosition = `${-(i % COLS) * w}px ${-Math.floor(i / COLS) * h}px`;
-  };
-  const spriteHTML = (i, w) => {
-    const h = w * 0.75;
-    return `<span class="flag" style="width:${w}px;height:${h}px;background-size:${COLS * w}px ${ROWS * h}px;background-position:${-(i % COLS) * w}px ${-Math.floor(i / COLS) * h}px"></span>`;
-  };
+  { const [a, b] = cfg.title.split(' '); $('title').innerHTML = b ? `${a} <b>${cfg.title.slice(a.length + 1)}</b>` : a; }
+  $('rules').innerHTML = `💬 ${cfg.shield} chats → <b class="s">SHIELD</b><br>💬 ${cfg.revive} chats if out → <b class="r">REVIVE</b><br>🔔 Subscribe → <b class="f">FREE SHIELD</b><br>⭐ Super Chat → <b class="x">BOTH</b>`;
 
-  /* ---------- saved progress (survives a page reload) ---------- */
-  const KEY = 'fft_flags';
+  /* ---------------------------------------------------------------- saved state (a reload continues the round) */
+  const KEY = 'fft_arena';
   freshRun('flags', [KEY, 'fft_fans_flags']);
-  let st = null;
-  try { st = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { /* private mode */ }
-  if (!st || st.reset !== cfg.reset || !Array.isArray(st.qualified)) st = { reset: cfg.reset, qualified: [], champs: [], avg: 0, cup: 1 };
-  st.qualified = st.qualified.filter((c) => byCode.has(c));
-  st.champs = (st.champs || []).filter((c) => byCode.has(c));
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* ignore */ } };
+  let S = null;
+  try { S = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { /* private mode */ }
+  if (!S || S.reset !== cfg.reset || S.count !== COUNT) S = { reset: cfg.reset, count: COUNT, round: 0, want: {} };
+  const save = () => {
+    try {
+      S.live = phase === 'play' ? { teams, alive: [...alive], out, shield: [...shield.entries()], revived: [...revived], revLeft, toNext, power: [...power.entries()],
+        fans: [...fans.entries()].map(([k, m]) => [k, [...m.entries()].slice(0, 20)]), hold: Math.max(0, holdUntil - simT), likeGoal, viewGoal, t: simT } : null;
+      localStorage.setItem(KEY, JSON.stringify(S));
+    } catch (e) { /* ignore */ }
+  };
 
-  $('title').textContent = cfg.title;
-  $('st-target').textContent = cfg.target;
+  /* ---------------------------------------------------------------- round state */
+  let teams = [], alive = new Set(), out = [], balls = [], shield = new Map(), revived = new Set(), revLeft = cfg.revives;
+  let power = new Map();                 // country -> chats this round (CHAT POWER)
+  let prog = new Map();                  // country -> chats towards the next shield / revive
+  let fans = new Map();                  // country -> Map(name -> chats)
+  let phase = 'play', phaseT = 0, simT = 0, toNext = 10, drawing = null, doubleNext = false, holdUntil = 0, speedUntil = 0;
+  let likeGoal = 0, viewGoal = 0, lastStats = null, nextEvent = 0, barA = 0, final10 = false, finalSaid = false;
+  const tags = new Map();                // country -> { name, until, kind }
 
-  /* ---------- the small flag grid ---------- */
-  const gridEls = C.map((c, i) => { const d = document.createElement('div'); d.className = 'flag'; sprite(d, i, 32); d.title = c.name; return d; });
-  $('grid').append(...gridEls);
+  const ball = (code, x, y) => { const a = Math.random() * Math.PI * 2; return { code, x, y, vx: Math.cos(a) * SPEED, vy: Math.sin(a) * SPEED, hot: 0 }; };
+  const freeSpot = () => {
+    for (let t = 0; t < 400; t++) {
+      const a = Math.random() * Math.PI * 2, d = HOLE + R + 20 + Math.random() * (RW - HOLE - 2 * R - 30);
+      const x = CX + Math.cos(a) * d, y = CY + Math.sin(a) * d;
+      if (balls.every((b) => Math.hypot(b.x - x, b.y - y) > 2 * R + 4)) return [x, y];
+    }
+    const a = Math.random() * Math.PI * 2; return [CX + Math.cos(a) * (RW - R - 4), CY + Math.sin(a) * (RW - R - 4)];
+  };
 
-  /* ---------- sound + voice ---------- */
-  const sfx = new FlagSfx();
-  const voice = new Commentator(cfg.voice, sfx);
+  const chooseTeams = () => {
+    const want = Object.entries(S.want || {}).sort((a, b) => b[1] - a[1]).map(([k]) => k).filter((k) => byCode.has(k));
+    const list = [];
+    for (const c of [...CORE, ...want]) if (byCode.has(c) && !list.includes(c) && list.length < COUNT) list.push(c);
+    for (const c of shuffle(C.map((x) => x.code))) { if (list.length >= COUNT) break; if (!list.includes(c)) list.push(c); }
+    S.want = {};
+    return list;
+  };
+
+  const newRound = () => {
+    S.round++;
+    teams = chooseTeams(); alive = new Set(teams); out = []; balls = []; shield = new Map(); revived = new Set(); revLeft = cfg.revives;
+    power = new Map(); prog = new Map(); fans = new Map(); tags.clear();
+    phase = 'play'; phaseT = 0; simT = 0; toNext = 12; drawing = null; doubleNext = false; holdUntil = 0; speedUntil = 0; final10 = false; finalSaid = false;
+    likeGoal = 0; viewGoal = cfg.viewers; nextEvent = 240 + Math.random() * 120;
+    for (const c of shuffle(teams.slice())) { const [x, y] = freeSpot(); balls.push(ball(c, x, y)); }
+    $('win').hidden = true;
+    banner(`ROUND ${S.round}`, `${COUNT} COUNTRIES · TYPE YOURS TO SAVE IT!`);
+    host([`ROUND ${S.round} STARTS! ${COUNT} COUNTRIES IN THE ARENA. TYPE YOUR COUNTRY IN CHAT — ${cfg.shield} CHATS GIVE IT A SHIELD!`], 3);
+    save(); updateUI();
+  };
+
+  const resume = (L) => {
+    teams = L.teams; alive = new Set(L.alive); out = L.out; shield = new Map(L.shield); revived = new Set(L.revived); revLeft = L.revLeft;
+    toNext = L.toNext; power = new Map(L.power); fans = new Map(L.fans.map(([k, a]) => [k, new Map(a)])); holdUntil = L.hold; likeGoal = L.likeGoal; viewGoal = L.viewGoal;
+    simT = 0; nextEvent = 120 + Math.random() * 120; final10 = alive.size <= 10; finalSaid = alive.size <= 2;
+    balls = []; for (const c of alive) { const [x, y] = freeSpot(); balls.push(ball(c, x, y)); }
+  };
+
+  /* ---------------------------------------------------------------- sound + screen helpers */
+  const sfx = new ArenaSfx();
   const soundBtn = $('sound-btn');
   const unlock = () => { sfx.resume(); soundBtn.hidden = true; };
-  soundBtn.addEventListener('click', unlock);
-  addEventListener('pointerdown', unlock);
-  sfx.resume();
+  soundBtn.addEventListener('click', unlock); addEventListener('pointerdown', unlock); sfx.resume();
   setTimeout(() => { if (sfx.ok && !sfx.running) soundBtn.hidden = false; }, 1500);
+  const report = reporter('flags');
 
-  /* ---------- canvas ---------- */
-  const cv = $('arena'), c = cv.getContext('2d');
-  let k = 1;
-  const resize = () => {
-    const r = cv.getBoundingClientRect();
-    const dpr = Math.min(devicePixelRatio || 1, 1.5);
-    cv.width = Math.max(1, Math.round(r.width * dpr));
-    cv.height = Math.max(1, Math.round(r.height * dpr));
-    k = cv.width / 1080;
-  };
-  resize(); addEventListener('resize', resize);
-
-  /* ---------- round state ---------- */
-  let flags = [], order = [], alive = 0, entrants = 0, isFinal = false;
-  let phase = 'spawn', phaseT = 0, roundT = 0, simT = 0;
-  let gapA = Math.random() * TAU, ringDir = 1, gapNow = 0, size = 40, winner = null, lastOut = null;
-  let nextCall = 28 + Math.random() * 15, nextSub = 200 + Math.random() * 100;
-
-  const FLAG_W = 42; // every flag keeps the same size for the whole round
-  const targetSize = () => FLAG_W;
-  const speed = () => 360 * (cfg.speed / 100) * (1 + 0.3 * clamp((30 - alive) / 30, 0, 1));
-  const gapTarget = () => {
-    const r = size * 0.47;
-    const stall = 1 + clamp((roundT - 90) / 45, 0, 2); // very long round: open the gap wider
-    const px = Math.max(150, 2 * r * 2.1) * (cfg.gap / 100) * stall;
-    return Math.asin(Math.min(0.95, px / (2 * RIN)));
-  };
-
-  const gridClass = () => {
-    const inArena = new Set(flags.filter((f) => f.state === 'in').map((f) => f.i));
-    const q = new Set(st.qualified.map((x) => byCode.get(x)));
-    gridEls.forEach((el, i) => {
-      let cls = 'flag';
-      if (q.has(i)) cls += ' q';
-      if (!inArena.has(i) && (isFinal || !q.has(i))) cls += ' out';
-      if (winner && winner.i === i && phase === 'won' && isFinal) cls = 'flag q champ';
-      el.className = cls;
-    });
-  };
-
-  const showQualified = (fresh) => {
-    const list = st.qualified.slice(-5);
-    const first = st.qualified.length - list.length;
-    let html = list.map((code, n) => {
-      const i = byCode.get(code);
-      const hi = fresh && n === list.length - 1 ? ' hi' : '';
-      return `<div class="row${hi}"><span class="n">#${first + n + 1}</span><span class="nm">${spriteHTML(i, 44)}${C[i].name}</span><span class="w">WIN</span></div>`;
-    }).join('');
-    for (let n = list.length; n < 5; n++) html += '<div class="row empty">— waiting —</div>';
-    $('qual-rows').innerHTML = html;
-    $('qual-title').textContent = isFinal ? 'GRAND FINAL' : 'QUALIFIED FOR FINAL';
-  };
-
-  const updateUI = () => {
-    const q = Math.min(st.qualified.length, cfg.target);
-    const spots = Math.max(0, cfg.target - q);
-    const round = isFinal ? 'FINAL' : String(q + 1);
-    $('st-round').textContent = round;
-    $('st-qual').textContent = q;
-    $('st-k3').textContent = isFinal ? 'FLAGS LEFT' : 'SPOTS LEFT';
-    $('st-left').textContent = isFinal ? alive : spots;
-    $('left').innerHTML = `<b>${alive}</b> / ${entrants} FLAGS LEFT`;
-    $('bar').style.width = (entrants > 1 ? ((entrants - alive) / (entrants - 1)) * 100 : 0) + '%';
-    $('foot-r').textContent = isFinal ? `CUP #${st.cup} · ${entrants} FLAGS · 1 CHAMPION` : `ROUND ${round} · ${spots} SPOTS LEFT`;
-    $('foot-m').textContent = isFinal ? 'GRAND FINAL' : `ROUND ${round} · QUALIFYING`;
-  };
-
-  const updateTimer = () => {
-    if (isFinal) { $('timer').innerHTML = phase === 'won' ? 'WE HAVE A <b>CHAMPION</b>' : 'GRAND FINAL · <b>LIVE</b>'; return; }
-    const avg = st.avg || 95;
-    const left = (cfg.target - st.qualified.length) * avg - Math.min(roundT, avg * 0.95);
-    $('timer').innerHTML = `FINAL IN <b>${fmtTime(left)}</b>`;
-  };
-
-  const banner = (text, small) => {
+  const banner = (text, small, cls = '', box = '') => {
     const b = $('banner'), t = $('banner-text');
-    t.innerHTML = `${text}<small>${small}</small>`;
+    t.className = 'banner-in ' + cls; t.innerHTML = `${box ? `<span class="box">${box}</span>` : ''}${text}<small>${small}</small>`;
     b.hidden = false; t.style.animation = 'none'; void t.offsetWidth; t.style.animation = '';
-    clearTimeout(banner.timer); banner.timer = setTimeout(() => { b.hidden = true; }, 2300);
+    clearTimeout(banner.timer); banner.timer = setTimeout(() => { b.hidden = true; }, 3500);
+  };
+  const popAt = (cls, code, label, name, x, y) => {
+    const p = document.createElement('div'); p.className = 'pop ' + cls;
+    p.style.left = clamp(x - 150, 20, W - 340) + 'px'; p.style.top = clamp(y - 40, 10, H - 90) + 'px';
+    p.innerHTML = `${flagHTML(code, 60)}<div><small>${label}</small><b></b></div>`;
+    p.querySelector('b').textContent = name;
+    $('pops').append(p); setTimeout(() => p.remove(), 3300);
   };
 
-  const startRound = () => {
-    isFinal = st.qualified.length >= cfg.target;
-    const qs = new Set(st.qualified);
-    const pool = isFinal ? st.qualified.slice(0, cfg.target) : C.map((x) => x.code).filter((x) => !qs.has(x));
-    entrants = alive = pool.length;
-    size = targetSize(alive);
-    const r0 = RIN - size * 0.6;
-    flags = pool.map((code, n) => {
-      const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * r0, va = Math.random() * TAU;
-      const sp = speed();
-      return {
-        i: byCode.get(code), x: CX + Math.cos(a) * d, y: CY + Math.sin(a) * d,
-        vx: Math.cos(va) * sp, vy: Math.sin(va) * sp, rot: (Math.random() - 0.5) * 0.6, spin: (Math.random() - 0.5) * 1.6,
-        state: 'in', exiting: false, t: 0, delay: (n / pool.length) * 1.1,
-      };
-    });
-    order = flags.slice();
-    winner = null; lastOut = null; roundT = 0; phase = 'spawn'; phaseT = 0; gapNow = 0;
-    ringDir = Math.random() < 0.5 ? -1 : 1;
-    $('win').hidden = true; $('feed').innerHTML = '';
-    gridClass(); showQualified(false); updateUI(); updateTimer();
-    if (isFinal) banner('GRAND FINAL', `${entrants} FLAGS · 1 CHAMPION`);
-    else banner(`ROUND ${st.qualified.length + 1}`, `QUALIFYING · ${entrants} FLAGS`);
-    sfx.spawn();
-    report({ round: st.qualified.length + 1, final: isFinal, qualified: Math.min(st.qualified.length, cfg.target) });
-    if (isFinal) { voice.say('flag_final', { urgent: true }); robotEvent(['THE GRAND FINAL STARTS NOW! WHICH COUNTRY TAKES THE CUP? COMMENT YOUR PICK!']); }
-    else if (simT > 5) voice.say('flag_start', { chance: 0.35 });
+  /* ---------------------------------------------------------------- chat powers */
+  const addFan = (code, name) => {
+    if (!fans.has(code)) fans.set(code, new Map());
+    const m = fans.get(code); m.set(name, (m.get(name) || 0) + 1);
   };
-
-  const eliminate = (f) => {
-    f.state = 'out'; f.t = 0;
-    alive--;
-    order = order.filter((g) => g !== f);
-    lastOut = f;
-    const fe = $('feed');
-    fe.innerHTML = `${spriteHTML(f.i, 40)}<span>${NAME(f.i)} IS OUT</span>`;
-    fe.classList.remove('pop'); void fe.offsetWidth; fe.classList.add('pop');
-    gridEls[f.i].classList.add('out');
-    sfx.out();
-    updateUI();
-    if (alive === 5) voice.say('flag_five', { chance: 0.9 });
-    else if (alive === 2) voice.say('flag_two', { chance: 0.9 });
-    else if (alive > 5 && voice.idle && Math.random() < 0.07) voice.say('flag_out');
-    if (alive <= 1) onWinner();
+  const giveShield = (code, by, why) => {
+    if (!alive.has(code) || shield.has(code)) return false;
+    shield.set(code, by || '');
+    const b = balls.find((x) => x.code === code);
+    if (b) popAt('shd', code, why || 'SHIELD ON', NAME(code), b.x, b.y - 60);
+    tags.set(code, { name: by || '', until: simT + 12, kind: 'shield' });
+    sfx.shield();
+    host([{ node: flagNode(code) }, NAME(code) + ' GOT A SHIELD', ...(by ? [' THANKS TO ', { name: by }] : []), '! IT SURVIVES THE NEXT DRAW!'], 2);
+    return true;
   };
-
-  const onWinner = () => {
-    winner = flags.find((f) => f.state === 'in') || lastOut;
-    if (winner.state !== 'in') { winner.state = 'in'; alive = 1; } // two flags left together: the last one out still wins
-    phase = 'won'; phaseT = 0;
-    st.avg = st.avg ? st.avg * 0.8 + roundT * 0.2 : roundT;
-    const code = C[winner.i].code;
-    if (isFinal) {
-      st.champs.unshift(code); st.champs = st.champs.slice(0, 10);
-    } else {
-      st.qualified.push(code);
-      showQualified(true);
+  const revive = (code, by, free) => {
+    if (alive.has(code) || alive.size <= 2 || phase !== 'play' || revived.has(code) || (!free && revLeft <= 0)) return false;
+    if (!free) revLeft--;
+    revived.add(code); alive.add(code); out = out.filter((c) => c !== code);
+    const [x, y] = freeSpot(); const b = ball(code, x, y); b.hot = 4; balls.push(b);
+    popAt('rev', code, 'REVIVED!', NAME(code), x, y - 60);
+    tags.set(code, { name: by || '', until: simT + 12, kind: 'rev' });
+    banner(`${NAME(code)} IS BACK!`, by ? `REVIVED BY ${by} & FRIENDS` : 'REVIVED!', 'gold', '♻️');
+    sfx.revive();
+    host([{ node: flagNode(code) }, NAME(code) + ' IS BACK IN THE ARENA! THE CHAT REVIVED IT', ...(by ? [' — THANK YOU ', { name: by }] : []), '!'], 3);
+    save(); updateUI();
+    return true;
+  };
+  const onFan = (code, name) => {
+    if (phase !== 'play') return;
+    if (!teams.includes(code)) { S.want[code] = (S.want[code] || 0) + 1; return; }
+    power.set(code, (power.get(code) || 0) + 1);
+    addFan(code, name);
+    prog.set(code, (prog.get(code) || 0) + 1);
+    const b = balls.find((x) => x.code === code);
+    if (b) b.hot = 3;
+    tags.set(code, { name, until: simT + 6, kind: 'fan' });
+    if (alive.has(code) && !shield.has(code) && prog.get(code) >= cfg.shield) { prog.set(code, 0); giveShield(code, name, 'SHIELD ON'); }
+    else if (!alive.has(code) && prog.get(code) >= cfg.revive) { if (revive(code, name)) prog.set(code, 0); }
+  };
+  const statusLine = (code) => {
+    if (!teams.includes(code)) return `IT JOINS THE NEXT ROUND — KEEP COMMENTING ${NAME(code)}!`;
+    if (!alive.has(code)) {
+      if (revived.has(code) || revLeft <= 0) return 'IT IS OUT — CHEER FOR IT NEXT ROUND!';
+      return `IT IS OUT! ${Math.max(0, cfg.revive - (prog.get(code) || 0))} MORE CHATS AND IT COMES BACK!`;
     }
-    save();
-    updateUI(); gridClass(); updateTimer();
-    report({ round: isFinal ? st.qualified.length + 1 : st.qualified.length, final: isFinal,
-      qualified: Math.min(st.qualified.length, cfg.target), event: isFinal ? 'champion' : 'qualified', code, name: C[winner.i].name });
+    if (shield.has(code)) return 'IT HAS A SHIELD — SAFE FOR THE NEXT DRAW!';
+    return `${Math.max(0, cfg.shield - (prog.get(code) || 0))} MORE CHATS FOR A SHIELD!`;
   };
 
-  const showWinPopup = () => {
-    const w = $('win');
-    w.className = isFinal ? 'win champ' : 'win';
-    $('win-t').textContent = isFinal ? 'CHAMPION!' : 'ROUND WINNER';
-    sprite($('win-flag'), winner.i, isFinal ? 300 : 240);
-    $('win-name').textContent = C[winner.i].name;
-    $('win-sub').textContent = isFinal ? `CUP #${st.cup} WINNER` : `QUALIFIED #${st.qualified.length} / ${cfg.target}`;
-    w.hidden = false;
-    if (isFinal) { sfx.win(); voice.say('flag_champ', { urgent: true, prefix: NAME(winner.i) + '!' }); }
-    else { sfx.goal(); voice.say('flag_win', { urgent: true, prefix: NAME(winner.i) + '!' }); }
-    const wc = C[winner.i].code;
-    robotEvent(isFinal
-      ? ['WE HAVE A CHAMPION! ', { node: flagNode(wc) }, CN(wc) + ' WINS THE CUP! CONGRATULATIONS TO ALL ITS FANS!']
-      : [{ node: flagNode(wc) }, CN(wc) + ` WINS ROUND ${st.qualified.length} AND GOES TO THE GRAND FINAL!`]);
-  };
-
-  /* ---------- physics ---------- */
-  let hits = 0, walls = 0;
-  const step = (dt) => {
-    const r = size * 0.47, D = 2 * r, v = speed();
-    gapA += ringDir * 0.6 * (cfg.ring / 100) * dt;
-    const want = phase === 'spawn' ? 0 : gapTarget();
-    gapNow += (want - gapNow) * Math.min(1, dt * 2.5);
-    const passMargin = Math.asin(Math.min(1, (r * 0.85) / RIN));
-
-    for (const f of flags) {
-      if (f.state === 'gone') continue;
-      if (f.state === 'out') {
-        f.t += dt; f.vy += 1400 * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.spin * 3 * dt;
-        if (f.t > 1) f.state = 'gone';
-        continue;
-      }
-      if (phase === 'won' && f === winner) { // winner glides to the middle
-        f.x += (CX - f.x) * Math.min(1, dt * 3); f.y += (CY - f.y) * Math.min(1, dt * 3); f.rot *= 1 - Math.min(1, dt * 4);
-        continue;
-      }
-      // keep everyone moving at about the same speed
-      const sp = Math.hypot(f.vx, f.vy) || 1;
-      const m = 1 + (v / sp - 1) * 0.05;
-      f.vx *= m; f.vy *= m;
-      f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.spin * dt;
-    }
-
-    // flag against flag (sweep along x)
-    for (let a = 1; a < order.length; a++) { // insertion sort, list is almost sorted already
-      const f = order[a]; let b = a - 1;
-      while (b >= 0 && order[b].x > f.x) { order[b + 1] = order[b]; b--; }
-      order[b + 1] = f;
-    }
-    if (phase !== 'won') {
-      for (let a = 0; a < order.length; a++) {
-        const A = order[a];
-        for (let b = a + 1; b < order.length; b++) {
-          const B = order[b];
-          if (B.x - A.x >= D) break;
-          const dx = B.x - A.x, dy = B.y - A.y, d2 = dx * dx + dy * dy;
-          if (d2 >= D * D || d2 === 0) continue;
-          const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, pen = (D - d) / 2;
-          A.x -= nx * pen; A.y -= ny * pen; B.x += nx * pen; B.y += ny * pen;
-          const rv = (B.vx - A.vx) * nx + (B.vy - A.vy) * ny;
-          if (rv < 0) {
-            A.vx += rv * nx; A.vy += rv * ny; B.vx -= rv * nx; B.vy -= rv * ny;
-            A.spin += (Math.random() - 0.5) * 0.8; B.spin -= (Math.random() - 0.5) * 0.8;
-            A.spin = clamp(A.spin, -3, 3); B.spin = clamp(B.spin, -3, 3);
-            if (rv < -150) hits++;
-          }
-        }
-      }
-    }
-
-    // flag against the ring
-    for (const f of order) {
-      if (f.state !== 'in' || (phase === 'won' && f === winner)) continue;
-      const dx = f.x - CX, dy = f.y - CY, d = Math.hypot(dx, dy) || 1;
-      if (f.exiting) {
-        if (d < RIN - r - 4) f.exiting = false;       // pushed back inside
-        else if (d > RIN + r + 2) { eliminate(f); if (phase === 'won') return; }
-        continue;
-      }
-      if (d <= RIN - r) continue;
-      const delta = Math.abs(angDiff(Math.atan2(dy, dx), gapA));
-      if (phase !== 'spawn' && delta < gapNow - passMargin) { f.exiting = true; continue; }
-      const nx = dx / d, ny = dy / d;
-      f.x = CX + nx * (RIN - r); f.y = CY + ny * (RIN - r);
-      const vn = f.vx * nx + f.vy * ny;
-      if (vn > 0) {
-        f.vx -= 2 * vn * nx; f.vy -= 2 * vn * ny;
-        const j = (Math.random() - 0.5) * 0.25, cs = Math.cos(j), sn = Math.sin(j); // small random kick
-        const vx = f.vx * cs - f.vy * sn; f.vy = f.vx * sn + f.vy * cs; f.vx = vx;
-        if (vn > 120) walls++;
-      }
-    }
-  };
-
-  /* ---------- drawing ---------- */
-  const draw = () => {
-    c.setTransform(1, 0, 0, 1, 0, 0);
-    c.clearRect(0, 0, cv.width, cv.height);
-    c.setTransform(k, 0, 0, k, 0, 0);
-
-    // ring with a soft glow, open at the gap
-    const a0 = gapA + gapNow, a1 = gapA + TAU - gapNow;
-    c.lineCap = 'round';
-    [[40, 'rgba(90,140,255,.08)'], [26, 'rgba(110,160,255,.16)'], [LINE, '#eef3ff']].forEach(([w, col]) => {
-      c.lineWidth = w; c.strokeStyle = col; c.beginPath(); c.arc(CX, CY, RING, a0, a1); c.stroke();
-    });
-
-    const w = size, h = size * 0.75;
-    const showNames = alive <= 8 && phase !== 'spawn';
-    for (const f of flags) {
-      if (f.state === 'gone') continue;
-      let s = 1, alpha = 1;
-      if (phase === 'spawn') { s = clamp((phaseT - f.delay) / 0.3, 0, 1); if (s <= 0) continue; }
-      if (f.state === 'out') { alpha = clamp(1 - f.t, 0, 1); s = 1 + f.t * 0.3; }
-      if (phase === 'won' && f === winner) s = 1 + clamp(phaseT / 0.8, 0, 1) * 0.9;
-      const tag = f.state === 'in' && tags.get(f.i);
-      if (tag) s *= 1.5;
-      const cs = Math.cos(f.rot) * s * k, sn = Math.sin(f.rot) * s * k;
-      c.setTransform(cs, sn, -sn, cs, f.x * k, f.y * k);
-      c.globalAlpha = alpha;
-      c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(-w / 2 + 2, -h / 2 + 3, w, h);
-      c.drawImage(atlas, (f.i % COLS) * FW, Math.floor(f.i / COLS) * FH, FW, FH, -w / 2, -h / 2, w, h);
-      if ((phase === 'won' && f === winner) || tag) { c.lineWidth = tag ? 3 : 4; c.strokeStyle = '#ffc93a'; c.strokeRect(-w / 2, -h / 2, w, h); }
-    }
-    // viewers' names under their flags (glow + gold name tag)
-    if (tags.size) {
-      const now = performance.now();
-      c.setTransform(k, 0, 0, k, 0, 0);
-      c.font = '700 22px Rajdhani, Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      for (const f of flags) {
-        const t = tags.get(f.i);
-        if (!t) continue;
-        if (t.until < now) { tags.delete(f.i); continue; }
-        if (f.state !== 'in' || phase === 'spawn') continue;
-        const pulse = 0.55 + 0.45 * Math.sin(now / 180);
-        c.globalAlpha = 0.35 * pulse; c.fillStyle = '#ffc93a';
-        c.beginPath(); c.arc(f.x, f.y, w * 0.95, 0, TAU); c.fill(); c.globalAlpha = 1;
-        const label = '★ ' + t.name, tw = c.measureText(label).width + 20, y = f.y - h * 0.75 - 18; // above the flag (country names go below)
-        c.fillStyle = '#ffc93a'; c.beginPath(); c.roundRect(f.x - tw / 2, y - 15, tw, 30, 15); c.fill();
-        c.fillStyle = '#1a1200'; c.fillText(label, f.x, y + 1);
-      }
-      c.textBaseline = 'alphabetic';
-    }
-    c.globalAlpha = 1;
-    if (showNames) {
-      c.setTransform(k, 0, 0, k, 0, 0);
-      c.font = '700 24px Rajdhani, Oswald, sans-serif'; c.textAlign = 'center'; c.lineJoin = 'round';
-      for (const f of flags) {
-        if (f.state !== 'in') continue;
-        const y = f.y + h * 0.5 + 24;
-        c.lineWidth = 6; c.strokeStyle = 'rgba(0,0,0,.85)'; c.strokeText(NAME(f.i), f.x, y);
-        c.fillStyle = '#fff'; c.fillText(NAME(f.i), f.x, y);
-      }
-    }
-  };
-
-  /* ---------- live chat: viewers' names on their flags, top fans, robot host ---------- */
-  const tags = new Map();   // country index -> { name, until }
-  const aliveIdx = () => new Set(flags.filter((f) => f.state === 'in').map((f) => f.i));
-  const flagNode = (code, w = 40) => { const d = document.createElement('span'); d.className = 'flag'; sprite(d, byCode.get(code), w); return d; };
-  const CN = (code) => C[byCode.get(code)].name.toUpperCase();
-  const isGreeting = (t) => /\b(hi|hii+|hello|hey|helo|salam|salaam|assalam\w*|asalam\w*)\b|হাই|হ্যালো|সালাম|আসসালামু/i.test(t);
-  const isSalam = (t) => /salam|salaam|assalam|asalam|সালাম|আসসালামু/i.test(t);
-  const isQuestion = (t) => /who.*win|winner|kon|কে জিতবে|predict/i.test(t);
-  // what is happening to a country right now (for the robot)
-  const flagState = (code) => {
-    if (aliveIdx().has(byCode.get(code))) return "YOUR FLAG IS SHINING NOW — LET'S GO!";
-    if (!isFinal && st.qualified.includes(code)) return 'IT IS ALREADY IN THE GRAND FINAL!';
-    if (isFinal) return st.qualified.includes(code) ? 'IT IS OUT OF THIS FINAL — NEXT CUP STARTS SOON!' : 'IT DID NOT REACH THIS FINAL — NEXT CUP STARTS SOON!';
-    return 'IT IS OUT THIS ROUND, BUT IT COMES BACK NEXT ROUND!';
-  };
-  const favourite = () => {
-    const alive = aliveIdx();
-    const fav = [...chat.counts.entries()].filter(([code]) => alive.has(byCode.get(code))).sort((a, b) => b[1] - a[1])[0];
-    if (fav) return fav[0];
-    const a = [...alive]; return a.length ? C[a[Math.floor(Math.random() * a.length)]].code : null;
-  };
+  const isGreeting = (s) => /\b(hi|hii+|hello|hey|salam|salaam|assalam\w*|asalam\w*)\b|হাই|হ্যালো|সালাম|আসসালামু/i.test(s);
+  const isSalam = (s) => /salam|salaam|assalam|asalam|সালাম|আসসালামু/i.test(s);
   const chat = liveChat({
-    game: 'flags',
+    game: 'flags', rows: 3,
     match: countryMatcher(C),
-    badge: (code) => flagNode(code, 34),
-    sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
-    onFan: (code, name) => { tags.set(byCode.get(code), { name: name.toUpperCase().slice(0, 12), until: performance.now() + 25000 }); },
-    emptyHint: 'Type your country in chat — your name goes on its flag!',
-    hints: ['WRITE YOUR COUNTRY AND YOUR NAME GOES ON ITS FLAG!', 'DROP A LIKE IF YOU ARE ENJOYING THE BATTLE!', 'WHICH FLAG DO YOU THINK WINS THIS ROUND?'],
+    badge: (code) => flagNode(code, 32),
     duck: (on) => sfx.duck(on),
+    sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
+    onFan,
+    onSub: (name, code) => {
+      const c = code && alive.has(code) && !shield.has(code) ? code : [...power.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).find((k) => alive.has(k) && !shield.has(k));
+      if (c) giveShield(c, name.toUpperCase().slice(0, 14), 'FREE SHIELD · SUBSCRIBER');
+    },
+    onSuper: (code, name) => {
+      if (!code || !teams.includes(code)) return;
+      if (!alive.has(code)) revive(code, name, true); else giveShield(code, name, 'SUPER CHAT SHIELD');
+    },
+    onStats: (st) => { lastStats = st; },
+    emptyHint: 'Type your country — 20 chats give it a SHIELD!',
+    hints: ['TYPE YOUR COUNTRY — ENOUGH CHATS GIVE IT A SHIELD!', 'LIKE IF YOU SEE YOUR COUNTRY FLAG!', 'SUBSCRIBE AND YOUR COUNTRY GETS A FREE SHIELD!'],
     idleLines: [
-      ['TYPE YOUR COUNTRY IN CHAT — I WILL PUT YOUR NAME ON ITS FLAG!'],
-      ['WHERE ARE YOU WATCHING FROM? COMMENT YOUR COUNTRY NOW!'],
-      ['WHICH FLAG WINS THIS ROUND? WRITE YOUR GUESS IN CHAT!'],
-      ['SUBSCRIBE AND YOUR NAME APPEARS RIGHT HERE ON THE SCREEN!'],
+      [`TYPE YOUR COUNTRY IN CHAT! ${cfg.shield} CHATS GIVE IT A SHIELD AGAINST THE BLACK HOLE!`],
+      ['LIKE IF YOU SEE YOUR COUNTRY FLAG IN THE ARENA!'],
+      ['SUBSCRIBE AND YOUR COUNTRY GETS A FREE SHIELD — RIGHT NOW!'],
+      ['YOUR COUNTRY IS NOT IN THE ARENA? COMMENT IT AND IT JOINS THE NEXT ROUND!'],
     ],
     welcome: (name, code, text) => {
       const hi = isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'WELCOME ';
-      if (!code) return [hi, { name }, '! TYPE YOUR COUNTRY IN CHAT AND I PUT YOUR NAME ON ITS FLAG!'];
-      return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + '! ', flagState(code)];
+      if (!code) return [hi, { name }, `! TYPE YOUR COUNTRY — ${cfg.shield} CHATS GIVE IT A SHIELD!`];
+      return [hi, { name }, ' FROM ', { node: flagNode(code) }, NAME(code) + '! ' + statusLine(code)];
     },
     reply: (name, code, text) => {
-      if (code) {
-        const n = chat.counts.get(code) || 1;
-        if (!aliveIdx().has(byCode.get(code))) return [{ name }, ' IS CHEERING FOR ', { node: flagNode(code) }, CN(code) + '! ' + flagState(code)];
-        return Math.random() < 0.5
-          ? [{ name }, ' IS CHEERING FOR ', { node: flagNode(code) }, CN(code) + `! ${n} ${n === 1 ? 'FAN' : 'FANS'} NOW!`]
-          : [{ node: flagNode(code) }, CN(code) + ' HAS A NEW FAN: ', { name }, '! KEEP IT IN THE RING!'];
+      if (code) return [{ node: flagNode(code) }, NAME(code) + ', ', { name }, '! ' + statusLine(code)];
+      if (/who.*(win|lead)|winner|কে জিতবে/i.test(text)) {
+        const top = [...power.entries()].filter(([k]) => alive.has(k)).sort((a, b) => b[1] - a[1])[0];
+        return top ? [{ node: flagNode(top[0]) }, NAME(top[0]) + ' HAS THE MOST CHAT POWER, ', { name }, '! TYPE YOURS TO BEAT IT!'] : null;
       }
-      if (isQuestion(text)) {
-        const f = favourite();
-        return f ? ['MY PICK, ', { name }, ': ', { node: flagNode(f) }, CN(f) + '! BUT IN THIS RING ANYTHING CAN HAPPEN!'] : null;
-      }
-      if (isGreeting(text)) return [isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'HELLO AGAIN ', { name }, '! WHICH COUNTRY ARE YOU CHEERING FOR?'];
+      if (isGreeting(text)) return [isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'HELLO AGAIN ', { name }, '! WHICH COUNTRY ARE YOU SAVING?'];
       return null;
     },
-    demoTexts: ['Bangladesh 🇧🇩', 'India will win!', 'Brasil 🔥', 'Go Pakistan', 'hello', '🇧🇩🇧🇩', 'who will win?', 'USA', 'assalamu alaikum', 'Nepal', 'Saudi Arabia', 'Morocco ❤️', 'বাংলাদেশ', 'nice game'],
+    demoTexts: ['Bangladesh 🇧🇩', 'India!', 'Brasil 🔥', 'Pakistan', 'hello', 'USA USA', 'who will win?', 'Nepal', 'Egypt', 'বাংলাদেশ', 'Indonesia', 'Mexico', 'nice game', 'Morocco'],
   });
+  const host = (parts, prio = 2) => { if (chat.active) chat.say(parts, prio); };
+  { // LUNA's box is small here: make a long line smaller until it fits
+    const rbt = document.querySelector('.lc-flags .lc-rb-text');
+    if (rbt) new MutationObserver(() => {
+      rbt.style.fontSize = '';
+      for (let size = 26; rbt.scrollHeight > rbt.clientHeight + 2 && size > 16; size -= 1) rbt.style.fontSize = size + 'px';
+    }).observe(rbt, { childList: true });
+  }
 
-  // the robot host replaces the old commentator voice (when its voice is on)
-  const commentatorSay = voice.say.bind(voice);
-  voice.say = (...a) => (chat.active && chat.voiceOn() ? undefined : commentatorSay(...a));
-  const robotEvent = (parts) => { if (chat.active && chat.voiceOn()) chat.say(parts, 2); };
-  setTimeout(() => robotEvent(['WELCOME TO COUNTRY FLAG BATTLE! 195 COUNTRIES, ONLY ONE CHAMPION. COMMENT YOUR COUNTRY AND I PUT YOUR NAME ON ITS FLAG!']), 4000);
+  /* ---------------------------------------------------------------- the draw (black hole) */
+  // Time between draws: shorter at the start, longer near the end, adding up to about `minutes` a round.
+  const weights = (n) => Math.pow(COUNT / n, 0.55) * (n <= 2 ? 3 : n <= 4 ? 1.6 : 1);
+  let WSUM = 0; for (let n = COUNT; n >= 2; n--) WSUM += weights(n);
+  const gapFor = (n) => clamp(cfg.minutes * 60 * weights(n) / WSUM, 4, 600);
 
-  /* ---------- settings from the admin panel ---------- */
+  const startDraw = () => {
+    const near = balls.filter((b) => !b.gone).sort((a, b) => Math.hypot(a.x - CX, a.y - CY) - Math.hypot(b.x - CX, b.y - CY));
+    let saved = null, victim = null;
+    for (const b of near) {
+      if (shield.has(b.code)) { if (!saved) saved = b; continue; }
+      victim = b; break;
+    }
+    if (saved) { // the shield breaks and saves it
+      const by = shield.get(saved.code); shield.delete(saved.code);
+      popAt('shd', saved.code, 'SHIELD SAVED', NAME(saved.code), saved.x, saved.y - 60);
+      host(['THE SHIELD SAVED ', { node: flagNode(saved.code) }, NAME(saved.code) + '! TYPE IT AGAIN FOR A NEW SHIELD!'], 2);
+      const dx = saved.x - CX, dy = saved.y - CY, d = Math.hypot(dx, dy) || 1; saved.vx = dx / d * SPEED * 1.6; saved.vy = dy / d * SPEED * 1.6;
+      void by;
+    }
+    if (!victim) return;
+    drawing = { b: victim, t: 0, x0: victim.x, y0: victim.y };
+    victim.gone = true;
+    sfx.draw();
+  };
+
+  const eliminate = (b) => {
+    balls = balls.filter((x) => x !== b);
+    alive.delete(b.code); out.push(b.code); prog.set(b.code, 0);
+    const canRev = revLeft > 0 && !revived.has(b.code) && alive.size > 2;
+    popAt('out', b.code, 'ELIMINATED', NAME(b.code), CX - 150, CY + 120);
+    if (canRev) host([{ node: flagNode(b.code) }, NAME(b.code) + ` IS OUT! ${NAME(b.code)} FANS — ${cfg.revive} CHATS AND IT COMES BACK!`], 2);
+    else host([{ node: flagNode(b.code) }, NAME(b.code) + ` IS OUT! ${alive.size} COUNTRIES LEFT!`], 1);
+    if (alive.size === 10 && !final10) { final10 = true; banner('FINAL 10', 'TYPE YOUR COUNTRY — SHIELDS DECIDE IT NOW!', 'red'); host(['ONLY 10 COUNTRIES LEFT! EVERY SHIELD COUNTS NOW — TYPE YOUR COUNTRY!'], 3); }
+    if (alive.size === 2 && !finalSaid) {
+      finalSaid = true;
+      const [a, c] = [...alive];
+      banner('FINAL BATTLE', `${NAME(a)} VS ${NAME(c)}`, 'red');
+      host(['FINAL BATTLE! ', { node: flagNode(a) }, NAME(a) + ' AGAINST ', { node: flagNode(c) }, NAME(c) + '! SHIELD YOUR COUNTRY IN CHAT!'], 3);
+    }
+    if (alive.size === 1) crown([...alive][0]);
+    report({ round: S.round, final: false, qualified: out.length });
+    save(); updateUI();
+  };
+
+  const crown = (code) => {
+    phase = 'won'; phaseT = 0;
+    const top = [...(fans.get(code) || new Map()).entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n]) => n);
+    $('win-flag').style.cssText = flagCss(code, 300);
+    $('win-name').textContent = NAME(code);
+    $('win-sub').textContent = `ROUND ${S.round} · ${COUNT} COUNTRIES`;
+    $('win-heroes').innerHTML = top.length ? '🏅 TOP SUPPORTERS<b></b>' : '';
+    if (top.length) $('win-heroes').querySelector('b').textContent = top.join(' · ');
+    $('win').hidden = false; $('banner').hidden = true; sfx.win();
+    host(['WE HAVE A CHAMPION! ', { node: flagNode(code) }, NAME(code) + ` WINS ROUND ${S.round}!`, ...(top.length ? [' THANK YOU ', ...top.flatMap((n, i) => [{ name: n }, i < top.length - 1 ? ', ' : ''])] : []), '! A NEW ROUND STARTS SOON!'], 3);
+    report({ round: S.round, final: false, qualified: out.length, event: 'qualified', code, name: C[byCode.get(code)].name });
+    report({ round: S.round, final: true, qualified: out.length, event: 'champion', code, name: C[byCode.get(code)].name });
+    S.live = null; save();
+  };
+
+  /* ---------------------------------------------------------------- mystery boxes + goals */
+  const mystery = () => {
+    const opts = ['shields', 'speed'];
+    if (alive.size > 12) opts.push('double');
+    if (out.some((c) => !revived.has(c)) && alive.size > 2) opts.push('revive');
+    const e = pick(opts);
+    if (e === 'double') { doubleNext = true; banner('DOUBLE DRAW!', 'THE NEXT DRAW TAKES 2 FLAGS', 'red', '🎁'); host(['MYSTERY BOX: DOUBLE DRAW! THE BLACK HOLE TAKES TWO FLAGS NEXT TIME — SHIELD YOUR COUNTRY!'], 3); }
+    if (e === 'shields') {
+      banner('LUCKY SHIELDS!', '3 RANDOM COUNTRIES GET A SHIELD', 'gold', '🎁');
+      shuffle([...alive].filter((c) => !shield.has(c))).slice(0, 3).forEach((c) => giveShield(c, '', 'LUCKY SHIELD'));
+    }
+    if (e === 'speed') { speedUntil = simT + 20; banner('SPEED STORM!', 'ALL FLAGS GO FAST FOR 20 SECONDS', '', '🎁'); host(['MYSTERY BOX: SPEED STORM! HOLD ON TIGHT!'], 2); }
+    if (e === 'revive') {
+      const c = pick(out.filter((x) => !revived.has(x)));
+      banner('LUCKY COMEBACK!', `${NAME(c)} RETURNS FOR FREE`, 'gold', '🎁'); revive(c, '', true);
+    }
+  };
+  const checkGoals = () => {
+    let st = lastStats;
+    if (demo) st = { likes: Math.floor(simT / 9) + 12, viewers: 60 + Math.floor(simT / 6) }; // made-up numbers for the preview
+    $('goals').hidden = !st;
+    if (!st) return;
+    if (!likeGoal) likeGoal = (Math.floor(st.likes / cfg.likes) + 1) * cfg.likes;
+    if (st.likes >= likeGoal && phase === 'play') {
+      likeGoal = (Math.floor(st.likes / cfg.likes) + 1) * cfg.likes;
+      holdUntil = Math.max(holdUntil, simT) + 30;
+      banner('LIKE GOAL!', 'THE BLACK HOLE IS CLOSED FOR 30 SECONDS', 'gold', '👍');
+      host([`LIKE GOAL REACHED! THE BLACK HOLE IS CLOSED FOR 30 SECONDS. NEXT GOAL: ${likeGoal} LIKES!`], 3);
+    }
+    if (st.viewers >= viewGoal && phase === 'play') {
+      viewGoal += cfg.viewers;
+      const top = [...power.entries()].filter(([k]) => alive.has(k) && !shield.has(k)).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k);
+      banner('VIEWER GOAL!', `${st.viewers} WATCHING — FREE SHIELDS!`, 'gold', '👀');
+      top.forEach((c) => giveShield(c, '', 'VIEWER GOAL SHIELD'));
+    }
+    const lp = clamp(1 - (likeGoal - st.likes) / cfg.likes, 0, 1), vp = clamp(st.viewers / viewGoal, 0, 1);
+    $('g-like').style.width = (lp * 100) + '%'; $('g-like-t').textContent = `👍 LIKES ${st.likes}/${likeGoal}`;
+    $('g-view').style.width = (vp * 100) + '%'; $('g-view-t').textContent = `👀 WATCHING ${st.viewers}/${viewGoal}`;
+  };
+
+  /* ---------------------------------------------------------------- physics */
+  const barSeg = (k) => { const a = barA + k * Math.PI * 2 / BARS; const c = Math.cos(a), s = Math.sin(a); return [CX + c * BAR_IN, CY + s * BAR_IN, CX + c * BAR_OUT, CY + s * BAR_OUT, a]; };
+  const step = (dt) => {
+    simT += dt;
+    barA += dt * 0.45;
+    const sp = SPEED * (speedUntil > simT ? 1.8 : 1);
+    for (const b of balls) {
+      if (b.gone) continue;
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      // wall
+      let dx = b.x - CX, dy = b.y - CY, d = Math.hypot(dx, dy);
+      if (d > RW - R) { const nx = dx / d, ny = dy / d, v = b.vx * nx + b.vy * ny; if (v > 0) { b.vx -= 2 * v * nx; b.vy -= 2 * v * ny; sfx.knock(); } b.x = CX + nx * (RW - R); b.y = CY + ny * (RW - R); }
+      // black hole edge (closed between draws)
+      if (d < HOLE + R) { const nx = dx / (d || 1), ny = dy / (d || 1), v = b.vx * nx + b.vy * ny; if (v < 0) { b.vx -= 2 * v * nx; b.vy -= 2 * v * ny; } b.x = CX + nx * (HOLE + R); b.y = CY + ny * (HOLE + R); }
+      // turning bars
+      for (let k = 0; k < BARS; k++) {
+        const [x1, y1, x2, y2] = barSeg(k);
+        const ex = x2 - x1, ey = y2 - y1, L2 = ex * ex + ey * ey;
+        const t = clamp(((b.x - x1) * ex + (b.y - y1) * ey) / L2, 0, 1);
+        const px = x1 + ex * t, py = y1 + ey * t;
+        dx = b.x - px; dy = b.y - py; d = Math.hypot(dx, dy);
+        if (d < R + BAR_W && d > 0) {
+          const nx = dx / d, ny = dy / d;
+          // the bar point moves with the turn: push the ball along
+          const rr = Math.hypot(px - CX, py - CY), bvx = -(py - CY) / (rr || 1) * rr * 0.45, bvy = (px - CX) / (rr || 1) * rr * 0.45;
+          const rel = (b.vx - bvx) * nx + (b.vy - bvy) * ny;
+          if (rel < 0) { b.vx -= 2 * rel * nx; b.vy -= 2 * rel * ny; }
+          b.x = px + nx * (R + BAR_W); b.y = py + ny * (R + BAR_W);
+        }
+      }
+    }
+    // flags bump each other
+    for (let i = 0; i < balls.length; i++) {
+      const a = balls[i]; if (a.gone) continue;
+      for (let j = i + 1; j < balls.length; j++) {
+        const b = balls[j]; if (b.gone) continue;
+        const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+        if (d2 >= 4 * R * R || d2 === 0) continue;
+        const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, ov = 2 * R - d;
+        a.x -= nx * ov / 2; a.y -= ny * ov / 2; b.x += nx * ov / 2; b.y += ny * ov / 2;
+        const rel = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+        if (rel < 0) { a.vx += rel * nx; a.vy += rel * ny; b.vx -= rel * nx; b.vy -= rel * ny; }
+      }
+    }
+    for (const b of balls) { // keep every flag moving at the same speed
+      const m = Math.hypot(b.vx, b.vy) || 1; const k = 1 + (sp / m - 1) * Math.min(1, dt * 3);
+      b.vx *= k; b.vy *= k; if (b.hot > 0) b.hot -= dt;
+    }
+
+    if (phase !== 'play') { phaseT += dt / FAST; if (phaseT > WIN_SECS) newRound(); return; }
+    if (drawing) {
+      drawing.t += dt;
+      const p = Math.min(1, drawing.t / DRAW_SECS), b = drawing.b;
+      b.x = drawing.x0 + (CX - drawing.x0) * p * p; b.y = drawing.y0 + (CY - drawing.y0) * p * p; b.scale = 1 - p * 0.85; b.spin = p * 8;
+      if (p >= 1) {
+        drawing = null; eliminate(b);
+        if (doubleNext && phase === 'play') { doubleNext = false; startDraw(); }
+      }
+      return;
+    }
+    if (simT < holdUntil) return;
+    const before = Math.ceil(toNext);
+    toNext -= dt;
+    if (toNext <= 3 && Math.ceil(toNext) !== before && toNext > 0) sfx.tick();
+    if (toNext <= 0) { toNext = gapFor(alive.size - 1); startDraw(); }
+    if (cfg.events && simT > nextEvent && alive.size > 3) { nextEvent = simT + 240 + Math.random() * 120; mystery(); }
+  };
+
+  /* ---------------------------------------------------------------- drawing */
+  const cv = $('arena'), c = cv.getContext('2d');
+  let k = 1;
+  const resize = () => { const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 1.5); cv.width = Math.round(r.width * dpr) || W; cv.height = Math.round(r.height * dpr) || H; k = cv.width / W; };
+  resize(); addEventListener('resize', resize);
+  const drawBall = (b) => {
+    const s = b.scale ?? 1, r = R * s;
+    const plain = PLAIN[b.code], i = byCode.get(b.code);
+    c.save(); c.translate(b.x, b.y); if (b.spin) c.rotate(b.spin);
+    if (shield.has(b.code)) { c.globalAlpha = 0.45 + 0.2 * Math.sin(simT * 6); c.fillStyle = '#7dd3fc'; c.beginPath(); c.arc(0, 0, r + 12, 0, 7); c.fill(); c.globalAlpha = 1; }
+    if (b.hot > 0) { c.globalAlpha = Math.min(1, b.hot) * 0.7; c.fillStyle = '#ffc93a'; c.beginPath(); c.arc(0, 0, r + 9, 0, 7); c.fill(); c.globalAlpha = 1; }
+    c.beginPath(); c.arc(0, 0, r, 0, 7); c.closePath(); c.fillStyle = plain ? plain[0] : '#fff'; c.fill();
+    c.save(); c.clip();
+    if (plain) { c.fillStyle = '#fff'; c.font = `700 ${Math.round(r * 0.7)}px Oswald, Rajdhani, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(plain[1], 0, 1); }
+    else c.drawImage(atlas, (i % COLS_A) * FW, Math.floor(i / COLS_A) * FH, FW, FH, -r * 1.36, -r, r * 2.72, r * 2);
+    c.restore();
+    c.lineWidth = 4; c.strokeStyle = shield.has(b.code) ? '#7dd3fc' : b.hot > 0 ? '#ffc93a' : '#fff'; c.beginPath(); c.arc(0, 0, r, 0, 7); c.stroke();
+    c.restore();
+  };
+  const draw = () => {
+    c.setTransform(k, 0, 0, k, 0, 0);
+    c.clearRect(0, 0, W, H);
+    // arena floor + wall
+    const g = c.createRadialGradient(CX, CY, 40, CX, CY, RW); g.addColorStop(0, '#1d2747'); g.addColorStop(1, '#0b1026');
+    c.fillStyle = g; c.beginPath(); c.arc(CX, CY, RW + 6, 0, 7); c.fill();
+    c.lineWidth = 12; c.strokeStyle = '#22d3ee'; c.shadowColor = '#22d3ee'; c.shadowBlur = 30; c.beginPath(); c.arc(CX, CY, RW + 6, 0, 7); c.stroke(); c.shadowBlur = 0;
+    // bars
+    c.lineCap = 'round'; c.lineWidth = BAR_W * 2; c.strokeStyle = '#8b7cf6';
+    for (let i = 0; i < BARS; i++) { const [x1, y1, x2, y2] = barSeg(i); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
+    // black hole (glows red before a draw)
+    const hot = phase === 'play' && simT >= holdUntil && (toNext < 3.2 || drawing);
+    const pulse = hot ? 0.6 + 0.4 * Math.sin(simT * 14) : 0.35;
+    const hg = c.createRadialGradient(CX, CY, 10, CX, CY, HOLE + 16); hg.addColorStop(0, '#000'); hg.addColorStop(0.75, '#05000a'); hg.addColorStop(1, `rgba(255,45,85,${pulse * 0.5})`);
+    c.fillStyle = hg; c.beginPath(); c.arc(CX, CY, HOLE + 16, 0, 7); c.fill();
+    c.lineWidth = 7; c.strokeStyle = simT < holdUntil ? '#22d3ee' : `rgba(255,45,85,${0.5 + pulse * 0.5})`; c.shadowColor = c.strokeStyle; c.shadowBlur = hot ? 40 : 18;
+    c.beginPath(); c.arc(CX, CY, HOLE, 0, 7); c.stroke(); c.shadowBlur = 0;
+    if (simT < holdUntil) { c.fillStyle = '#7dd3fc'; c.font = '700 22px Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🔒 CLOSED', CX, CY); c.fillText(Math.ceil(holdUntil - simT) + 's', CX, CY + 26); }
+    // flags
+    for (const b of balls) if (b !== drawing?.b) drawBall(b);
+    if (drawing) drawBall(drawing.b);
+    // names over shielded / cheered flags
+    c.font = '700 20px Rajdhani, Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    for (const b of balls) {
+      const t = tags.get(b.code); if (!t || t.until < simT || !t.name || b.gone) continue;
+      const label = (t.kind === 'shield' ? '🛡️ ' : t.kind === 'rev' ? '♻️ ' : '★ ') + t.name, tw = c.measureText(label).width + 18, y = b.y - R - 18;
+      c.fillStyle = t.kind === 'shield' ? '#7dd3fc' : t.kind === 'rev' ? '#f9a8d4' : '#ffc93a'; c.beginPath(); c.roundRect(b.x - tw / 2, y - 14, tw, 28, 14); c.fill();
+      c.fillStyle = '#10131f'; c.fillText(label, b.x, y + 1);
+    }
+  };
+
+  /* ---------------------------------------------------------------- panels */
+  const updateUI = () => {
+    $('round').textContent = `ROUND ${S.round} · LIVE 24/7`;
+    $('n-all').textContent = COUNT; $('n-left').textContent = alive.size;
+    const top = [...power.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    $('power-rows').innerHTML = top.length
+      ? top.map(([code, n], i) => `<div class="prow">${i + 1}. ${flagHTML(code, 40)}<span class="nm">${NAME(code)}</span><b>${n}</b></div>`).join('')
+      : `<div class="prow empty">Type your country in chat — the top 3 show here!</div>`;
+    $('rev-left').textContent = `REVIVES LEFT ${revLeft}/${cfg.revives}`;
+    $('grave').innerHTML = out.slice(-18).reverse().map((code) => `<span class="gf">${flagHTML(code, 52)}</span>`).join('');
+    $('prog').style.width = (out.length / Math.max(1, COUNT - 1) * 100) + '%';
+    $('out-count').textContent = `${out.length} / ${COUNT} ELIMINATED`;
+  };
+  const updateClock = () => {
+    const el = $('clock'), lock = simT < holdUntil && phase === 'play';
+    const gap = gapFor(Math.max(2, alive.size)), left = lock ? holdUntil - simT : Math.max(0, toNext);
+    el.classList.toggle('lock', lock); el.classList.toggle('hot', !lock && left <= 3 && phase === 'play');
+    $('clock-n').textContent = phase !== 'play' ? '♛' : lock ? '🔒' : left > 99 ? Math.ceil(left / 60) + 'm' : Math.ceil(left);
+    $('clock-arc').style.strokeDashoffset = String(264 * (1 - clamp(left / (lock ? 30 : gap), 0, 1)));
+  };
+
+  /* ---------------------------------------------------------------- settings from the panel */
   setInterval(async () => {
     const n = await fetchConfig();
     if (!n) return;
     if (n.reset !== cfg.reset) { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } location.reload(); return; }
-    if (n.rev !== cfg.rev && phase !== 'won') location.reload();
+    if (n.rev !== cfg.rev) { save(); location.reload(); }
   }, 20000);
 
-  /* ---------- game loop ---------- */
-  setTimeout(() => voice.say('flag_intro'), 2500);
-  startRound();
-  let last = performance.now(), acc = 0, lastDraw = 0, lastTimer = 0;
+  /* ---------------------------------------------------------------- loop */
+  if (S.live && Array.isArray(S.live.alive) && S.live.alive.length > 1) resume(S.live); else newRound();
+  updateUI();
+  let last = performance.now(), acc = 0, lastUI = 0, lastSave = performance.now(), lastDraw = 0;
   const frame = (now) => {
     const dt = Math.min(0.1, (now - last) / 1000) * FAST * pace; last = now;
-    phaseT += dt; simT += dt;
-    if (phase !== 'won') roundT += dt;
     acc += dt;
-    while (acc >= FIXED) { step(FIXED); acc -= FIXED; }
-    // knock sounds only when few flags are left, so the arena never turns into a constant buzz
-    if (hits && alive <= 15) sfx.hit(Math.min(1, hits / 3));
-    if (walls && alive <= 15) sfx.wall();
-    hits = 0; walls = 0;
-
-    if (phase === 'spawn' && phaseT > 1.8) { phase = 'play'; phaseT = 0; }
-    if (phase === 'won') {
-      if (phaseT > 1 && $('win').hidden) showWinPopup();
-      if (phaseT > (isFinal ? 11 : 6)) {
-        if (isFinal) { // new tournament
-          st.qualified = []; st.cup = (st.cup || 1) + 1; save();
-          startRound();
-          voice.say('flag_newcup', { urgent: true });
-        } else startRound();
-      }
-    }
-    if (phase === 'play' && voice.idle && simT > nextCall) { voice.say('flag_call'); nextCall = simT + 30 + Math.random() * 25; }
-    if (phase === 'play' && voice.idle && simT > nextSub) { voice.say('flag_sub'); nextSub = simT + 240 + Math.random() * 120; }
-
-    if (now - lastTimer > 500) { updateTimer(); lastTimer = now; }
-    if (now - lastDraw >= 31) { draw(); lastDraw = now; } // about 30 frames a second is plenty for a stream
+    let n = 0;
+    while (acc >= FIXED && n < 3000) { step(FIXED); acc -= FIXED; n++; }
+    if (n >= 3000) acc = 0;
+    if (now - lastUI > 400) { updateUI(); updateClock(); checkGoals(); lastUI = now; }
+    if (now - lastSave > 5000) { save(); lastSave = now; }
+    if (now - lastDraw >= 31) { draw(); lastDraw = now; }
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
-
-  window.__flags = { chat, tags, st, cfg, phase: () => phase, alive: () => alive, roundT: () => roundT, flags: () => flags, voice, sfx };
+  window.__arena = { cfg, S, alive: () => alive, out: () => out, balls: () => balls, shield, phase: () => phase, simT: () => simT, toNext: () => toNext, onFan, revive, chat };
 }
 
 main();
