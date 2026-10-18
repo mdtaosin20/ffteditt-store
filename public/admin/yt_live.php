@@ -33,18 +33,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $up = $_FILES['image'] ?? null;
     if ($up && ($up['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
         $info = $up['error'] === UPLOAD_ERR_OK ? @getimagesize($up['tmp_name']) : false;
-        if (!$info || !in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG], true)) {
-            $errors[] = 'The thumbnail must be a JPG or PNG picture.';
-        } elseif ($up['size'] > 2 * 1024 * 1024) {
-            $errors[] = 'The thumbnail must be smaller than 2 MB (YouTube’s limit).';
+        if (in_array($up['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+            $errors[] = 'This picture is too big for the server to receive. Use one under ' . ini_get('upload_max_filesize') . 'B.';
+        } elseif (!$info || !in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
+            $errors[] = 'The thumbnail must be a JPG, PNG or WEBP picture.';
         } elseif ($info[0] < 640) {
             $errors[] = 'The thumbnail is too small. Use 1280 × 720 pixels.';
         } elseif (!$errors) {
-            $ext = $info[2] === IMAGETYPE_PNG ? 'png' : 'jpg';
             foreach (['jpg', 'png'] as $old) @unlink(yt_thumb_dir() . "/thumb_{$id}.{$old}");
-            if (move_uploaded_file($up['tmp_name'], yt_thumb_dir() . "/thumb_{$id}.{$ext}")) {
-                $newThumb = $ext;
+            $ok = false;
+            $smallEnough = $up['size'] <= 2 * 1024 * 1024 && $info[2] !== IMAGETYPE_WEBP && $info[0] <= 2560;
+            if ($smallEnough) {
+                $ext = $info[2] === IMAGETYPE_PNG ? 'png' : 'jpg';
+                $ok = move_uploaded_file($up['tmp_name'], yt_thumb_dir() . "/thumb_{$id}.{$ext}");
             } else {
+                // big picture: make it a 1280 × 720 JPG under 2 MB (YouTube's limit)
+                $ext = 'jpg';
+                $ok = yt_shrink_thumb($up['tmp_name'], $info[2], yt_thumb_dir() . "/thumb_{$id}.jpg");
+                if (!$ok) $errors[] = 'The picture is bigger than 2 MB and the server could not make it smaller. Save it as JPG (1280 × 720) and try again.';
+            }
+            if ($ok) {
+                $newThumb = $ext;
+            } elseif (!$errors) {
                 $errors[] = 'Could not save the picture. Try again.';
             }
         }
@@ -110,8 +120,8 @@ page_start('Title & thumbnail', 'youtube', $admin);
           <label><input type="radio" name="thumb" value="own" <?= $thumbChoice === 'own' ? 'checked' : '' ?>> My own picture</label>
           <label><input type="radio" name="thumb" value="none" <?= $thumbChoice === 'none' ? 'checked' : '' ?>> Don’t change the thumbnail</label>
         </div>
-        <input type="file" name="image" id="image" accept="image/jpeg,image/png">
-        <small class="muted">JPG or PNG, 1280 × 720, under 2 MB. Custom thumbnails need a phone-verified channel (youtube.com/verify).</small>
+        <input type="file" name="image" id="image" accept="image/jpeg,image/png,image/webp">
+        <small class="muted">JPG, PNG or WEBP, best 1280 × 720. Big pictures are made smaller by the panel. Custom thumbnails need a phone-verified channel (youtube.com/verify).</small>
       </div>
       <label class="check"><input type="checkbox" name="auto" <?= $s['yt_auto'] ? 'checked' : '' ?>> Put these on the live video automatically every time the stream starts</label>
       <div class="form-actions">

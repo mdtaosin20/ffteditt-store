@@ -203,6 +203,31 @@ function yt_thumb_dir(): string
     return $d;
 }
 
+/** Turn a big picture into a 1280 × 720 JPG under 2 MB (crops to 16:9 from the middle). Needs PHP GD. */
+function yt_shrink_thumb(string $src, int $type, string $dest): bool
+{
+    if (!function_exists('imagecreatetruecolor')) return false;
+    $img = match ($type) {
+        IMAGETYPE_PNG  => @imagecreatefrompng($src),
+        IMAGETYPE_WEBP => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($src) : false,
+        default        => @imagecreatefromjpeg($src),
+    };
+    if (!$img) return false;
+    $w = imagesx($img); $h = imagesy($img);
+    $cw = $w; $ch = (int) round($w * 9 / 16);
+    if ($ch > $h) { $ch = $h; $cw = (int) round($h * 16 / 9); }
+    $out = imagecreatetruecolor(1280, 720);
+    imagecopyresampled($out, $img, 0, 0, (int) (($w - $cw) / 2), (int) (($h - $ch) / 2), 1280, 720, $cw, $ch);
+    imagedestroy($img);
+    foreach ([90, 82, 74, 65] as $q) {
+        imagejpeg($out, $dest, $q);
+        clearstatcache(true, $dest);
+        if (filesize($dest) <= 2 * 1024 * 1024 - 20000) break;
+    }
+    imagedestroy($out);
+    return is_file($dest) && filesize($dest) <= 2 * 1024 * 1024;
+}
+
 /** @return array{0:string,1:string}|null [file path, mime] of the thumbnail to use */
 function yt_thumb_file(array $s): ?array
 {
