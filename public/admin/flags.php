@@ -42,6 +42,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     $new['events'] = isset($_POST['events']);
+    $new['music'] = isset($_POST['music']);
+    $style = (string) ($_POST['music_style'] ?? 'upbeat');
+    $new['music_style'] = in_array($style, ['upbeat', 'chill', 'epic'], true) ? $style : 'upbeat';
+    $mv = (int) ($_POST['music_vol'] ?? -1);
+    if ($mv < 0 || $mv > 100) $errors[] = 'Music volume must be between 0 and 100.'; else $new['music_vol'] = $mv;
 
     if (!$errors) {
         $newRound = $new['count'] !== $cfg['count'];
@@ -107,7 +112,22 @@ page_start('Flag Arena', 'flags', $admin);
         <small class="muted">The top 3 chat countries get free shields.</small>
       </label>
     </div>
-    <label class="check" style="margin-top:10px"><input type="checkbox" name="events" <?= $cfg['events'] ? 'checked' : '' ?>> Mystery boxes every few minutes (Double Draw, Lucky Shields, Speed Storm, Lucky Comeback)</label>
+    <label class="check" style="margin-top:10px"><input type="checkbox" name="events" <?= $cfg['events'] ? 'checked' : '' ?>> Mystery boxes every few minutes (Big Hole, Lucky Shields, Speed Storm, Lucky Comeback)</label>
+
+    <h3 style="margin:18px 0 6px">Background music</h3>
+    <p class="muted small" style="margin:0 0 8px">The music is made by the game itself while it plays (no music files), so it is our own and copyright free — YouTube has nothing to claim. It gets quieter while LUNA talks.</p>
+    <div class="row2">
+      <label class="check"><input type="checkbox" name="music" <?= $cfg['music'] ? 'checked' : '' ?>> Play background music</label>
+      <label class="field"><span>Style</span>
+        <select name="music_style">
+          <?php foreach (['upbeat' => 'Upbeat (pop / EDM)', 'chill' => 'Chill (lo-fi)', 'epic' => 'Epic (battle)'] as $k => $l): ?>
+            <option value="<?= $k ?>" <?= $cfg['music_style'] === $k ? 'selected' : '' ?>><?= $l ?></option>
+          <?php endforeach; ?>
+        </select></label>
+      <label class="field"><span>Music volume (%)</span>
+        <input name="music_vol" type="number" min="0" max="100" required value="<?= (int) $cfg['music_vol'] ?>">
+        <small class="muted">35 = soft under the game sounds.</small></label>
+    </div>
     <div class="form-actions"><button class="btn btn-pink" type="submit">Save settings</button></div>
   </section>
 </form>

@@ -14,6 +14,9 @@ function flags_defaults(): array
         'likes'    => 50,      // every this many new likes: the hole closes for 30 s
         'viewers'  => 100,     // people watching reach this: top 3 chat countries get shields
         'events'   => true,    // mystery boxes (double draw, lucky shields, …)
+        'music'    => true,    // background music made in code (copyright free)
+        'music_style' => 'upbeat',
+        'music_vol'   => 35,   // %
         'autoplay' => true,
         'pace'     => 'normal',
         'rev'      => '1',

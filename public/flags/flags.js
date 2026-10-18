@@ -6,6 +6,7 @@
 // The last flag left is the round champion, then a new round starts (about an hour a round).
 import { Sfx, holdScreen, PACE, reporter, freshRun } from '/game/audio.js?v=13';
 import { liveChat, countryMatcher } from '/game/chat.js?v=5';
+import { Music } from '/game/music.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -14,7 +15,7 @@ const FAST = clamp(Number(QS.get('fast')) || 1, 1, 200);   // testing only
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-const DEF = { title: 'FLAG ARENA', count: 64, minutes: 55, shield: 20, revive: 40, revives: 5, likes: 50, viewers: 100, events: true, rev: '', reset: '' };
+const DEF = { music: true, music_style: 'upbeat', music_vol: 35, title: 'FLAG ARENA', count: 64, minutes: 55, shield: 20, revive: 40, revives: 5, likes: 50, viewers: 100, events: true, rev: '', reset: '' };
 // countries that are always in a round (most viewers come from these)
 const CORE = ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'eg', 'ma', 'my', 'np', 'ph', 'mx', 'gb', 'fr', 'de', 'ru',
   'cn', 'jp', 'ca', 'es', 'it', 'dz', 'iq', 'af', 'lk', 'vn', 'th', 'kr'];
@@ -145,6 +146,11 @@ async function main() {
   soundBtn.addEventListener('click', unlock); addEventListener('pointerdown', unlock); sfx.resume();
   setTimeout(() => { if (sfx.ok && !sfx.running) soundBtn.hidden = false; }, 1500);
   const report = reporter('flags');
+  // background music (our own, made in code — no copyright claims); it starts when sound is allowed
+  if (cfg.music !== false && sfx.ok && !QS.has('nomusic')) {
+    const music = new Music(sfx.ctx, sfx.master, { style: cfg.music_style, volume: (Number(cfg.music_vol) || 35) / 100 });
+    music.start();
+  }
 
   const banner = (text, small, cls = '', box = '') => {
     const b = $('banner'), t = $('banner-text');
