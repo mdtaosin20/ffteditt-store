@@ -24,10 +24,11 @@ const PLAIN = { sa: ['#006c35', 'KSA'], af: ['#007a36', 'AFG'], iq: ['#ce1126', 
 /* ---------------------------------------------------------------- arena geometry (canvas units) */
 const W = 1080, H = 680;                 // canvas size (stage y 408 … 1088)
 const CX = 540, CY = 335, RW = 322;      // arena centre and inner wall radius
-const HOLE = 74;                         // black hole radius
+const HOLE = 36;                         // black hole radius (about a flag's size)
+const CYCLE = 5, OPEN = 0.45;            // the hole is closed 5 s, then open a moment: whatever is on it falls in
 const BAR_IN = 112, BAR_OUT = 250, BAR_W = 9, BARS = 5;
 const FIXED = 1 / 120;
-const DRAW_SECS = 1.3;                   // how long the hole takes to swallow a flag
+const DRAW_SECS = 0.9;                   // how long a flag takes to fall in
 const WIN_SECS = 16;
 
 async function fetchConfig() {
@@ -89,14 +90,14 @@ async function main() {
   let power = new Map();                 // country -> chats this round (CHAT POWER)
   let prog = new Map();                  // country -> chats towards the next shield / revive
   let fans = new Map();                  // country -> Map(name -> chats)
-  let phase = 'play', phaseT = 0, simT = 0, toNext = 10, drawing = null, doubleNext = false, holdUntil = 0, speedUntil = 0;
+  let phase = 'play', phaseT = 0, simT = 0, toNext = 10, openLeft = 0, falling = [], doubleNext = false, holdUntil = 0, speedUntil = 0;
   let likeGoal = 0, viewGoal = 0, lastStats = null, nextEvent = 0, barA = 0, final10 = false, finalSaid = false;
   const tags = new Map();                // country -> { name, until, kind }
 
   const ball = (code, x, y) => { const a = Math.random() * Math.PI * 2; return { code, x, y, vx: Math.cos(a) * SPEED, vy: Math.sin(a) * SPEED, hot: 0 }; };
   const freeSpot = () => {
     for (let t = 0; t < 400; t++) {
-      const a = Math.random() * Math.PI * 2, d = HOLE + R + 20 + Math.random() * (RW - HOLE - 2 * R - 30);
+      const a = Math.random() * Math.PI * 2, d = HOLE + R + 30 + Math.random() * (RW - HOLE - 2 * R - 40);
       const x = CX + Math.cos(a) * d, y = CY + Math.sin(a) * d;
       if (balls.every((b) => Math.hypot(b.x - x, b.y - y) > 2 * R + 4)) return [x, y];
     }
@@ -116,7 +117,7 @@ async function main() {
     S.round++;
     teams = chooseTeams(); alive = new Set(teams); out = []; balls = []; shield = new Map(); revived = new Set(); revLeft = cfg.revives;
     power = new Map(); prog = new Map(); fans = new Map(); tags.clear();
-    phase = 'play'; phaseT = 0; simT = 0; toNext = 12; drawing = null; doubleNext = false; holdUntil = 0; speedUntil = 0; final10 = false; finalSaid = false;
+    phase = 'play'; phaseT = 0; simT = 0; toNext = 8; openLeft = 0; falling = []; doubleNext = false; holdUntil = 0; speedUntil = 0; final10 = false; finalSaid = false;
     likeGoal = 0; viewGoal = cfg.viewers; nextEvent = 240 + Math.random() * 120;
     for (const c of shuffle(teams.slice())) { const [x, y] = freeSpot(); balls.push(ball(c, x, y)); }
     $('win').hidden = true;
@@ -256,29 +257,28 @@ async function main() {
   }
 
   /* ---------------------------------------------------------------- the draw (black hole) */
-  // Time between draws: shorter at the start, longer near the end, adding up to about `minutes` a round.
-  const weights = (n) => Math.pow(COUNT / n, 0.55) * (n <= 2 ? 3 : n <= 4 ? 1.6 : 1);
-  let WSUM = 0; for (let n = COUNT; n >= 2; n--) WSUM += weights(n);
-  const gapFor = (n) => clamp(cfg.minutes * 60 * weights(n) / WSUM, 4, 600);
+  // How close to the middle a flag must be when the hole opens. Worked out so a round lasts about
+  // `minutes`: with many flags someone is usually on the hole, near the end it takes a while.
+  const AREA = Math.PI * (RW - R) * (RW - R);
+  let HSUM = 0; for (let n = 2; n <= COUNT; n++) HSUM += 1 / n;
+  const pNeed = (CYCLE + OPEN) * HSUM / Math.max(60, cfg.minutes * 60);   // chance per opening, per flag
+  const CATCH = (() => { const a = Math.PI, b = 2 * SPEED * OPEN, cc = -pNeed * AREA; return clamp((-b + Math.sqrt(b * b - 4 * a * cc)) / (2 * a), 3, HOLE); })();
 
-  const startDraw = () => {
-    const near = balls.filter((b) => !b.gone).sort((a, b) => Math.hypot(a.x - CX, a.y - CY) - Math.hypot(b.x - CX, b.y - CY));
-    let saved = null, victim = null;
-    for (const b of near) {
-      if (shield.has(b.code)) { if (!saved) saved = b; continue; }
-      victim = b; break;
+  const catchFlags = () => { // the hole is open: flags over it fall in (a shield bounces its flag out instead)
+    for (const b of balls) {
+      if (b.gone || Math.hypot(b.x - CX, b.y - CY) > CATCH) continue;
+      if (shield.has(b.code)) {
+        shield.delete(b.code);
+        popAt('shd', b.code, 'SHIELD SAVED', NAME(b.code), b.x, b.y - 70);
+        host(['THE SHIELD SAVED ', { node: flagNode(b.code) }, NAME(b.code) + '! TYPE IT AGAIN FOR A NEW SHIELD!'], 2);
+        const a = Math.random() * Math.PI * 2; b.x = CX + Math.cos(a) * (HOLE + R + 6); b.y = CY + Math.sin(a) * (HOLE + R + 6);
+        b.vx = Math.cos(a) * SPEED * 1.6; b.vy = Math.sin(a) * SPEED * 1.6;
+        continue;
+      }
+      if (alive.size - falling.length <= 1) return;   // never take the last flag
+      b.gone = true; falling.push({ b, t: 0, x0: b.x, y0: b.y });
+      sfx.draw();
     }
-    if (saved) { // the shield breaks and saves it
-      const by = shield.get(saved.code); shield.delete(saved.code);
-      popAt('shd', saved.code, 'SHIELD SAVED', NAME(saved.code), saved.x, saved.y - 60);
-      host(['THE SHIELD SAVED ', { node: flagNode(saved.code) }, NAME(saved.code) + '! TYPE IT AGAIN FOR A NEW SHIELD!'], 2);
-      const dx = saved.x - CX, dy = saved.y - CY, d = Math.hypot(dx, dy) || 1; saved.vx = dx / d * SPEED * 1.6; saved.vy = dy / d * SPEED * 1.6;
-      void by;
-    }
-    if (!victim) return;
-    drawing = { b: victim, t: 0, x0: victim.x, y0: victim.y };
-    victim.gone = true;
-    sfx.draw();
   };
 
   const eliminate = (b) => {
@@ -321,7 +321,7 @@ async function main() {
     if (alive.size > 12) opts.push('double');
     if (out.some((c) => !revived.has(c)) && alive.size > 2) opts.push('revive');
     const e = pick(opts);
-    if (e === 'double') { doubleNext = true; banner('DOUBLE DRAW!', 'THE NEXT DRAW TAKES 2 FLAGS', 'red', '🎁'); host(['MYSTERY BOX: DOUBLE DRAW! THE BLACK HOLE TAKES TWO FLAGS NEXT TIME — SHIELD YOUR COUNTRY!'], 3); }
+    if (e === 'double') { doubleNext = true; banner('BIG HOLE!', 'THE HOLE STAYS OPEN LONGER NEXT TIME', 'red', '🎁'); host(['MYSTERY BOX: BIG HOLE! NEXT TIME THE BLACK HOLE STAYS OPEN LONGER — SHIELD YOUR COUNTRY!'], 3); }
     if (e === 'shields') {
       banner('LUCKY SHIELDS!', '3 RANDOM COUNTRIES GET A SHIELD', 'gold', '🎁');
       shuffle([...alive].filter((c) => !shield.has(c))).slice(0, 3).forEach((c) => giveShield(c, '', 'LUCKY SHIELD'));
@@ -367,8 +367,6 @@ async function main() {
       // wall
       let dx = b.x - CX, dy = b.y - CY, d = Math.hypot(dx, dy);
       if (d > RW - R) { const nx = dx / d, ny = dy / d, v = b.vx * nx + b.vy * ny; if (v > 0) { b.vx -= 2 * v * nx; b.vy -= 2 * v * ny; sfx.knock(); } b.x = CX + nx * (RW - R); b.y = CY + ny * (RW - R); }
-      // black hole edge (closed between draws)
-      if (d < HOLE + R) { const nx = dx / (d || 1), ny = dy / (d || 1), v = b.vx * nx + b.vy * ny; if (v < 0) { b.vx -= 2 * v * nx; b.vy -= 2 * v * ny; } b.x = CX + nx * (HOLE + R); b.y = CY + ny * (HOLE + R); }
       // turning bars
       for (let k = 0; k < BARS; k++) {
         const [x1, y1, x2, y2] = barSeg(k);
@@ -405,21 +403,20 @@ async function main() {
     }
 
     if (phase !== 'play') { phaseT += dt / FAST; if (phaseT > WIN_SECS) newRound(); return; }
-    if (drawing) {
-      drawing.t += dt;
-      const p = Math.min(1, drawing.t / DRAW_SECS), b = drawing.b;
-      b.x = drawing.x0 + (CX - drawing.x0) * p * p; b.y = drawing.y0 + (CY - drawing.y0) * p * p; b.scale = 1 - p * 0.85; b.spin = p * 8;
-      if (p >= 1) {
-        drawing = null; eliminate(b);
-        if (doubleNext && phase === 'play') { doubleNext = false; startDraw(); }
-      }
-      return;
+    for (const f of falling) {
+      f.t += dt;
+      const p = Math.min(1, f.t / DRAW_SECS), b = f.b;
+      b.x = f.x0 + (CX - f.x0) * p; b.y = f.y0 + (CY - f.y0) * p; b.scale = 1 - p * 0.9; b.spin = p * 9;
+      if (p >= 1) { f.done = true; eliminate(b); }
     }
+    falling = falling.filter((f) => !f.done);
+    if (phase !== 'play') return;
+    if (openLeft > 0) { openLeft -= dt; catchFlags(); if (openLeft <= 0) toNext = CYCLE; return; }
     if (simT < holdUntil) return;
     const before = Math.ceil(toNext);
     toNext -= dt;
     if (toNext <= 3 && Math.ceil(toNext) !== before && toNext > 0) sfx.tick();
-    if (toNext <= 0) { toNext = gapFor(alive.size - 1); startDraw(); }
+    if (toNext <= 0) { openLeft = OPEN * (doubleNext ? 4 : 1); doubleNext = false; sfx.tone({ freq: 160, to: 60, type: 'sine', dur: 0.4, vol: 0.12 }); }
     if (cfg.events && simT > nextEvent && alive.size > 3) { nextEvent = simT + 240 + Math.random() * 120; mystery(); }
   };
 
@@ -452,17 +449,30 @@ async function main() {
     // bars
     c.lineCap = 'round'; c.lineWidth = BAR_W * 2; c.strokeStyle = '#8b7cf6';
     for (let i = 0; i < BARS; i++) { const [x1, y1, x2, y2] = barSeg(i); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
-    // black hole (glows red before a draw)
-    const hot = phase === 'play' && simT >= holdUntil && (toNext < 3.2 || drawing);
-    const pulse = hot ? 0.6 + 0.4 * Math.sin(simT * 14) : 0.35;
-    const hg = c.createRadialGradient(CX, CY, 10, CX, CY, HOLE + 16); hg.addColorStop(0, '#000'); hg.addColorStop(0.75, '#05000a'); hg.addColorStop(1, `rgba(255,45,85,${pulse * 0.5})`);
-    c.fillStyle = hg; c.beginPath(); c.arc(CX, CY, HOLE + 16, 0, 7); c.fill();
-    c.lineWidth = 7; c.strokeStyle = simT < holdUntil ? '#22d3ee' : `rgba(255,45,85,${0.5 + pulse * 0.5})`; c.shadowColor = c.strokeStyle; c.shadowBlur = hot ? 40 : 18;
-    c.beginPath(); c.arc(CX, CY, HOLE, 0, 7); c.stroke(); c.shadowBlur = 0;
-    if (simT < holdUntil) { c.fillStyle = '#7dd3fc'; c.font = '700 22px Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🔒 CLOSED', CX, CY); c.fillText(Math.ceil(holdUntil - simT) + 's', CX, CY + 26); }
-    // flags
-    for (const b of balls) if (b !== drawing?.b) drawBall(b);
-    if (drawing) drawBall(drawing.b);
+    // the hole: a closed lid most of the time, a black hole for a moment every few seconds
+    const open = openLeft > 0 && phase === 'play', lock = simT < holdUntil && phase === 'play';
+    const warn = !open && !lock && phase === 'play' && toNext < 2;
+    if (open) {
+      const hg = c.createRadialGradient(CX, CY, 4, CX, CY, HOLE + 26); hg.addColorStop(0, '#000'); hg.addColorStop(0.6, '#000'); hg.addColorStop(1, 'rgba(255,45,85,0)');
+      c.fillStyle = hg; c.beginPath(); c.arc(CX, CY, HOLE + 26, 0, 7); c.fill();
+      c.lineWidth = 6; c.strokeStyle = '#ff2d55'; c.shadowColor = '#ff2d55'; c.shadowBlur = 45; c.beginPath(); c.arc(CX, CY, HOLE, 0, 7); c.stroke(); c.shadowBlur = 0;
+    } else {
+      const lg = c.createRadialGradient(CX - 10, CY - 10, 4, CX, CY, HOLE); lg.addColorStop(0, '#7a86a8'); lg.addColorStop(1, '#2b3350');
+      c.fillStyle = lg; c.beginPath(); c.arc(CX, CY, HOLE, 0, 7); c.fill();
+      c.strokeStyle = 'rgba(10,14,30,.7)'; c.lineWidth = 3;
+      for (let q = 0; q < 6; q++) { const a = q * Math.PI / 3 + simT * 0.3; c.beginPath(); c.moveTo(CX, CY); c.lineTo(CX + Math.cos(a) * HOLE, CY + Math.sin(a) * HOLE); c.stroke(); }
+      const pulse = warn ? 0.6 + 0.4 * Math.sin(simT * 16) : 0.5;
+      c.lineWidth = 6; c.strokeStyle = lock ? '#22d3ee' : warn ? `rgba(255,45,85,${pulse})` : 'rgba(255,201,58,.8)';
+      c.shadowColor = c.strokeStyle; c.shadowBlur = warn ? 30 : 12; c.beginPath(); c.arc(CX, CY, HOLE, 0, 7); c.stroke(); c.shadowBlur = 0;
+    }
+    if (lock) { c.fillStyle = '#7dd3fc'; c.font = '700 20px Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🔒 ' + Math.ceil(holdUntil - simT) + 's', CX, CY + HOLE + 18); }
+    // flags (falling ones on top)
+    for (const b of balls) if (!b.gone) drawBall(b);
+    for (const f of falling) drawBall(f.b);
+    if (open || warn) { // the hole's ring also shows above the flags, so everyone sees the moment
+      c.lineWidth = open ? 8 : 5; c.strokeStyle = open ? '#ff2d55' : `rgba(255,45,85,${0.4 + 0.4 * Math.sin(simT * 16)})`;
+      c.shadowColor = '#ff2d55'; c.shadowBlur = open ? 50 : 20; c.beginPath(); c.arc(CX, CY, HOLE + (open ? 4 : 0), 0, 7); c.stroke(); c.shadowBlur = 0;
+    }
     // names over shielded / cheered flags
     c.font = '700 20px Rajdhani, Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
     for (const b of balls) {
@@ -488,9 +498,9 @@ async function main() {
   };
   const updateClock = () => {
     const el = $('clock'), lock = simT < holdUntil && phase === 'play';
-    const gap = gapFor(Math.max(2, alive.size)), left = lock ? holdUntil - simT : Math.max(0, toNext);
+    const gap = CYCLE, left = lock ? holdUntil - simT : openLeft > 0 ? 0 : Math.max(0, toNext);
     el.classList.toggle('lock', lock); el.classList.toggle('hot', !lock && left <= 3 && phase === 'play');
-    $('clock-n').textContent = phase !== 'play' ? '♛' : lock ? '🔒' : left > 99 ? Math.ceil(left / 60) + 'm' : Math.ceil(left);
+    $('clock-n').textContent = phase !== 'play' ? '♛' : lock ? '🔒' : openLeft > 0 ? '!' : Math.ceil(left);
     $('clock-arc').style.strokeDashoffset = String(264 * (1 - clamp(left / (lock ? 30 : gap), 0, 1)));
   };
 
@@ -518,7 +528,7 @@ async function main() {
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
-  window.__arena = { cfg, S, alive: () => alive, out: () => out, balls: () => balls, shield, phase: () => phase, simT: () => simT, toNext: () => toNext, onFan, revive, chat };
+  window.__arena = { cfg, S, alive: () => alive, out: () => out, balls: () => balls, shield, phase: () => phase, simT: () => simT, toNext: () => toNext, CATCH: () => CATCH, onFan, revive, chat };
 }
 
 main();
