@@ -50,7 +50,25 @@ class ArenaSfx extends Sfx {
   tick() { if (this.running) this.tone({ freq: 1250, type: 'square', dur: 0.05, vol: 0.11 }); }
   draw() { if (!this.running) return; this.tone({ freq: 520, to: 70, type: 'sawtooth', dur: 1.1, vol: 0.15 }); this.tone({ freq: 90, type: 'sine', dur: 0.7, vol: 0.26, delay: 0.5 }); }
   shield() { if (!this.running) return; this.tone({ freq: 660, to: 1320, type: 'triangle', dur: 0.35, vol: 0.18 }); }
-  gone() { if (!this.running) return; this.tone({ freq: 196, type: 'square', dur: 0.22, vol: 0.15 }); this.tone({ freq: 147, type: 'square', dur: 0.4, vol: 0.15, delay: 0.2 }); this.burst({ dur: 0.25, vol: 0.26, delay: 0.05 }); }
+  gone() { this.impact(); }
+  // A short punchy "boom-crash" like the big arena channels: a burst of noise that quickly darkens
+  // and fades (about a third of a second) on top of a deep thump.
+  impact() {
+    if (!this.running) return;
+    const c = this.ctx, t = c.currentTime;
+    if (!this.noise) {
+      const n = c.sampleRate * 0.6, buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      this.noise = buf;
+    }
+    const src = c.createBufferSource(); src.buffer = this.noise;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.7;
+    lp.frequency.setValueAtTime(7000, t); lp.frequency.exponentialRampToValueAtTime(350, t + 0.35);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.55, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+    src.connect(lp); lp.connect(g); g.connect(this.master); src.start(t); src.stop(t + 0.42);
+    this.tone({ freq: 140, to: 38, type: 'sine', dur: 0.5, vol: 0.6, attack: 0.004 });   // thump
+    this.tone({ freq: 2200, to: 900, type: 'triangle', dur: 0.06, vol: 0.12 });            // click on top
+  }
   revive() { if (!this.running) return; [0, 0.12, 0.24].forEach((d, i) => this.tone({ freq: 523 * (1 + i * 0.25), type: 'sine', dur: 0.25, vol: 0.20, delay: d })); }
 }
 
@@ -302,14 +320,14 @@ async function main() {
       }
       if (alive.size - falling.length <= 1) return;   // never take the last flag
       b.gone = true; falling.push({ b, t: 0, x0: b.x, y0: b.y });
-      sfx.draw(); tookOne = true; shakeT = 0.45;   // the arena shakes as the flag goes in
+      sfx.draw(); tookOne = true;
       return;
     }
   };
 
   const eliminate = (b) => {
     balls = balls.filter((x) => x !== b);
-    sfx.gone(); flashT = 0.35; shakeT = Math.max(shakeT, 0.55);   // a short white flash, like a camera
+    sfx.gone(); flashT = 0.35; shakeT = 0.3;   // flash + boom + a light shake   // a short white flash, like a camera
     alive.delete(b.code); out.push(b.code); prog.set(b.code, 0);
     const canRev = revLeft > 0 && !revived.has(b.code) && alive.size > 2;
     popAt('out', b.code, 'ELIMINATED', NAME(b.code), CX - 150, CY + 120);
@@ -472,7 +490,7 @@ async function main() {
   };
   const draw = () => {
     if (shakeT > 0) { // the whole arena shakes for a moment when a flag is eliminated
-      const m = 16 * Math.min(1, shakeT / 0.4);
+      const m = 7 * Math.min(1, shakeT / 0.2);
       cv.style.translate = `${(Math.random() * 2 - 1) * m}px ${(Math.random() * 2 - 1) * m}px`;
       shakeT -= 0.033; if (shakeT <= 0) cv.style.translate = '';
     }
