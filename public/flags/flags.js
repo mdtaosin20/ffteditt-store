@@ -46,12 +46,12 @@ function fitStage() {
 }
 
 class ArenaSfx extends Sfx {
-  knock() { if (!this.running || !this.limit('knock', 420)) return; this.tone({ freq: 300 + Math.random() * 90, type: 'sine', dur: 0.06, vol: 0.04 }); }
-  tick() { if (this.running) this.tone({ freq: 1250, type: 'square', dur: 0.05, vol: 0.05 }); }
-  draw() { if (!this.running) return; this.tone({ freq: 520, to: 70, type: 'sawtooth', dur: 1.1, vol: 0.07 }); this.tone({ freq: 90, type: 'sine', dur: 0.7, vol: 0.12, delay: 0.5 }); }
-  shield() { if (!this.running) return; this.tone({ freq: 660, to: 1320, type: 'triangle', dur: 0.35, vol: 0.08 }); }
-  gone() { if (!this.running) return; this.tone({ freq: 196, type: 'square', dur: 0.22, vol: 0.07 }); this.tone({ freq: 147, type: 'square', dur: 0.4, vol: 0.07, delay: 0.2 }); this.burst({ dur: 0.25, vol: 0.12, delay: 0.05 }); }
-  revive() { if (!this.running) return; [0, 0.12, 0.24].forEach((d, i) => this.tone({ freq: 523 * (1 + i * 0.25), type: 'sine', dur: 0.25, vol: 0.09, delay: d })); }
+  knock() { if (!this.running || !this.limit('knock', 420)) return; this.tone({ freq: 300 + Math.random() * 90, type: 'sine', dur: 0.06, vol: 0.09 }); }
+  tick() { if (this.running) this.tone({ freq: 1250, type: 'square', dur: 0.05, vol: 0.11 }); }
+  draw() { if (!this.running) return; this.tone({ freq: 520, to: 70, type: 'sawtooth', dur: 1.1, vol: 0.15 }); this.tone({ freq: 90, type: 'sine', dur: 0.7, vol: 0.26, delay: 0.5 }); }
+  shield() { if (!this.running) return; this.tone({ freq: 660, to: 1320, type: 'triangle', dur: 0.35, vol: 0.18 }); }
+  gone() { if (!this.running) return; this.tone({ freq: 196, type: 'square', dur: 0.22, vol: 0.15 }); this.tone({ freq: 147, type: 'square', dur: 0.4, vol: 0.15, delay: 0.2 }); this.burst({ dur: 0.25, vol: 0.26, delay: 0.05 }); }
+  revive() { if (!this.running) return; [0, 0.12, 0.24].forEach((d, i) => this.tone({ freq: 523 * (1 + i * 0.25), type: 'sine', dur: 0.25, vol: 0.20, delay: d })); }
 }
 
 async function main() {
@@ -149,14 +149,19 @@ async function main() {
   const report = reporter('flags');
   // background music (our own, made in code — no copyright claims); it starts when sound is allowed
   // (NCS songs, when the panel has them and this page is the live stream; otherwise our own music)
+  // The music has its own volume knob straight to the speakers (not through the effects'
+  // compressor, so it can't push the game sounds and LUNA down). While LUNA talks it drops low.
+  const musicBus = sfx.ok ? sfx.ctx.createGain() : null;
+  if (musicBus) musicBus.connect(sfx.ctx.destination);
+  const duckAll = (on) => { sfx.duck(on); if (musicBus) musicBus.gain.setTargetAtTime(on ? 0.25 : 1, sfx.ctx.currentTime, on ? 0.15 : 0.6); };
   if (cfg.music !== false && sfx.ok && !QS.has('nomusic')) {
-    const vol = (Number(cfg.music_vol) || 35) / 100, sid = QS.get('stream'), sg = QS.get('sig');
-    const own = () => new Music(sfx.ctx, sfx.master, { style: cfg.music_style, volume: vol }).start();
+    const vol = Math.max(0, Math.min(100, Number(cfg.music_vol ?? 35))) / 100, sid = QS.get('stream'), sg = QS.get('sig');
+    const own = () => new Music(sfx.ctx, musicBus, { style: cfg.music_style, volume: vol * 0.6 }).start();
     if (cfg.music_src === 'songs' && sid && sg) {
       const q = `stream=${encodeURIComponent(sid)}&sig=${encodeURIComponent(sg)}`;
       fetch('/api/music.php?' + q, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : [])).then((songs) => {
         if (!Array.isArray(songs) || !songs.length) return own();
-        new SongPlayer(sfx.ctx, sfx.master, { songs, volume: vol * 1.4, url: (f) => `/api/music.php?${q}&f=${encodeURIComponent(f)}` }).start();
+        new SongPlayer(sfx.ctx, musicBus, { songs, volume: vol * 0.5, url: (f) => `/api/music.php?${q}&f=${encodeURIComponent(f)}` }).start();
       }).catch(own);
     } else own();
   }
@@ -231,7 +236,7 @@ async function main() {
     game: 'flags', rows: 3, alwaysOn: true,
     match: countryMatcher(C),
     badge: (code) => flagNode(code, 32),
-    duck: (on) => sfx.duck(on),
+    duck: duckAll,
     sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
     onFan,
     onSub: (name, code) => {
@@ -436,7 +441,7 @@ async function main() {
     const before = Math.ceil(toNext);
     toNext -= dt;
     if (toNext <= 3 && Math.ceil(toNext) !== before && toNext > 0) sfx.tick();
-    if (toNext <= 0) { openLeft = OPEN; if (doubleNext) { openLeft = OPEN * 2.5; doubleNext = false; } sfx.tone({ freq: 160, to: 60, type: 'sine', dur: 0.4, vol: 0.12 }); }
+    if (toNext <= 0) { openLeft = OPEN; if (doubleNext) { openLeft = OPEN * 2.5; doubleNext = false; } sfx.tone({ freq: 160, to: 60, type: 'sine', dur: 0.4, vol: 0.26 }); }
     if (cfg.events && simT > nextEvent && alive.size > 3) { nextEvent = simT + 240 + Math.random() * 120; mystery(); }
   };
 

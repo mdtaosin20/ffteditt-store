@@ -133,7 +133,7 @@ page_start('Flag Arena', 'flags', $admin);
         </select></label>
       <label class="field"><span>Music volume (%)</span>
         <input name="music_vol" type="number" min="0" max="100" required value="<?= (int) $cfg['music_vol'] ?>">
-        <small class="muted">35 = soft under the game sounds.</small></label>
+        <small class="muted">35 = soft background (it drops lower while LUNA talks).</small></label>
     </div>
     <div class="form-actions"><button class="btn btn-pink" type="submit">Save settings</button></div>
   </section>
