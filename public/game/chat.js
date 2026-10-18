@@ -121,6 +121,7 @@ export function liveChat(o) {
   };
   const emptyRow = () => { if (!rows.children.length) rows.append(el('div', 'lc-row lc-empty', o.emptyHint)); };
   emptyRow();
+  if (o.alwaysOn) box.hidden = false;   // this game keeps the chat box and the host on screen all the time
 
   /* ---------- top fans ---------- */
   const renderFans = () => {
@@ -224,7 +225,7 @@ export function liveChat(o) {
     const now = performance.now();
     if (speaking) {
       if (o.busy && o.busy()) { stopAudio(); robot.hidden = true; speaking = null; pauseUntil = now + 800; } // winner screen: give way
-      else if (now > speakUntil) { robot.hidden = true; robot.classList.remove('talk'); speaking = null; pauseUntil = now + 700; }
+      else if (now > speakUntil) { if (!o.alwaysOn) robot.hidden = true; robot.classList.remove('talk'); speaking = null; pauseUntil = now + 700; }
       else if (!audio && now > speakUntil - 1500) robot.classList.remove('talk');
     }
     if (!speaking && queue.length && now > pauseUntil && !(o.busy && o.busy())) {
@@ -236,7 +237,7 @@ export function liveChat(o) {
       }
     }
     // ask for likes, subscribes and comments now and then (more often when the chat is quiet)
-    const gap = now - lastMsg > 60000 ? 50000 : 80000;
+    const gap = o.alwaysOn ? (now - lastMsg > 30000 ? 14000 : 30000) : now - lastMsg > 60000 ? 50000 : 80000;
     if (cfg.idle && cfg.robot && !speaking && !queue.length && now - lastPromo > gap) {
       lastPromo = now;
       say(pick(o.idleLines.concat(PROMO)), 0);
