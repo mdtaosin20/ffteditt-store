@@ -1,7 +1,7 @@
 // FFTEdit · Ball Drop Game (3D). Runs by itself, made for 24/7 vertical live streams.
 import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
-import { Sfx, Commentator, holdScreen, PACE, reporter } from './audio.js?v=12';
+import { Sfx, Commentator, holdScreen, PACE, reporter, freshRun } from './audio.js?v=13';
 import { liveChat } from './chat.js?v=3';
 
 /* ------------------------------------------------------------------ config */
@@ -644,6 +644,7 @@ async function main() {
   // Scores survive a page reload; the admin "Reset scores" button changes cfg.reset.
   // A match = rounds of ROUND_SECS seconds. Most goals in a round wins it (a draw goes to a golden goal).
   // Whoever wins NEED rounds wins the match.
+  freshRun('ball', ['fft_match', 'fft_fans_ball']);
   let score = [0, 0], won = [0, 0], roundNo = 1, timeLeft = ROUND_SECS, golden = false;
   try {
     const s = JSON.parse(localStorage.getItem('fft_match') || 'null');

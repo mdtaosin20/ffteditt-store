@@ -130,6 +130,7 @@ function migrate(PDO $pdo): void
     $add('streams', 'chat_status', "TEXT NOT NULL DEFAULT ''");
     $add('streams', 'chat_seen', 'INTEGER NOT NULL DEFAULT 0');
     $add('streams', 'chat_count', 'INTEGER NOT NULL DEFAULT 0');
+    $add('streams', 'run_id', 'INTEGER NOT NULL DEFAULT 0');   // new number on every Start = games begin fresh
     if ($pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='robot_tts'")->fetchColumn()) {
         $add('robot_tts', 'voice', "TEXT NOT NULL DEFAULT 'ryan'");
     }

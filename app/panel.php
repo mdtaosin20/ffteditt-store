@@ -201,7 +201,8 @@ function schedule_tick(): void
         $in = schedule_in_window($r, $now);
         if ($in && $r['last_state'] !== 'in') {
             if ($r['stream_key'] !== '' && $r['server_id']) {
-                db()->prepare("UPDATE streams SET desired = 'on', error = NULL, updated_at = ? WHERE id = ?")->execute([$now, $r['stream_id']]);
+                db()->prepare("UPDATE streams SET desired = 'on', error = NULL, updated_at = ?,
+                               run_id = CASE WHEN desired = 'off' THEN ? ELSE run_id END WHERE id = ?")->execute([$now, $now, $r['stream_id']]);
                 log_activity("Schedule started '{$r['name']}'", 'ok');
             } else {
                 log_activity("Schedule could not start '{$r['name']}' (no stream key or server)", 'error');

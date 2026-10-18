@@ -187,7 +187,7 @@ foreach ($mine as $id => $row) {
         'name'         => $row['name'],
         'rev'          => (int) $row['rev'],
         'rtmp'         => rtrim($row['rtmp_url'], '/') . '/' . $row['stream_key'],
-        'page_url'     => signed_page_url($row['page_url'], $id),
+        'page_url'     => signed_page_url($row['page_url'], $id) . '&run=' . (int) ($row['run_id'] ?? 0),
         'width'        => $preset['w'],
         'height'       => $preset['h'],
         'kbps'         => $preset['kbps'],

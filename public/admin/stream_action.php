@@ -10,7 +10,9 @@ check_csrf();
 $do  = (string) ($_POST['do'] ?? '');
 $now = time();
 
-$startSql = "UPDATE streams SET desired = 'on', error = NULL, updated_at = ?
+// Start gives the stream a new run number, so the games on it begin fresh (a crash restart keeps the old one).
+$startSql = "UPDATE streams SET desired = 'on', error = NULL, updated_at = ?,
+             run_id = CASE WHEN desired = 'off' THEN ? ELSE run_id END
              WHERE stream_key <> '' AND server_id IS NOT NULL";
 $stopSql  = "UPDATE streams SET desired = 'off', updated_at = ?";
 
@@ -30,7 +32,7 @@ switch ($do) {
                 flash('Add a stream key and choose a server first.', 'error');
                 break;
             }
-            db()->prepare($startSql . ' AND id = ?')->execute([$now, $id]);
+            db()->prepare($startSql . ' AND id = ?')->execute([$now, $now, $id]);
             log_activity("Start requested: {$s['name']}");
             flash("Starting \"{$s['name']}\"… the server will pick it up in a few seconds.");
         } else {
@@ -42,14 +44,14 @@ switch ($do) {
 
     case 'start_all':
         $n = db()->prepare($startSql);
-        $n->execute([$now]);
+        $n->execute([$now, $now]);
         log_activity('Start requested: all streams');
         flash('Starting all streams that have a key and a server.');
         break;
 
     case 'restart_all':
-        $n = db()->prepare("UPDATE streams SET rev = rev + 1, updated_at = ? WHERE desired = 'on'");
-        $n->execute([$now]);
+        $n = db()->prepare("UPDATE streams SET rev = rev + 1, run_id = ?, updated_at = ? WHERE desired = 'on'");
+        $n->execute([$now, $now]);
         log_activity('Restart requested: all live streams');
         flash('Restarting all running streams. They come back in about 20 seconds.');
         break;

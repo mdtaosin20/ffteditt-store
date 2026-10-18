@@ -179,3 +179,18 @@ export function reporter(game) {
     }).catch(() => {});
   };
 }
+
+/* ------------------------------------------------------------ fresh start */
+// The panel adds &run=<number> to the address; the number changes every time the admin presses
+// Start (or Restart). A new number = the game begins from zero. A crash restart keeps the number,
+// so the game simply continues.
+export function freshRun(game, keys) {
+  const run = new URLSearchParams(location.search).get('run');
+  if (!run || run === '0') return false;
+  try {
+    if (localStorage.getItem('fft_run_' + game) === run) return false;
+    keys.forEach((k) => localStorage.removeItem(k));
+    localStorage.setItem('fft_run_' + game, run);
+    return true;
+  } catch (e) { return false; }
+}
