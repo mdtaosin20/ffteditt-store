@@ -387,6 +387,11 @@ function yt_apply(array $s): array
         $sn = $r[1]['items'][0]['snippet'];
 
         $t = yt_texts($s);
+        // NCS asks for this credit when its songs play in a livestream: always add it (once)
+        if (game_of_url($s['page_url']) === 'flags' && music_tracks() && !str_contains($t['desc'], 'spoti.fi/NCS')) {
+            $f = flags_config();
+            if (!empty($f['music']) && ($f['music_src'] ?? '') === 'songs') $t['desc'] = rtrim($t['desc']) . "\n\n" . music_credit_text();
+        }
         preg_match_all('/#([\p{L}\p{N}_]+)/u', $t['desc'], $m);
         $snippet = [
             'title'       => $t['title'],
