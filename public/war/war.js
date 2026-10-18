@@ -90,7 +90,10 @@ async function main() {
   let g = new Int8Array(TOTAL), cnt = new Int32Array(N), lastBy = new Int16Array(N).fill(-1);
   let balls = [], alive = N, simT = 0, warNo = 1, lastSudden = 0, colorOf = [], phase = 'play', phaseT = 0, champion = -1;
   let outOrder = [];   // countries in the order they were knocked out
-  const teamAlive = new Uint8Array(N), boostUntil = new Float64Array(N), tagText = new Array(N).fill(''), tagUntil = new Float64Array(N);
+  const teamAlive = new Uint8Array(N), boostUntil = new Float64Array(N);
+  // viewers who cheered for each country (newest first): each of its balls carries one of their names
+  const FAN_SECS = 240, FAN_MAX = 6, wall = () => performance.now() / 1000;
+  const fans = Array.from({ length: N }, () => []);
 
   const speedBase = () => 260 * (cfg.speed / 100);
   const startBall = (t, x, y) => { const a = Math.random() * Math.PI * 2; return { t, x, y, vx: Math.cos(a), vy: Math.sin(a) }; };
@@ -113,7 +116,7 @@ async function main() {
     }
     balls = seeds.map(([x, y, t]) => startBall(t, x, y));
     colorOf = shuffle(PALETTE.slice(0, Math.max(N, 1)));
-    teamAlive.fill(1); boostUntil.fill(0); tagUntil.fill(0); outOrder = [];
+    teamAlive.fill(1); boostUntil.fill(0); outOrder = [];
     alive = N; simT = 0; lastSudden = 0; phase = 'play'; phaseT = 0; champion = -1; lastBy.fill(-1);
   };
 
@@ -225,7 +228,10 @@ async function main() {
     onFan: (code, name) => {
       const t = teamOf(code);
       if (t < 0 || !teamAlive[t]) return;
-      tagText[t] = name.toUpperCase().slice(0, 12); tagUntil[t] = simT + BOOST_SECS + 4;
+      const nm = name.toUpperCase().slice(0, 12);
+      fans.forEach((list) => { const j = list.findIndex((f) => f.name === nm); if (j >= 0) list.splice(j, 1); }); // one viewer, one country
+      fans[t].unshift({ name: nm, until: wall() + FAN_SECS, hot: wall() + BOOST_SECS + 4 });
+      if (fans[t].length > FAN_MAX) fans[t].length = FAN_MAX;
       if (cfg.boost) boostUntil[t] = simT + BOOST_SECS;
     },
     emptyHint: 'Type a country from the map — its ball gets a speed boost!',
@@ -413,15 +419,19 @@ async function main() {
       c.lineWidth = boosted ? 5 : 4; c.strokeStyle = boosted ? '#ffd166' : '#fff';
       c.beginPath(); c.arc(b.x, b.y, R, 0, 7); c.stroke();
     }
-    // viewers' names over their boosted balls
+    // viewers' names over the balls: every ball of a country carries one of its fans' names
+    // (the newest fan gets the first ball; gold while their boost is on)
     c.font = '700 22px Rajdhani, Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    const tagged = new Set();
-    for (const b of balls) {
-      if (tagged.has(b.t) || !tagText[b.t] || tagUntil[b.t] < now) continue;
-      tagged.add(b.t);
-      const label = '★ ' + tagText[b.t], tw = c.measureText(label).width + 20, y = b.y - R - 20;
-      c.fillStyle = '#ffc93a'; c.beginPath(); c.roundRect(b.x - tw / 2, y - 15, tw, 30, 15); c.fill();
-      c.fillStyle = '#1a1200'; c.fillText(label, b.x, y + 1);
+    const tnow = wall(), seen = new Int16Array(N);
+    for (let t = 0; t < N; t++) { const list = fans[t]; while (list.length && list[list.length - 1].until < tnow) list.pop(); }
+    const tags = [];
+    for (const b of balls) { const f = fans[b.t][seen[b.t]++]; if (f) tags.push([b, f]); }
+    tags.sort((a, z) => (a[1].hot > tnow) - (z[1].hot > tnow)); // the boosting fan's name on top
+    for (const [b, f] of tags) {
+      const hot = f.hot > tnow, label = (hot ? '★ ' : '') + f.name, tw = c.measureText(label).width + 20, y = b.y - R - 20;
+      c.fillStyle = hot ? '#ffc93a' : 'rgba(8,14,34,.82)'; c.beginPath(); c.roundRect(b.x - tw / 2, y - 15, tw, 30, 15); c.fill();
+      if (!hot) { c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,.7)'; c.stroke(); }
+      c.fillStyle = hot ? '#1a1200' : '#fff'; c.fillText(label, b.x, y + 1);
     }
     c.textBaseline = 'alphabetic';
   };
@@ -492,7 +502,7 @@ async function main() {
   };
   updateUI();
   requestAnimationFrame(frame);
-  window.__war = { cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat };
+  window.__war = { cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
 }
 
 main();
