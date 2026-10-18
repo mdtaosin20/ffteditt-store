@@ -45,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $new['music'] = isset($_POST['music']);
     $style = (string) ($_POST['music_style'] ?? 'upbeat');
     $new['music_style'] = in_array($style, ['upbeat', 'chill', 'epic'], true) ? $style : 'upbeat';
+    $new['music_src'] = ($_POST['music_src'] ?? '') === 'own' ? 'own' : 'songs';
     $mv = (int) ($_POST['music_vol'] ?? -1);
     if ($mv < 0 || $mv > 100) $errors[] = 'Music volume must be between 0 and 100.'; else $new['music_vol'] = $mv;
 
@@ -118,7 +119,13 @@ page_start('Flag Arena', 'flags', $admin);
     <p class="muted small" style="margin:0 0 8px">The music is made by the game itself while it plays (no music files), so it is our own and copyright free — YouTube has nothing to claim. It gets quieter while LUNA talks.</p>
     <div class="row2">
       <label class="check"><input type="checkbox" name="music" <?= $cfg['music'] ? 'checked' : '' ?>> Play background music</label>
-      <label class="field"><span>Style</span>
+      <label class="field"><span>Music</span>
+        <select name="music_src">
+          <option value="songs" <?= $cfg['music_src'] === 'songs' ? 'selected' : '' ?>>NCS songs (<?= count(music_tracks()) ?> added) — on the live stream</option>
+          <option value="own" <?= $cfg['music_src'] === 'own' ? 'selected' : '' ?>>Our own music made in code</option>
+        </select>
+        <small class="muted">With no songs added, our own music plays.</small></label>
+      <label class="field"><span>Style (own music)</span>
         <select name="music_style">
           <?php foreach (['upbeat' => 'Upbeat (pop / EDM)', 'chill' => 'Chill (lo-fi)', 'epic' => 'Epic (battle)'] as $k => $l): ?>
             <option value="<?= $k ?>" <?= $cfg['music_style'] === $k ? 'selected' : '' ?>><?= $l ?></option>

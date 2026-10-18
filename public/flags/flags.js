@@ -6,7 +6,7 @@
 // The last flag left is the round champion, then a new round starts (about an hour a round).
 import { Sfx, holdScreen, PACE, reporter, freshRun } from '/game/audio.js?v=13';
 import { liveChat, countryMatcher } from '/game/chat.js?v=5';
-import { Music } from '/game/music.js?v=1';
+import { Music, SongPlayer } from '/game/music.js?v=2';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -147,9 +147,17 @@ async function main() {
   setTimeout(() => { if (sfx.ok && !sfx.running) soundBtn.hidden = false; }, 1500);
   const report = reporter('flags');
   // background music (our own, made in code — no copyright claims); it starts when sound is allowed
+  // (NCS songs, when the panel has them and this page is the live stream; otherwise our own music)
   if (cfg.music !== false && sfx.ok && !QS.has('nomusic')) {
-    const music = new Music(sfx.ctx, sfx.master, { style: cfg.music_style, volume: (Number(cfg.music_vol) || 35) / 100 });
-    music.start();
+    const vol = (Number(cfg.music_vol) || 35) / 100, sid = QS.get('stream'), sg = QS.get('sig');
+    const own = () => new Music(sfx.ctx, sfx.master, { style: cfg.music_style, volume: vol }).start();
+    if (cfg.music_src === 'songs' && sid && sg) {
+      const q = `stream=${encodeURIComponent(sid)}&sig=${encodeURIComponent(sg)}`;
+      fetch('/api/music.php?' + q, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : [])).then((songs) => {
+        if (!Array.isArray(songs) || !songs.length) return own();
+        new SongPlayer(sfx.ctx, sfx.master, { songs, volume: vol * 1.4, url: (f) => `/api/music.php?${q}&f=${encodeURIComponent(f)}` }).start();
+      }).catch(own);
+    } else own();
   }
 
   const banner = (text, small, cls = '', box = '') => {

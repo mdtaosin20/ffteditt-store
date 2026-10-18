@@ -104,3 +104,55 @@ export class Music {
   snare(t) { this.osc('triangle', 210, t, 0.12, 0.12, 0.002, 0.08); this.osc('sine', 330, t, 0.08, 0.06, 0.002, 0.06); }
   hat(t) { this.osc('sine', 7400, t, 0.03, 0.012, 0.001, 0.02); }
 }
+
+/* ---------------------------------------------------------------- song playlist with crossfade */
+// Plays song files one after another in a shuffled order. The next song fades in while the
+// current one fades out (about 7 s), so there is never a gap and you can't hear where one ends.
+export class SongPlayer {
+  constructor(ctx, out, { songs, url, volume = 0.4, fade = 7 }) {
+    this.ctx = ctx; this.songs = songs; this.url = url; this.fade = fade;
+    this.vol = Math.max(0, Math.min(1, volume));
+    this.out = ctx.createGain(); this.out.gain.value = this.vol; this.out.connect(out);
+    this.decks = [0, 1].map(() => {
+      const el = new Audio(); el.preload = 'auto'; el.crossOrigin = 'anonymous';
+      const src = ctx.createMediaElementSource(el), g = ctx.createGain(); g.gain.value = 0;
+      src.connect(g); g.connect(this.out);
+      return { el, g };
+    });
+    this.cur = 0; this.order = []; this.last = '';
+    this.timer = null;
+  }
+  nextSong() {
+    if (!this.order.length) {
+      this.order = this.songs.slice().sort(() => Math.random() - 0.5);
+      if (this.order.length > 1 && this.order[0].f === this.last) this.order.push(this.order.shift());
+    }
+    const s = this.order.shift(); this.last = s.f; return s;
+  }
+  playOn(i, fadeIn) {
+    const d = this.decks[i], s = this.nextSong(), t = this.ctx.currentTime;
+    d.el.src = this.url(s.f); d.el.currentTime = 0;
+    d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(0.0001, t); d.g.gain.linearRampToValueAtTime(1, t + fadeIn);
+    d.el.play().catch(() => {});
+    d.started = performance.now();
+  }
+  start() {
+    if (this.timer) return;
+    this.playOn(this.cur, 2);
+    this.timer = setInterval(() => this.tick(), 500);
+  }
+  tick() {
+    if (this.ctx.state !== 'running') return;
+    const d = this.decks[this.cur];
+    const left = (d.el.duration || 0) - d.el.currentTime;
+    const stuck = d.el.error || (d.el.paused && performance.now() - d.started > 8000);
+    if ((d.el.duration && left < this.fade) || d.el.ended || stuck) {
+      const t = this.ctx.currentTime;
+      d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(d.g.gain.value, t); d.g.gain.linearRampToValueAtTime(0.0001, t + this.fade);
+      const old = d.el; setTimeout(() => old.pause(), this.fade * 1000 + 200);
+      this.cur = 1 - this.cur;
+      this.playOn(this.cur, stuck ? 1 : this.fade);
+    } else if (d.el.paused && !d.el.ended) d.el.play().catch(() => {});
+  }
+  setVolume(v) { this.vol = Math.max(0, Math.min(1, v)); this.out.gain.setTargetAtTime(this.vol, this.ctx.currentTime, 0.3); }
+}

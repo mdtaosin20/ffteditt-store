@@ -15,6 +15,7 @@ function flags_defaults(): array
         'viewers'  => 100,     // people watching reach this: top 3 chat countries get shields
         'events'   => true,    // mystery boxes (double draw, lucky shields, …)
         'music'    => true,    // background music made in code (copyright free)
+        'music_src'   => 'songs',   // 'songs' = NCS songs from the panel (live stream only), 'own' = made in code
         'music_style' => 'upbeat',
         'music_vol'   => 35,   // %
         'autoplay' => true,

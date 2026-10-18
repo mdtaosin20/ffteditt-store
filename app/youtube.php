@@ -207,6 +207,7 @@ function yt_defaults(string $game): array
                 . "🎙️ LUNA, our live host, reads your comments and answers you live.\n"
                 . "🎁 Mystery boxes: Double Draw, Lucky Shields, Speed Storm, Lucky Comeback!\n"
                 . "⏱️ One round ≈ {$f['minutes']} minutes · Live 24/7\n\n"
+                . (!empty($f['music']) && ($f['music_src'] ?? '') === 'songs' && music_tracks() ? music_credit_text() . "\n" : '')
                 . "👍 LIKE IF YOU SEE YOUR COUNTRY FLAG and share with friends from your country!\n\n"
                 . "#flagarena #countryballs #flags #countries #marblerace #live #interactive #chatgame #satisfying #geography #bangladesh #india #pakistan #brazil #usa",
         ];
