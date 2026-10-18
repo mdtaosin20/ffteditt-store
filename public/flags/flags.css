@@ -39,7 +39,7 @@ body { position: fixed; inset: 0; overflow: clip; }
 .clock .bg { stroke: #2a3352; }
 .clock .fg { fill: none; stroke: var(--gold); stroke-linecap: round; stroke-dasharray: 264; transition: stroke-dashoffset .25s linear; }
 .clock b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-size: 50px; }
-.clock.hot .fg { stroke: #ff2d55; } .clock.hot b { color: #ff6b81; animation: beat .5s ease-in-out infinite alternate; }
+.clock.hot b { animation: beat .5s ease-in-out infinite alternate; }
 .clock.lock .fg { stroke: #22d3ee; }
 @keyframes beat { to { transform: scale(1.15); } }
 

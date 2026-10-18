@@ -26,7 +26,10 @@ const W = 1080, H = 680;                 // canvas size (stage y 408 … 1088)
 const CX = 540, CY = 335, RW = 322;      // arena centre and inner wall radius
 const HOLE = 44;                         // black centre of the hole
 const RING = 92;                         // the pink ring around it (flags roll over it)
-const CYCLE = 5, OPEN = 0.45;            // the hole is closed 5 s, then open a moment: whatever is on it falls in
+// Like the arena games on YouTube: the hole is closed ~4.4 s, then its iris turns open (0.4 s),
+// stays open 0.8 s and closes (0.4 s) — about every 6 seconds. A flag over the open hole falls in.
+const CYCLE = 4.4, OPEN = 1.6, OPEN_IN = 0.4, OPEN_EFF = 1.0;
+const openness = (left) => { const t = OPEN - left; return t < OPEN_IN ? t / OPEN_IN : left < OPEN_IN ? left / OPEN_IN : 1; };
 const BAR_LEN = 118, BAR_W = 8, BARS = 6, BAR_TILT = 0.32;   // six bars fixed to the wall, turning with it
 const FIXED = 1 / 120;
 const DRAW_SECS = 0.9;                   // how long a flag takes to fall in
@@ -68,7 +71,7 @@ async function main() {
   const flagNode = (code, w = 40) => { const d = document.createElement('span'); d.className = 'flag'; d.style.cssText = flagCss(code, w); return d; };
   const COUNT = clamp(Math.round(cfg.count) || 64, 16, 100);
   const R = COUNT > 72 ? 24 : COUNT > 48 ? 27 : 31;      // ball radius
-  const SPEED = 190;
+  const SPEED = 150;
 
   { const [a, b] = cfg.title.split(' '); $('title').innerHTML = b ? `${a} <b>${cfg.title.slice(a.length + 1)}</b>` : a; }
   $('rules').innerHTML = `💬 ${cfg.shield} chats → <b class="s">SHIELD</b><br>💬 ${cfg.revive} chats if out → <b class="r">REVIVE</b><br>🔔 Subscribe → <b class="f">FREE SHIELD</b><br>⭐ Super Chat → <b class="x">BOTH</b>`;
@@ -264,11 +267,11 @@ async function main() {
   const AREA = Math.PI * (RW - R) * (RW - R);
   let HSUM = 0; for (let n = 2; n <= COUNT; n++) HSUM += 1 / n;
   const pNeed = (CYCLE + OPEN) * HSUM / Math.max(60, cfg.minutes * 60 * 0.78);   // chance per opening, per flag (shields, revives and goals add the rest)
-  const CATCH = (() => { const a = Math.PI, b = 2 * SPEED * OPEN, cc = -pNeed * AREA; return clamp((-b + Math.sqrt(b * b - 4 * a * cc)) / (2 * a), 3, HOLE); })();
+  const CATCH = (() => { const a = Math.PI, b = 2 * SPEED * OPEN_EFF, cc = -pNeed * AREA; return clamp((-b + Math.sqrt(b * b - 4 * a * cc)) / (2 * a), 4, R * 0.75); })();
 
   const catchFlags = () => { // the hole is open: flags over it fall in (a shield bounces its flag out instead)
     for (const b of balls) {
-      if (b.gone || Math.hypot(b.x - CX, b.y - CY) > CATCH) continue;
+      if (b.gone || Math.hypot(b.x - CX, b.y - CY) > CATCH * (openLeft > OPEN ? 1 : openness(openLeft))) continue;
       if (shield.has(b.code)) {
         shield.delete(b.code);
         popAt('shd', b.code, 'SHIELD SAVED', NAME(b.code), b.x, b.y - 70);
@@ -285,7 +288,7 @@ async function main() {
 
   const eliminate = (b) => {
     balls = balls.filter((x) => x !== b);
-    sfx.gone();
+    sfx.gone(); flashT = 0.35;   // a short white flash, like a camera
     alive.delete(b.code); out.push(b.code); prog.set(b.code, 0);
     const canRev = revLeft > 0 && !revived.has(b.code) && alive.size > 2;
     popAt('out', b.code, 'ELIMINATED', NAME(b.code), CX - 150, CY + 120);
@@ -422,14 +425,14 @@ async function main() {
     const before = Math.ceil(toNext);
     toNext -= dt;
     if (toNext <= 3 && Math.ceil(toNext) !== before && toNext > 0) sfx.tick();
-    if (toNext <= 0) { openLeft = OPEN * (doubleNext ? 4 : 1); doubleNext = false; sfx.tone({ freq: 160, to: 60, type: 'sine', dur: 0.4, vol: 0.12 }); }
+    if (toNext <= 0) { openLeft = OPEN; if (doubleNext) { openLeft = OPEN * 2.5; doubleNext = false; } sfx.tone({ freq: 160, to: 60, type: 'sine', dur: 0.4, vol: 0.12 }); }
     if (cfg.events && simT > nextEvent && alive.size > 3) { nextEvent = simT + 240 + Math.random() * 120; mystery(); }
   };
 
   /* ---------------------------------------------------------------- drawing */
   const cv = $('arena'), c = cv.getContext('2d');
   let k = 1;
-  let irisO = 0, irisRot = 0;
+  let irisO = 0, irisRot = 0, flashT = 0;
   const resize = () => { const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 1.5); cv.width = Math.round(r.width * dpr) || W; cv.height = Math.round(r.height * dpr) || H; k = cv.width / W; };
   resize(); addEventListener('resize', resize);
   const drawBall = (b) => {
@@ -456,35 +459,28 @@ async function main() {
     // bars
     c.lineCap = 'round'; c.lineWidth = BAR_W * 2; c.strokeStyle = '#8b7cf6';
     for (let i = 0; i < BARS; i++) { const [x1, y1, x2, y2] = barSeg(i); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
-    // the hole: a pink ring with turning iris blades; the blades open for a moment every few seconds
+    // the hole: a gold ring with iris blades; when it opens the ring turns pink and the blades turn open
     const open = openLeft > 0 && phase === 'play', lock = simT < holdUntil && phase === 'play';
-    const warn = !open && !lock && phase === 'play' && toNext < 2;
-    irisO += ((open ? 1 : 0) - irisO) * (open ? 0.45 : 0.2);
-    irisRot += (open ? 0.25 : 0.01);
-    c.fillStyle = 'rgba(70,40,110,.45)'; c.beginPath(); c.arc(CX, CY, RING, 0, 7); c.fill();
-    const inner = 6 + (HOLE - 6) * irisO;
-    for (let q = 0; q < 6; q++) {
-      const a0 = irisRot + q * Math.PI / 3, a1 = a0 + Math.PI / 3;
-      c.fillStyle = q % 2 ? 'rgba(120,80,170,.55)' : 'rgba(90,55,140,.55)';
-      c.beginPath(); c.arc(CX, CY, RING - 5, a0, a1); c.arc(CX, CY, inner, a1, a0, true); c.closePath(); c.fill();
+    irisO = open ? (openLeft > OPEN ? 1 : openness(openLeft)) : 0;
+    irisRot += open ? 0.12 : 0.004;
+    c.fillStyle = 'rgba(95,90,170,.55)'; c.beginPath(); c.arc(CX, CY, RING, 0, 7); c.fill();
+    const inner = 4 + (HOLE - 4) * irisO;
+    for (let q = 0; q < 8; q++) {
+      const a0 = irisRot + q * Math.PI / 4, a1 = a0 + Math.PI / 4;
+      c.fillStyle = q % 2 ? 'rgba(130,120,200,.55)' : 'rgba(105,95,180,.55)';
+      c.beginPath(); c.arc(CX, CY, RING - 4, a0, a1); c.arc(CX, CY, inner, a1 + irisO * 0.6, a0 + irisO * 0.6, true); c.closePath(); c.fill();
     }
-    const hg = c.createRadialGradient(CX, CY, 2, CX, CY, inner + 4); hg.addColorStop(0, '#000'); hg.addColorStop(0.8, '#000'); hg.addColorStop(1, 'rgba(0,0,0,0)');
-    c.fillStyle = hg; c.beginPath(); c.arc(CX, CY, inner + 4, 0, 7); c.fill();
-    const pulse = 0.6 + 0.4 * Math.sin(simT * 16);
-    c.lineWidth = 7; c.strokeStyle = lock ? '#22d3ee' : open ? '#ff2d55' : warn ? `rgba(255,45,85,${pulse})` : '#ff4fa3';
-    c.shadowColor = c.strokeStyle; c.shadowBlur = open ? 45 : warn ? 30 : 16; c.beginPath(); c.arc(CX, CY, RING, 0, 7); c.stroke(); c.shadowBlur = 0;
+    if (irisO > 0.02) {
+      const hg = c.createRadialGradient(CX, CY, 2, CX, CY, inner + 6); hg.addColorStop(0, '#000'); hg.addColorStop(0.8, '#05000a'); hg.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = hg; c.beginPath(); c.arc(CX, CY, inner + 6, 0, 7); c.fill();
+    }
+    c.lineWidth = 6; c.strokeStyle = lock ? '#22d3ee' : open ? '#ff4fd8' : '#f5c33b';
+    c.shadowColor = c.strokeStyle; c.shadowBlur = open ? 26 : 10; c.beginPath(); c.arc(CX, CY, RING, 0, 7); c.stroke(); c.shadowBlur = 0;
     if (lock) { c.fillStyle = '#7dd3fc'; c.font = '700 20px Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🔒 ' + Math.ceil(holdUntil - simT) + 's', CX, CY + RING + 18); }
     // flags (falling ones on top)
     for (const b of balls) if (!b.gone) drawBall(b);
     for (const f of falling) drawBall(f.b);
-    if (irisO > 0.08) { // the open hole shows above the flags, so everyone sees the moment
-      c.globalAlpha = Math.min(1, irisO * 1.2); c.fillStyle = '#000'; c.beginPath(); c.arc(CX, CY, inner, 0, 7); c.fill();
-      c.lineWidth = 8; c.strokeStyle = '#ff2d55'; c.shadowColor = '#ff2d55'; c.shadowBlur = 50; c.beginPath(); c.arc(CX, CY, inner + 3, 0, 7); c.stroke(); c.shadowBlur = 0; c.globalAlpha = 1;
-      for (const f of falling) drawBall(f.b);
-    } else if (warn) {
-      c.lineWidth = 5; c.strokeStyle = `rgba(255,45,85,${0.4 + 0.4 * Math.sin(simT * 16)})`; c.shadowColor = '#ff2d55'; c.shadowBlur = 20;
-      c.beginPath(); c.arc(CX, CY, RING, 0, 7); c.stroke(); c.shadowBlur = 0;
-    }
+    if (flashT > 0) { c.fillStyle = `rgba(255,255,255,${Math.min(0.55, flashT * 1.8)})`; c.beginPath(); c.arc(CX, CY, RW + 6, 0, 7); c.fill(); flashT -= 0.033; }
     // names over shielded / cheered flags
     c.font = '700 20px Rajdhani, Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
     for (const b of balls) {
