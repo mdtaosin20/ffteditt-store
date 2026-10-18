@@ -285,9 +285,13 @@ async function main() {
   // A flag falls when at least half of it is over the open black hole (its centre inside the hole).
   const holeNow = () => HOLE * (openLeft > OPEN ? 1 : openness(openLeft));
 
+  // Only ONE flag falls each time the hole opens (the one nearest the middle), like the big arena channels.
+  let tookOne = false, shakeT = 0;
   const catchFlags = () => { // the hole is open: flags over it fall in (a shield bounces its flag out instead)
-    for (const b of balls) {
-      if (b.gone || Math.hypot(b.x - CX, b.y - CY) > holeNow()) continue;
+    if (tookOne) return;
+    const near = balls.filter((b) => !b.gone && Math.hypot(b.x - CX, b.y - CY) <= holeNow())
+      .sort((p, q) => Math.hypot(p.x - CX, p.y - CY) - Math.hypot(q.x - CX, q.y - CY));
+    for (const b of near) {
       if (shield.has(b.code)) {
         shield.delete(b.code);
         popAt('shd', b.code, 'SHIELD SAVED', NAME(b.code), b.x, b.y - 70);
@@ -298,13 +302,14 @@ async function main() {
       }
       if (alive.size - falling.length <= 1) return;   // never take the last flag
       b.gone = true; falling.push({ b, t: 0, x0: b.x, y0: b.y });
-      sfx.draw();
+      sfx.draw(); tookOne = true; shakeT = 0.45;   // the arena shakes as the flag goes in
+      return;
     }
   };
 
   const eliminate = (b) => {
     balls = balls.filter((x) => x !== b);
-    sfx.gone(); flashT = 0.35;   // a short white flash, like a camera
+    sfx.gone(); flashT = 0.35; shakeT = Math.max(shakeT, 0.55);   // a short white flash, like a camera
     alive.delete(b.code); out.push(b.code); prog.set(b.code, 0);
     const canRev = revLeft > 0 && !revived.has(b.code) && alive.size > 2;
     popAt('out', b.code, 'ELIMINATED', NAME(b.code), CX - 150, CY + 120);
@@ -441,7 +446,7 @@ async function main() {
     const before = Math.ceil(toNext);
     toNext -= dt;
     if (toNext <= 3 && Math.ceil(toNext) !== before && toNext > 0) sfx.tick();
-    if (toNext <= 0) { openLeft = OPEN; if (doubleNext) { openLeft = OPEN * 2.5; doubleNext = false; } sfx.tone({ freq: 160, to: 60, type: 'sine', dur: 0.4, vol: 0.26 }); }
+    if (toNext <= 0) { tookOne = false; openLeft = OPEN; if (doubleNext) { openLeft = OPEN * 2.5; doubleNext = false; } sfx.tone({ freq: 160, to: 60, type: 'sine', dur: 0.4, vol: 0.26 }); }
     if (cfg.events && simT > nextEvent && alive.size > 3) { nextEvent = simT + 240 + Math.random() * 120; mystery(); }
   };
 
@@ -466,6 +471,11 @@ async function main() {
     c.restore();
   };
   const draw = () => {
+    if (shakeT > 0) { // the whole arena shakes for a moment when a flag is eliminated
+      const m = 16 * Math.min(1, shakeT / 0.4);
+      cv.style.translate = `${(Math.random() * 2 - 1) * m}px ${(Math.random() * 2 - 1) * m}px`;
+      shakeT -= 0.033; if (shakeT <= 0) cv.style.translate = '';
+    }
     c.setTransform(k, 0, 0, k, 0, 0);
     c.clearRect(0, 0, W, H);
     // arena floor + wall
