@@ -18,7 +18,7 @@ const PALETTE = ['#ff9f1c', '#3c5bd6', '#2ec4b6', '#e63946', '#f4d21b', '#74b9ff
   '#b30000', '#1e8f4e', '#ffffff', '#555c6e', '#00b3a4', '#8a1538', '#c77dff', '#ffb4a2', '#4cc9f0', '#fb5607',
   '#80b918', '#3a0ca3', '#ffd166', '#118ab2', '#ef476f', '#7f5539', '#90e0ef', '#d00000', '#fcbf49', '#2b9348', '#e0aaff', '#a3b18a'];
 
-const MAP_W = 1000, MAP_H = 960, FIXED = 1 / 120;
+const MAP_W = 1000, MAP_H = 700, FIXED = 1 / 120;   // the map stays above YouTube's phone chat
 const SUDDEN_EVERY = 90;            // seconds between Sudden Death eliminations
 const BOOST_SECS = 8, BOOST_MULT = 1.5;
 // Bigger countries get more balls and move a bit faster, and that edge grows as the war goes on,
@@ -79,7 +79,7 @@ async function main() {
   /* ---------- war state (saved, so a page reload continues the war) ---------- */
   const KEY = 'fft_war';
   freshRun('war', [KEY, 'fft_fans_war']);
-  const sig = 'v2|' + cfg.reset + '|' + TEAMS.join(',') + '|' + GC;
+  const sig = 'v3|' + cfg.reset + '|' + TEAMS.join(',') + '|' + GC;
   let W = null;
   try { W = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { /* private mode */ }
   if (!W || W.sig !== sig || typeof W.g !== 'string' || W.g.length !== TOTAL) W = null;
@@ -137,13 +137,55 @@ async function main() {
   const cv = $('map'), c = cv.getContext('2d');
   const land = document.createElement('canvas'), lc = land.getContext('2d');
   let k = 1;
-  const drawCell = (idx) => {
-    const x = idx % GC, y = (idx - x) / GC;
-    const px = Math.floor(x * CELL * k), py = Math.floor(y * CH * k), pw = Math.ceil((x + 1) * CELL * k) - px, ph = Math.ceil((y + 1) * CH * k) - py;
-    lc.fillStyle = colorOf[g[idx]]; lc.fillRect(px, py, pw, ph);
-    lc.fillStyle = 'rgba(0,0,0,.16)'; lc.fillRect(px, py, pw, 1); lc.fillRect(px, py, 1, ph);
+  // Each country's land shows its own flag: one big flag stretched over the box around its land
+  // (kept 4:3 and centred), so every square shows its piece of that flag. Dark lines mark the borders.
+  const bx0 = new Int16Array(N), by0 = new Int16Array(N), bx1 = new Int16Array(N), by1 = new Int16Array(N);
+  const boxes = () => { // returns the countries whose box changed
+    const nx0 = new Int16Array(N).fill(GC), ny0 = new Int16Array(N).fill(GR), nx1 = new Int16Array(N).fill(-1), ny1 = new Int16Array(N).fill(-1);
+    for (let i = 0; i < TOTAL; i++) {
+      const t = g[i], x = i % GC, y = (i - x) / GC;
+      if (x < nx0[t]) nx0[t] = x; if (x > nx1[t]) nx1[t] = x; if (y < ny0[t]) ny0[t] = y; if (y > ny1[t]) ny1[t] = y;
+    }
+    const changed = [];
+    for (let t = 0; t < N; t++) {
+      if (nx1[t] < 0) continue;
+      if (nx0[t] !== bx0[t] || ny0[t] !== by0[t] || nx1[t] !== bx1[t] || ny1[t] !== by1[t]) changed.push(t);
+      bx0[t] = nx0[t]; by0[t] = ny0[t]; bx1[t] = nx1[t]; by1[t] = ny1[t];
+    }
+    return changed;
   };
-  const redrawLand = () => { for (let i = 0; i < TOTAL; i++) drawCell(i); };
+  const drawCell = (idx) => {
+    const x = idx % GC, y = (idx - x) / GC, t = g[idx];
+    const px = Math.floor(x * CELL * k), py = Math.floor(y * CH * k), pw = Math.ceil((x + 1) * CELL * k) - px, ph = Math.ceil((y + 1) * CH * k) - py;
+    // the flag over this country's box (map units)
+    const w = (bx1[t] - bx0[t] + 1) * CELL, h = (by1[t] - by0[t] + 1) * CH;
+    const s = Math.max(w / FW, h / FH), fx = bx0[t] * CELL + (w - FW * s) / 2, fy = by0[t] * CH + (h - FH * s) / 2;
+    const fi = byCode.get(TEAMS[t]);
+    const sx = (fi % COLS_A) * FW + clamp((x * CELL - fx) / s, 0, FW - 0.5), sy = Math.floor(fi / COLS_A) * FH + clamp((y * CH - fy) / s, 0, FH - 0.5);
+    lc.fillStyle = colorOf[t]; lc.fillRect(px, py, pw, ph);
+    if (atlas.naturalWidth) lc.drawImage(atlas, sx, sy, Math.max(0.5, CELL / s), Math.max(0.5, CH / s), px, py, pw, ph);
+    lc.fillStyle = 'rgba(0,0,0,.10)'; lc.fillRect(px, py, pw, 1); lc.fillRect(px, py, 1, ph);
+    // borders with other countries
+    const bw = Math.max(2, Math.round(3 * k));
+    lc.fillStyle = 'rgba(8,10,20,.85)';
+    if (x > 0 && g[idx - 1] !== t) lc.fillRect(px, py, bw, ph);
+    if (x < GC - 1 && g[idx + 1] !== t) lc.fillRect(px + pw - bw, py, bw, ph);
+    if (y > 0 && g[idx - GC] !== t) lc.fillRect(px, py, pw, bw);
+    if (y < GR - 1 && g[idx + GC] !== t) lc.fillRect(px, py + ph - bw, pw, bw);
+  };
+  const drawAround = (idx) => { // a square changed owner: it and its neighbours' borders change
+    const x = idx % GC;
+    drawCell(idx);
+    if (x > 0) drawCell(idx - 1); if (x < GC - 1) drawCell(idx + 1);
+    if (idx >= GC) drawCell(idx - GC); if (idx + GC < TOTAL) drawCell(idx + GC);
+  };
+  const refreshFlags = () => { // a country's land grew or shrank: lay its flag again
+    const ch = boxes();
+    if (!ch.length) return;
+    const on = new Uint8Array(N); ch.forEach((t) => { on[t] = 1; });
+    for (let i = 0; i < TOTAL; i++) if (on[g[i]]) drawCell(i);
+  };
+  const redrawLand = () => { boxes(); for (let i = 0; i < TOTAL; i++) drawCell(i); };
   const resize = () => {
     const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 1.5);
     cv.width = land.width = Math.max(1, Math.round(r.width * dpr)); cv.height = land.height = Math.max(1, Math.round(r.height * dpr));
@@ -214,6 +256,12 @@ async function main() {
     demoTexts: ['Bangladesh 🇧🇩', 'India!', 'Brasil 🔥', 'Go Pakistan', 'hello', 'USA USA', 'who will win?', 'China', 'assalamu alaikum', 'Nepal', 'Saudi Arabia', 'Japan ❤️', 'বাংলাদেশ', 'nice game'],
   });
   const host = (parts, prio = 2) => { if (chat.active) chat.say(parts, prio); };
+  // LUNA's box is small here: make a long line smaller until it fits
+  const rbt = document.querySelector('.lc-war .lc-rb-text');
+  if (rbt) new MutationObserver(() => {
+    rbt.style.fontSize = '';
+    for (let size = 28; rbt.scrollHeight > rbt.clientHeight + 2 && size > 17; size -= 1) rbt.style.fontSize = size + 'px';
+  }).observe(rbt, { childList: true });
 
   /* ---------- the war ---------- */
   const feed = (html) => {
@@ -244,7 +292,8 @@ async function main() {
     if (by < 0 || !teamAlive[by]) by = neighbourOf(o);
     teamAlive[o] = 0; alive--; outOrder.push(o);
     balls = balls.filter((b) => b.t !== o);
-    for (let k2 = 0; k2 < TOTAL; k2++) if (g[k2] === o) { g[k2] = by; drawCell(k2); }
+    for (let k2 = 0; k2 < TOTAL; k2++) if (g[k2] === o) g[k2] = by;
+    redrawLand();
     cnt[by] += cnt[o]; cnt[o] = 0;
     feed(`💥 ${flagHTML(o, 40)}<span>${NAME(o)} IS OUT — CONQUERED BY</span>${flagHTML(by, 40)}<span>${NAME(by)}</span>`);
     sfx.out();
@@ -261,7 +310,8 @@ async function main() {
 
   const crown = (t) => {
     champion = t; phase = 'won'; phaseT = 0;
-    for (let k2 = 0; k2 < TOTAL; k2++) if (g[k2] !== t) { g[k2] = t; drawCell(k2); }
+    for (let k2 = 0; k2 < TOTAL; k2++) g[k2] = t;
+    redrawLand();
     recount();
     const w = $('win'); $('win-flag').style.cssText = flagCss(byCode.get(TEAMS[t]), 300);
     $('win-name').textContent = NAME(t); $('win-sub').textContent = `WAR #${warNo} · ${fmtTime(simT)}`;
@@ -272,7 +322,7 @@ async function main() {
   const capture = (idx, t) => {
     const o = g[idx];
     g[idx] = t; cnt[o]--; cnt[t]++; lastBy[o] = t;
-    drawCell(idx); sfx.take();
+    drawAround(idx); sfx.take();
     if (cnt[o] < ELIM) eliminate(o, t);
   };
 
@@ -380,8 +430,8 @@ async function main() {
     const rows = order.map((t) => [t, true]).concat(outOrder.slice().reverse().map((t) => [t, false])).slice(0, 8);
     $('board').innerHTML = rows.map(([t, on], n) => {
       const p = pct(t);
-      return `<div class="r${n === 0 && on ? ' top' : ''}${on ? '' : ' out'}"><span class="n">${on ? '#' + (n + 1) : '✖'}</span>${flagHTML(t, 48)}<span class="nm">${NAME(t)}</span>` +
-        `<span class="bar"><i style="width:${on ? Math.min(100, p * 100 / Math.max(1, pct(lead))) : 0}%;background:${colorOf[t]}"></i></span><span class="p">${on ? p.toFixed(1) + '%' : 'OUT'}</span></div>`;
+      return `<div class="r${n === 0 && on ? ' top' : ''}${on ? '' : ' out'}"><span class="n">${on ? '#' + (n + 1) : '✖'}</span>${flagHTML(t, 34)}<span class="nm">${NAME(t)}</span>` +
+        `<span class="p">${on ? p.toFixed(1) + '%' : 'OUT'}</span></div>`;
     }).join('');
     const ph = $('phase');
     if (phase === 'play' && alive === 2) { ph.hidden = false; ph.className = 'phase final'; ph.textContent = '⚔ FINAL BATTLE'; }
@@ -427,7 +477,7 @@ async function main() {
         host([`A NEW WAR BEGINS! ${N} COUNTRIES, ONE WORLD. COMMENT YOUR COUNTRY TO BOOST IT!`], 2);
       }
     }
-    if (now - lastUI > 1000) { updateUI(); lastUI = now; }
+    if (now - lastUI > 1000) { updateUI(); refreshFlags(); lastUI = now; }
     if (now - lastSave > 5000) { save(); lastSave = now; }
     if (now - lastDraw >= 31) { draw(); lastDraw = now; } // ~30 frames a second is plenty for a stream
     requestAnimationFrame(frame);
