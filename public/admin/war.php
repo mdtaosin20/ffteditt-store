@@ -33,13 +33,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $bad = array_values(array_filter($codes, fn ($c) => !isset($known[$c])));
     if ($bad) {
         $errors[] = 'Unknown country code: ' . implode(', ', $bad) . '. Use 2-letter codes like bd, in, us.';
-    } elseif (count($codes) < 2 || count($codes) > 32) {
-        $errors[] = 'Choose between 2 and 32 countries (now ' . count($codes) . ').';
+    } elseif (count($codes) < 2 || count($codes) > 200) {
+        $errors[] = 'Choose between 2 and 200 countries (now ' . count($codes) . ').';
     } else {
         $new['teams'] = $codes;
     }
 
-    foreach ([['grid', 'Map size', 20, 70], ['speed', 'Ball speed', 40, 300], ['sudden', 'Sudden Death after', 10, 600]] as [$k, $label, $min, $max]) {
+    foreach ([['grid', 'Map size', 20, 120], ['speed', 'Ball speed', 40, 300], ['sudden', 'Sudden Death after', 10, 600]] as [$k, $label, $min, $max]) {
         $v = (int) ($_POST[$k] ?? 0);
         if ($v < $min || $v > $max) {
             $errors[] = "{$label} must be between {$min} and {$max}.";
@@ -88,8 +88,8 @@ page_start('Territory War', 'games', $admin);
         <input name="title" maxlength="24" required value="<?= e($cfg['title']) ?>">
       </label>
       <label class="field"><span>Map size (squares across)</span>
-        <input name="grid" type="number" min="20" max="70" required value="<?= (int) $cfg['grid'] ?>">
-        <small class="muted">40 = normal. Bigger map = longer war.</small>
+        <input name="grid" type="number" min="20" max="120" required value="<?= (int) $cfg['grid'] ?>">
+        <small class="muted">40 = normal. Bigger map = longer war. With many countries the map is made bigger by itself.</small>
       </label>
       <label class="field"><span>Ball speed (%)</span>
         <input name="speed" type="number" min="40" max="300" required value="<?= (int) $cfg['speed'] ?>">
@@ -101,10 +101,10 @@ page_start('Territory War', 'games', $admin);
       </label>
     </div>
 
-    <label class="field" style="margin-top:14px"><span>Countries (2–32, two-letter codes)</span>
+    <label class="field" style="margin-top:14px"><span>Countries (2–200, two-letter codes)</span>
       <textarea name="teams" id="teams" rows="3" spellcheck="false"><?= e(implode(', ', $cfg['teams'])) ?></textarea>
       <span class="pick-row">
-        <?php foreach (['popular' => 'Popular 16', 'asia' => 'Asia 16', 'football' => 'Football 16', 'muslim' => 'Muslim world 16'] as $pk => $pl): ?>
+        <?php foreach (['popular' => 'Popular 16', 'asia' => 'Asia 16', 'football' => 'Football 16', 'muslim' => 'Muslim world 16', 'world150' => 'World 150'] as $pk => $pl): ?>
           <button type="button" class="btn btn-ghost btn-sm" data-teams="<?= e(implode(', ', WAR_PRESETS[$pk])) ?>"><?= e($pl) ?></button>
         <?php endforeach; ?>
       </span>

@@ -6,6 +6,7 @@ const WAR_PRESETS = [
     'popular' => ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'ru', 'cn', 'jp', 'de', 'fr', 'gb'],
     'asia'    => ['bd', 'in', 'pk', 'np', 'lk', 'af', 'cn', 'jp', 'kr', 'id', 'my', 'th', 'vn', 'ph', 'sa', 'ae'],
     'football'=> ['ar', 'br', 'fr', 'gb', 'es', 'pt', 'de', 'it', 'nl', 'be', 'hr', 'uy', 'ma', 'jp', 'us', 'mx'],
+    'world150' => ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'ru', 'cn', 'jp', 'de', 'fr', 'gb', 'af', 'al', 'dz', 'ao', 'am', 'au', 'at', 'az', 'by', 'be', 'bj', 'bt', 'bo', 'ba', 'bw', 'bg', 'bf', 'bi', 'kh', 'cm', 'ca', 'cf', 'td', 'cl', 'co', 'cg', 'cd', 'cr', 'ci', 'hr', 'cu', 'cz', 'dk', 'do', 'ec', 'eg', 'sv', 'ee', 'et', 'fi', 'ga', 'ge', 'gh', 'gr', 'gt', 'gn', 'ht', 'hn', 'hu', 'is', 'ir', 'iq', 'ie', 'il', 'it', 'jm', 'jo', 'kz', 'ke', 'kp', 'kr', 'kw', 'kg', 'la', 'lv', 'lb', 'lr', 'ly', 'lt', 'mg', 'mw', 'my', 'ml', 'mr', 'mx', 'md', 'mn', 'ma', 'mz', 'mm', 'na', 'np', 'nl', 'nz', 'ni', 'ne', 'mk', 'no', 'om', 'pa', 'pg', 'py', 'pe', 'ph', 'pl', 'pt', 'qa', 'ro', 'rw', 'sn', 'rs', 'sl', 'sg', 'sk', 'si', 'so', 'za', 'ss', 'es', 'lk', 'sd', 'se', 'ch', 'sy', 'tj', 'tz', 'th', 'tg', 'tt', 'tn', 'tm', 'ug', 'ua', 'ae', 'uy', 'uz', 've', 'vn', 'ye', 'zm', 'zw', 'ps', 'lu', 'cy'],
     'muslim'  => ['bd', 'pk', 'sa', 'tr', 'id', 'my', 'eg', 'ma', 'ae', 'qa', 'ir', 'iq', 'jo', 'dz', 'ps', 'af'],
 ];
 
@@ -29,7 +30,15 @@ function war_config(): array
 {
     $d = war_defaults();
     $c = json_decode(setting_get('war') ?? '', true);
-    return is_array($c) ? array_merge($d, array_intersect_key($c, $d)) : $d;
+    $c = is_array($c) ? array_merge($d, array_intersect_key($c, $d)) : $d;
+    if (setting_get('mig_war150') === null) {   // once: the war grows to 150 countries (owner's wish, Oct 2026)
+        setting_set('mig_war150', '1');
+        $c['teams'] = WAR_PRESETS['world150'];
+        $c['rev'] = bin2hex(random_bytes(4));
+        $c['reset'] = bin2hex(random_bytes(4));
+        war_save($c);
+    }
+    return $c;
 }
 
 function war_save(array $c): void

@@ -19,11 +19,12 @@ const PALETTE = ['#ff9f1c', '#3c5bd6', '#2ec4b6', '#e63946', '#f4d21b', '#74b9ff
   '#80b918', '#3a0ca3', '#ffd166', '#118ab2', '#ef476f', '#7f5539', '#90e0ef', '#d00000', '#fcbf49', '#2b9348', '#e0aaff', '#a3b18a'];
 
 const MAP_W = 1000, MAP_H = 700, FIXED = 1 / 120;   // the map stays above YouTube's phone chat
-const SUDDEN_EVERY = 90;            // seconds between Sudden Death eliminations
+const SUDDEN_EVERY = 90;            // seconds between Sudden Death eliminations (16 or fewer countries left)
+const suddenEvery = (alive) => (alive <= 16 ? SUDDEN_EVERY : clamp(Math.round(1440 / alive), 15, SUDDEN_EVERY)); // faster while many are left
 const BOOST_SECS = 8, BOOST_MULT = 1.5;
 // Bigger countries get more balls and move a bit faster, and that edge grows as the war goes on,
 // so countries fall one by one (tuned with a simulator: the first country falls after ~5–10 min, a 16-country war lasts ~1 hour with Sudden Death at 60).
-const ARMY_STEP = 0.5, ARMY_MAX = 4;   // one more ball for every half "fair share" above it (max 4)
+const ARMY_STEP = 0.5, ARMY_MAX_BIG = 4;   // one more ball for every half "fair share" above it (max 4)
 const EDGE_START = 0.08, EDGE_GROW = 0.4, EDGE_MINUTES = 45;
 
 async function fetchConfig() {
@@ -58,12 +59,14 @@ async function main() {
 
   const C = atlasInfo.countries, FW = atlasInfo.w, FH = atlasInfo.h, COLS_A = atlasInfo.cols, ROWS_A = Math.ceil(C.length / COLS_A);
   const byCode = new Map(C.map((c, i) => [c.code, i]));
-  const TEAMS = cfg.teams.filter((c) => byCode.has(c)).slice(0, 32);
+  const TEAMS = cfg.teams.filter((c) => byCode.has(c)).slice(0, 200);
   if (TEAMS.length < 2) TEAMS.splice(0, TEAMS.length, ...DEF.teams);
   const N = TEAMS.length;
   const NAME = (t) => C[byCode.get(TEAMS[t])].name.toUpperCase().replace('UNITED ARAB EMIRATES', 'UAE').replace('UNITED KINGDOM', 'UK').replace('UNITED STATES', 'USA');
 
-  const GC = clamp(Math.round(cfg.grid) || 40, 20, 70);
+  // many countries need a finer map (about 30 squares each at the start)
+  const GC = clamp(Math.max(Math.round(cfg.grid) || 40, Math.ceil(Math.sqrt(30 * N * MAP_W / MAP_H))), 20, 120);
+  const ARMY_MAX = N > 40 ? 2 : ARMY_MAX_BIG;   // with 100+ countries: fewer balls each (screen and CPU)
   const CELL = MAP_W / GC, GR = Math.floor(MAP_H / CELL), CH = MAP_H / GR;
   const TOTAL = GC * GR;
   const ELIM = Math.max(4, Math.round(TOTAL / N * 0.3));  // land smaller than 30% of a fair share = out
@@ -87,7 +90,7 @@ async function main() {
   try { W = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { /* private mode */ }
   if (!W || W.sig !== sig || typeof W.g !== 'string' || W.g.length !== TOTAL) W = null;
 
-  let g = new Int8Array(TOTAL), cnt = new Int32Array(N), lastBy = new Int16Array(N).fill(-1);
+  let g = new Int16Array(TOTAL), cnt = new Int32Array(N), lastBy = new Int16Array(N).fill(-1);
   let balls = [], alive = N, simT = 0, warNo = 1, lastSudden = 0, colorOf = [], phase = 'play', phaseT = 0, champion = -1;
   let outOrder = [];   // countries in the order they were knocked out
   const teamAlive = new Uint8Array(N), boostUntil = new Float64Array(N);
@@ -115,7 +118,7 @@ async function main() {
       g[y * GC + x] = seeds[best][2];
     }
     balls = seeds.map(([x, y, t]) => startBall(t, x, y));
-    colorOf = shuffle(PALETTE.slice(0, Math.max(N, 1)));
+    colorOf = shuffle(Array.from({ length: Math.max(N, 1) }, (_, i) => PALETTE[i] || `hsl(${(i * 137.5) % 360} 70% ${45 + (i % 3) * 10}%)`));
     teamAlive.fill(1); boostUntil.fill(0); outOrder = [];
     alive = N; simT = 0; lastSudden = 0; phase = 'play'; phaseT = 0; champion = -1; lastBy.fill(-1);
   };
@@ -144,7 +147,7 @@ async function main() {
   const land = document.createElement('canvas'), lc = land.getContext('2d');
   let k = 1;
   // Each country's land shows its own flag: one big flag stretched over the box around its land
-  // (kept 4:3 and centred), so every square shows its piece of that flag. Dark lines mark the borders.
+  // (kept 4:3 and centred), so every square shows its piece of that flag.
   const bx0 = new Int16Array(N), by0 = new Int16Array(N), bx1 = new Int16Array(N), by1 = new Int16Array(N);
   const boxes = () => { // returns the countries whose box changed
     const nx0 = new Int16Array(N).fill(GC), ny0 = new Int16Array(N).fill(GR), nx1 = new Int16Array(N).fill(-1), ny1 = new Int16Array(N).fill(-1);
@@ -172,19 +175,6 @@ async function main() {
     lc.fillStyle = plain ? plain[0] : colorOf[t]; lc.fillRect(px, py, pw, ph);
     if (!plain && atlas.naturalWidth) lc.drawImage(atlas, sx, sy, Math.max(0.5, CELL / s), Math.max(0.5, CH / s), px, py, pw, ph);
     lc.fillStyle = 'rgba(0,0,0,.10)'; lc.fillRect(px, py, pw, 1); lc.fillRect(px, py, 1, ph);
-    // borders with other countries
-    const bw = Math.max(2, Math.round(3 * k));
-    lc.fillStyle = 'rgba(8,10,20,.85)';
-    if (x > 0 && g[idx - 1] !== t) lc.fillRect(px, py, bw, ph);
-    if (x < GC - 1 && g[idx + 1] !== t) lc.fillRect(px + pw - bw, py, bw, ph);
-    if (y > 0 && g[idx - GC] !== t) lc.fillRect(px, py, pw, bw);
-    if (y < GR - 1 && g[idx + GC] !== t) lc.fillRect(px, py + ph - bw, pw, bw);
-  };
-  const drawAround = (idx) => { // a square changed owner: it and its neighbours' borders change
-    const x = idx % GC;
-    drawCell(idx);
-    if (x > 0) drawCell(idx - 1); if (x < GC - 1) drawCell(idx + 1);
-    if (idx >= GC) drawCell(idx - GC); if (idx + GC < TOTAL) drawCell(idx + GC);
   };
   const refreshFlags = () => { // a country's land grew or shrank: lay its flag again
     const ch = boxes();
@@ -332,7 +322,7 @@ async function main() {
   const capture = (idx, t) => {
     const o = g[idx];
     g[idx] = t; cnt[o]--; cnt[t]++; lastBy[o] = t;
-    drawAround(idx); sfx.take();
+    drawCell(idx); sfx.take();
     if (cnt[o] < ELIM) eliminate(o, t);
   };
 
@@ -363,11 +353,11 @@ async function main() {
     if (alive <= 1 || simT < cfg.sudden * 60) return;
     if (!lastSudden) {
       lastSudden = simT;
-      banner('SUDDEN DEATH', `SMALLEST COUNTRY OUT EVERY ${SUDDEN_EVERY} SECONDS`, true); sfx.alarm();
-      host(['SUDDEN DEATH! FROM NOW ON THE SMALLEST COUNTRY IS OUT EVERY 90 SECONDS — BOOST YOUR COUNTRY IN CHAT!'], 3);
+      banner('SUDDEN DEATH', `SMALLEST COUNTRY OUT EVERY ${suddenEvery(alive)} SECONDS`, true); sfx.alarm();
+      host([`SUDDEN DEATH! FROM NOW ON THE SMALLEST COUNTRY IS OUT EVERY ${suddenEvery(alive)} SECONDS — BOOST YOUR COUNTRY IN CHAT!`], 3);
       return;
     }
-    if (simT - lastSudden < SUDDEN_EVERY) return;
+    if (simT - lastSudden < suddenEvery(alive)) return;
     lastSudden = simT;
     let s = -1; for (let t = 0; t < N; t++) if (teamAlive[t] && (s < 0 || cnt[t] < cnt[s])) s = t;
     if (s >= 0) eliminate(s, neighbourOf(s));
@@ -453,7 +443,7 @@ async function main() {
     }).join('');
     const ph = $('phase');
     if (phase === 'play' && alive === 2) { ph.hidden = false; ph.className = 'phase final'; ph.textContent = '⚔ FINAL BATTLE'; }
-    else if (phase === 'play' && simT > cfg.sudden * 60) { ph.hidden = false; ph.className = 'phase'; ph.textContent = `☠ SUDDEN DEATH · NEXT OUT IN ${Math.max(0, Math.ceil(SUDDEN_EVERY - (simT - lastSudden)))}s`; }
+    else if (phase === 'play' && simT > cfg.sudden * 60) { ph.hidden = false; ph.className = 'phase'; ph.textContent = `☠ SUDDEN DEATH · NEXT OUT IN ${Math.max(0, Math.ceil(suddenEvery(alive) - (simT - lastSudden)))}s`; }
     else ph.hidden = true;
     // the host mentions a new leader now and then
     if (phase === 'play' && lead !== lastLeader && lead >= 0 && simT - lastLeaderTalk > 150) {
