@@ -33,22 +33,22 @@ h1 {
 .stats b.g { color: var(--gold); }
 .stats b.red { color: #ff6b6b; }
 
-#map { position: absolute; left: 40px; top: 478px; width: 1000px; height: 600px; border-radius: 20px;
+#map { position: absolute; left: 40px; top: 364px; width: 1000px; height: 700px; border-radius: 20px;
   box-shadow: 0 0 0 5px #eef3ff, 0 0 50px rgba(90, 140, 255, .6); background: #0b1226; }
-.phase { position: absolute; top: 490px; left: 50%; transform: translateX(-50%); padding: 6px 26px; border-radius: 999px;
+.phase { position: absolute; top: 376px; left: 50%; transform: translateX(-50%); padding: 6px 26px; border-radius: 999px;
   font-family: var(--display); font-size: 34px; letter-spacing: 3px; background: rgba(160, 0, 20, .9); border: 3px solid #ffb3b3;
   box-shadow: 0 0 30px rgba(255, 40, 60, .7); animation: pulse 1.2s ease-in-out infinite alternate; white-space: nowrap; }
 .phase.final { background: rgba(140, 90, 0, .92); border-color: #ffe08a; box-shadow: 0 0 30px rgba(255, 190, 40, .8); }
 .phase[hidden] { display: none; }
 @keyframes pulse { to { transform: translateX(-50%) scale(1.06); } }
 
-.feed { position: absolute; top: 1084px; left: 36px; right: 36px; overflow: hidden; left: 0; right: 0; height: 40px; display: flex; justify-content: center; align-items: center; gap: 12px;
+.feed { position: absolute; top: 1068px; left: 36px; right: 36px; overflow: hidden; left: 0; right: 0; height: 40px; display: flex; justify-content: center; align-items: center; gap: 12px;
   font-family: var(--display); font-size: 30px; letter-spacing: 2px; color: #ff7b7b; white-space: nowrap; }
 .feed.pop { animation: feed .4s ease-out; }
 @keyframes feed { from { transform: scale(1.25); opacity: .2; } to { transform: none; opacity: 1; } }
 
 /* top 8 countries: 2 rows of small cards under the stats (above the map, so YouTube's chat on phones never covers them) */
-.board { position: absolute; left: 36px; right: 36px; top: 362px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 8px; }
+.board { position: absolute; left: 36px; right: 36px; top: 1290px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 8px; }
 .r { display: flex; align-items: center; gap: 5px; height: 50px; padding: 0 6px; border: 2px solid var(--line); border-radius: 12px;
   background: rgba(10, 18, 40, .9); font-size: 23px; font-weight: 700; white-space: nowrap; overflow: hidden; }
 .r .n { flex: 0 0 auto; color: #8fb0ff; font-size: 19px; }
@@ -63,11 +63,11 @@ h1 {
 .r.out { opacity: .45; } .r.out .nm { text-decoration: line-through; } .r.out .p, .r.out .n { color: #ff7b7b; }
 
 /* under the line where YouTube's phone chat starts: only extras */
-.cta { position: absolute; left: 0; right: 0; top: 1330px; text-align: center; font-family: var(--display); font-weight: 700; font-size: 56px; letter-spacing: 3px; color: var(--gold); }
+.cta { position: absolute; left: 0; right: 0; top: 1430px; text-align: center; font-family: var(--display); font-weight: 700; font-size: 56px; letter-spacing: 3px; color: var(--gold); }
 .cta small { display: block; margin-top: 16px; font-size: 36px; color: #cfe0ff; font-weight: 500; }
 
 /* ---------- banner + champion ---------- */
-.banner { position: absolute; left: 0; right: 0; top: 660px; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
+.banner { position: absolute; left: 0; right: 0; top: 600px; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
 .banner[hidden] { display: none; }
 .banner-in { font-family: var(--display); font-weight: 700; font-size: 84px; letter-spacing: 3px; line-height: 1; padding: 18px 46px; text-align: center;
   border-radius: 24px; background: rgba(6, 10, 26, .88); border: 4px solid #5a8cff; box-shadow: 0 0 40px rgba(90, 140, 255, .5);
@@ -93,13 +93,13 @@ h1 {
 .sound-btn[hidden] { display: none; }
 
 /* live chat pieces (from /game/chat.css): LUNA and the chat box side by side right under the map */
-.lc.lc-war .lc-sub { top: 490px; }
+.lc.lc-war .lc-sub { top: 376px; }
 .lc.lc-war .lc-fans { display: none !important; }   /* the host announces boosts instead */
-.lc.lc-war .lc-box { top: 1128px; right: 36px; width: 380px; height: 168px; padding: 8px 16px; overflow: hidden; }
+.lc.lc-war .lc-box { top: 1112px; right: 36px; width: 380px; height: 160px; padding: 8px 16px; overflow: hidden; }
 .lc.lc-war .lc-box-h { font-size: 19px; padding-bottom: 3px; }
 .lc.lc-war .lc-box .lc-row { font-size: 25px; padding: 1px 0; line-height: 1.25; }
 .lc.lc-war .lc-box .lc-row .flag { transform: scale(.8); }
-.lc.lc-war .lc-robot, .lc.lc-war .lc-robot.girl { top: 1128px; bottom: auto; left: 36px; right: auto; width: 616px; height: 168px; min-height: 0; padding: 8px 14px 8px 162px; gap: 0; border-width: 4px; border-radius: 24px; overflow: visible; }
+.lc.lc-war .lc-robot, .lc.lc-war .lc-robot.girl { top: 1112px; bottom: auto; left: 36px; right: auto; width: 616px; height: 160px; min-height: 0; padding: 8px 14px 8px 162px; gap: 0; border-width: 4px; border-radius: 24px; overflow: visible; }
 .lc.lc-war .lc-robot .lc-rb-face { position: absolute; left: 2px; bottom: -4px; width: 152px; }
 .lc.lc-war .lc-robot.girl .lc-rb-face { width: 160px; }
 .lc.lc-war .lc-rb-name { font-size: 20px; letter-spacing: 3px; }

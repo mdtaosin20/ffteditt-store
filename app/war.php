@@ -16,7 +16,7 @@ function war_defaults(): array
     return [
         'title'    => 'TERRITORY WAR',
         'teams'    => WAR_PRESETS['popular20'],
-        'grid'     => 40,      // squares across the map (more = longer game)
+        'grid'     => 56,      // squares across the map (more = longer game)
         'speed'    => 100,     // ball speed, % of normal
         'sudden'   => 60,      // minutes before Sudden Death (smallest country out every 90 s)
         'boost'    => true,    // a comment with a country name speeds up its ball for a few seconds
@@ -47,6 +47,13 @@ function war_config(): array
         setting_set('mig_war20', '1');
         $c['teams'] = WAR_PRESETS['popular20'];
         $c['fill'] = 'color';
+        $c['rev'] = bin2hex(random_bytes(4));
+        $c['reset'] = bin2hex(random_bytes(4));
+        war_save($c);
+    }
+    if (setting_get('mig_war_grid56') === null) {   // once: smaller squares (owner's wish)
+        setting_set('mig_war_grid56', '1');
+        if ((int) $c['grid'] < 56) $c['grid'] = 56;
         $c['rev'] = bin2hex(random_bytes(4));
         $c['reset'] = bin2hex(random_bytes(4));
         war_save($c);

@@ -12,7 +12,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const FAST = clamp(Number(QS.get('fast')) || 1, 1, 400); // testing only: run the war faster
 
 const DEF = { title: 'TERRITORY WAR', teams: ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'ru', 'cn', 'jp', 'de', 'fr', 'gb'],
-  grid: 40, speed: 100, sudden: 60, boost: true, fill: 'color', ball_chats: 15, revive_chats: 30, like_step: 20, rev: '', reset: '' };
+  grid: 56, speed: 100, sudden: 60, boost: true, fill: 'color', ball_chats: 15, revive_chats: 30, like_step: 20, rev: '', reset: '' };
 const BONUS_SECS = 180, BONUS_MAX = 4;   // chat-won extra balls last 3 minutes, at most 4 at a time
 
 // clear, different colours for the countries' land (in team order, shuffled each war)
@@ -20,7 +20,7 @@ const PALETTE = ['#ff9f1c', '#3c5bd6', '#2ec4b6', '#e63946', '#f4d21b', '#74b9ff
   '#b30000', '#1e8f4e', '#ffffff', '#555c6e', '#00b3a4', '#8a1538', '#c77dff', '#ffb4a2', '#4cc9f0', '#fb5607',
   '#80b918', '#3a0ca3', '#ffd166', '#118ab2', '#ef476f', '#7f5539', '#90e0ef', '#d00000', '#fcbf49', '#2b9348', '#e0aaff', '#a3b18a'];
 
-const MAP_W = 1000, MAP_H = 600, FIXED = 1 / 120;   // the map stays above YouTube's phone chat
+const MAP_W = 1000, MAP_H = 700, FIXED = 1 / 120;   // the map stays above YouTube's phone chat
 const SUDDEN_EVERY = 90;            // seconds between Sudden Death eliminations (16 or fewer countries left)
 const suddenEvery = (alive) => (alive <= 16 ? SUDDEN_EVERY : clamp(Math.round(1440 / alive), 15, SUDDEN_EVERY)); // faster while many are left
 const BOOST_SECS = 8, BOOST_MULT = 1.5;
@@ -73,7 +73,8 @@ async function main() {
   const TOTAL = GC * GR;
   const ELIM = Math.max(4, Math.round(TOTAL / N * 0.3));  // land smaller than 30% of a fair share = out
   if (QS.get('fill')) cfg.fill = QS.get('fill');   // preview: ?fill=color
-  const R = clamp(CELL * 1.45, 14, 40);                   // ball radius (big round flags)
+  const SPD_K = Number(QS.get("spk")) || 1.7;   // ball speed for the small squares (a war lasts about an hour)
+  const R = N > 60 ? clamp(CELL * 1.2, 14, 26) : 30;      // ball radius (round flags; the squares are smaller than the ball)
   const BALL_CHATS = Math.max(0, Math.round(cfg.ball_chats) || 0), REV_CHATS = Math.max(0, Math.round(cfg.revive_chats) || 0);
   const FLAGFILL = cfg.fill !== 'color';
   const LIKE_STEP = Math.max(0, Math.round(cfg.like_step) || 0), SHARE_GAP = 600;   // one share reward per viewer every 10 minutes
@@ -501,7 +502,7 @@ async function main() {
     for (const b of balls) {
       if (!teamAlive[b.t]) continue;
       const strength = Math.max(0.35, 1 + edge * Math.min(3, cnt[b.t] / TOTAL * alive - 1));
-      const sp = base * strength * (boostUntil[b.t] > simT ? BOOST_MULT : 1) * CELL / 25;
+      const sp = base * strength * (boostUntil[b.t] > simT ? BOOST_MULT : 1) * SPD_K;
       const m = Math.hypot(b.vx, b.vy) || 1; b.vx /= m; b.vy /= m;
       // x
       let nx = b.x + b.vx * sp * dt;
