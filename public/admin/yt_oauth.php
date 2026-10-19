@@ -71,7 +71,12 @@ try {
     if (!str_contains((string) ($tok['scope'] ?? YT_SCOPE), 'youtube')) {
         throw new RuntimeException('Please tick the YouTube permission box on the Google page, then connect again.');
     }
-    $channel = yt_channel_title((string) $tok['access_token']);
+    // The channel name costs 1 unit of the daily YouTube limit. If the limit is used up, connect anyway.
+    try {
+        $channel = yt_channel_title((string) $tok['access_token']);
+    } catch (Throwable $e) {
+        $channel = 'YouTube channel';
+    }
     $id = (int) $want['id'];
     db()->prepare("UPDATE streams SET yt_refresh = ?, yt_channel = ?, yt_msg = '', yt_done_start = 0, yt_fails = 0 WHERE id = ?")
         ->execute([$refresh, $channel, $id]);

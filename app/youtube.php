@@ -459,6 +459,8 @@ function yt_tick(int $serverId): void
                          AND started_at < ? AND yt_find_at < ?");
     $st->execute([$serverId, $now - 45, $now - 60]);
     foreach ($st->fetchAll() as $s) {
+        // first 10 minutes: look every minute; after that every 5 minutes (saves the daily YouTube limit)
+        if ($now - (int) $s['started_at'] > 600 && (int) $s['yt_find_at'] > $now - 300) continue;
         db()->prepare('UPDATE streams SET yt_find_at = ? WHERE id = ?')->execute([$now, $s['id']]);
         try {
             yt_find_video($s, yt_token($s), $now - (int) $s['started_at'] > 70);
@@ -493,30 +495,33 @@ function yt_tick(int $serverId): void
 function yt_stats_tick(int $serverId): void
 {
     $now = time();
-    $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_refresh != '' AND yt_video != ''
-                         AND yt_video_start = COALESCE(started_at, 0)");
-    $st->execute([$serverId]);
-    foreach ($st->fetchAll() as $s) {
-        $old = json_decode((string) setting_get('yt_stats_' . $s['id']), true) ?: [];
-        if ((int) ($old['t'] ?? 0) > $now - 60) continue;
-        setting_set('yt_stats_' . $s['id'], json_encode(['t' => $now] + $old));
-        try {
-            $r = yt_get(yt_token($s), 'videos', ['part' => 'statistics,liveStreamingDetails', 'id' => $s['yt_video']]);
-            $it = $r[0] === 200 ? ($r[1]['items'][0] ?? null) : null;
-            if (!$it) continue;
-            setting_set('yt_stats_' . $s['id'], json_encode([
-                't'       => $now,
-                'video'   => $s['yt_video'],
-                'likes'   => (int) ($it['statistics']['likeCount'] ?? 0),
-                'viewers' => (int) ($it['liveStreamingDetails']['concurrentViewers'] ?? 0),
-            ]));
-            db()->prepare('INSERT INTO audience (stream_id, ts, video, viewers, likes) VALUES (?,?,?,?,?)')->execute([
-                (int) $s['id'], $now, $s['yt_video'], (int) ($it['liveStreamingDetails']['concurrentViewers'] ?? 0), (int) ($it['statistics']['likeCount'] ?? 0)]);
-            if (random_int(1, 60) === 1) db()->exec('DELETE FROM audience WHERE ts < ' . ($now - 14 * 86400));
-        } catch (Throwable $e) {
-            // try again next minute
+    // One shared check for ALL live videos (1 unit for up to 50 videos), not one per video.
+    $last = (int) (setting_get('yt_stats_all_at') ?? 0);
+    if ($last > $now - 60) return;
+    $st = db()->query("SELECT * FROM streams WHERE status = 'live' AND yt_refresh != '' AND yt_video != ''
+                       AND yt_video_start = COALESCE(started_at, 0) ORDER BY id");
+    $list = $st->fetchAll();
+    if (!$list) return;
+    setting_set('yt_stats_all_at', (string) $now);
+    $byVideo = [];
+    foreach ($list as $s) $byVideo[$s['yt_video']][] = $s;
+    $tok = '';
+    foreach ($list as $s) {
+        try { $tok = yt_token($s); break; } catch (Throwable $e) { /* try the next channel */ }
+    }
+    if ($tok === '') return;
+    $r = yt_get($tok, 'videos', ['part' => 'statistics,liveStreamingDetails', 'id' => implode(',', array_slice(array_keys($byVideo), 0, 50))]);
+    if ($r[0] !== 200) return;
+    foreach ($r[1]['items'] ?? [] as $it) {
+        $likes = (int) ($it['statistics']['likeCount'] ?? 0);
+        $viewers = (int) ($it['liveStreamingDetails']['concurrentViewers'] ?? 0);
+        foreach ($byVideo[(string) ($it['id'] ?? '')] ?? [] as $s) {
+            setting_set('yt_stats_' . $s['id'], json_encode(['t' => $now, 'video' => $s['yt_video'], 'likes' => $likes, 'viewers' => $viewers]));
+            db()->prepare('INSERT INTO audience (stream_id, ts, video, viewers, likes) VALUES (?,?,?,?,?)')
+                ->execute([(int) $s['id'], $now, $s['yt_video'], $viewers, $likes]);
         }
     }
+    if (random_int(1, 60) === 1) db()->exec('DELETE FROM audience WHERE ts < ' . ($now - 14 * 86400));
 }
 
 /**
