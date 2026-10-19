@@ -104,7 +104,14 @@ function chat_target(array $row): ?array
     $channel = (string) ($row['channel_url'] ?? '');
     if ($video === '' && $channel === '') return null;
     // with several streams on one channel the channel's /live page could show the wrong one, so wait for the video
-    if ($video === '' && ($row['yt_refresh'] ?? '') !== '') return null;
+    // ...but if YouTube still has not told us the video after 3 minutes (e.g. the daily limit is used up),
+    // read the channel's /live page when no other live stream uses the same channel link.
+    if ($video === '' && ($row['yt_refresh'] ?? '') !== '') {
+        if ($channel === '' || $started <= 0 || time() - $started < 180) return null;
+        $st = db()->prepare("SELECT COUNT(*) FROM streams WHERE status = 'live' AND id != ? AND channel_url = ?");
+        $st->execute([(int) ($row['id'] ?? 0), $channel]);
+        if ((int) $st->fetchColumn() > 0) return null;
+    }
     return ['video' => $video, 'channel' => $channel];
 }
 
