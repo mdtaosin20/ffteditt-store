@@ -258,7 +258,10 @@ async function main() {
     return `${Math.max(0, BALL_CHATS - chatProg[t])} MORE CHATS = ONE MORE BALL!` + (x ? ` IT HAS +${x} EXTRA BALL${x > 1 ? 'S' : ''} NOW!` : '');
   };
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
-  const shareAt = new Map();
+  const shareAt = new Map(), shareWait = new Map();
+  let shareCount = 0;
+  // share / shared / sharing / share done / share kiya / শেয়ার করেছি …
+  const SHARE_RX = /\bshar(e|ed|ing|ed it)\b|\bshr\b|শেয়ার|শেয়ার|शेयर/i;
   let likeBase = -1, likeVideo = '';
   // a gift for a country: one more ball if it is fighting, back in the war if it is out
   const reward = (t, by, why, quiet) => {
@@ -316,15 +319,24 @@ async function main() {
       if (t < 0) { for (let u = 0; u < N; u++) if (teamAlive[u] && (t < 0 || chatTotal[u] > chatTotal[t])) t = u; }
       if (t >= 0) reward(t, name.toUpperCase().slice(0, 12), 'SUBSCRIBE');
     },
-    onText: (name, text, code, author) => { // "shared" in chat: we can't see shares, so we trust the viewer (once every 10 min)
-      if (!/\bshared\b|\bshare\s*(done|korsi|korchi|korlam|korechi|korsi|dilam|disi|diyechi|kore\s*disi)|শেয়ার\s*(করেছি|করলাম|দিলাম|করছি|দিছি|দিয়েছি)/i.test(text)) return null;
-      const t = code ? teamOf(code) : -1;
-      if (t < 0) return ['THANK YOU FOR SHARING, ', { name }, '! TYPE "SHARED" WITH YOUR COUNTRY NAME AND IT GETS ONE MORE BALL!'];
+    onText: (name, text, code, author) => { // "share" in chat: we can't see shares, so we trust the viewer (once every 10 min)
+      const isShare = SHARE_RX.test(text) && !/\b(don'?t|do not|not|no|never|can'?t|won'?t)\s+shar/i.test(text);
       const w = wall();
-      if ((shareAt.get(author) || 0) > w - SHARE_GAP) return ['THANK YOU FOR SHARING AGAIN, ', { name }, '! ONE SHARE GIFT EVERY 10 MINUTES — KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'];
-      shareAt.set(author, w);
+      // said "share" earlier without a country: the gift goes to the first country they type in the next 5 minutes
+      const pend = shareWait.has(author) && shareWait.get(author) > w - 300;
+      if (!isShare && !(pend && code)) return null;
+      const t = code ? teamOf(code) : -1;
+      if (t < 0) {
+        shareWait.set(author, w);
+        return ['THANK YOU FOR SHARING, ', { name }, '! NOW TYPE YOUR COUNTRY AND IT GETS ONE MORE BALL — OR COMES BACK IF IT IS OUT!'];
+      }
+      shareWait.delete(author);
+      if (shareAt.has(author) && shareAt.get(author) > w - SHARE_GAP) return ['THANK YOU FOR SHARING AGAIN, ', { name }, '! ONE SHARE GIFT EVERY 10 MINUTES — KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'];
+      if (phase !== 'play') { shareWait.set(author, w); return ['THANK YOU FOR SHARING, ', { name }, '! THE NEXT WAR STARTS IN A MOMENT — TYPE ', { node: flagNode(code) }, CN(code) + ' THEN AND IT GETS YOUR GIFT!']; }
       const was = teamAlive[t];
-      reward(t, name.toUpperCase().slice(0, 12), 'SHARE', true);
+      if (!reward(t, name.toUpperCase().slice(0, 12), 'SHARE', true)) return ['THANK YOU FOR SHARING, ', { name }, '! KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'];
+      shareAt.set(author, w);
+      shareCount++;
       return ['THANK YOU FOR SHARING, ', { name }, '! ', { node: flagNode(code) }, CN(code) + (was ? ' GETS ONE MORE BALL!' : ' IS BACK IN THE WAR!') + ' MORE FRIENDS = MORE POWER!'];
     },
     onStats: (st) => { // every LIKE_STEP new likes: the country closest to a comeback returns, or the chat's favourite gets a ball
@@ -683,7 +695,7 @@ async function main() {
   updateUI();
   requestAnimationFrame(frame);
   autoUpdate('war', save);   // after a deploy: reload with the game where it was (no Restart needed)
-  window.__war = { reviveCall, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
+  window.__war = { reviveCall, shares: () => shareCount, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
 }
 
 main();
