@@ -158,6 +158,11 @@ export function liveChat(o) {
   const counts = new Map();        // fan key -> number of comments
   const lastSaid = new Map();      // author -> time of the last robot answer to them
   const authorKey = new Map();     // author -> the country (or side) they last cheered for
+  // remembered across reloads and wars, so a viewer who once typed their country can later write only "share" / "subscribed"
+  const WKEY = 'fft_who_' + (o.game || 'game');
+  try { for (const [k, v] of JSON.parse(localStorage.getItem(WKEY) || '[]')) authorKey.set(k, v); } catch (e) { /* ignore */ }
+  let whoT = 0;
+  const saveWho = () => { clearTimeout(whoT); whoT = setTimeout(() => { try { localStorage.setItem(WKEY, JSON.stringify([...authorKey].slice(-3000))); } catch (e) { /* ignore */ } }, 2000); };
   let lastMsg = performance.now();
 
   /* ---------- chat box ---------- */
@@ -339,7 +344,7 @@ export function liveChat(o) {
 
     if (key) {
       counts.set(key, (counts.get(key) || 0) + 1); saveFans(); renderFans();
-      authorKey.set(name.toLowerCase(), key);
+      authorKey.delete(name.toLowerCase()); authorKey.set(name.toLowerCase(), key); saveWho();
       o.onFan && o.onFan(key, cleanName(name));
     }
     if (ev.k === 'super') o.onSuper?.(key || authorKey.get(name.toLowerCase()) || null, cleanName(name));
