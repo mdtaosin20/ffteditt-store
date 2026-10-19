@@ -131,7 +131,7 @@ page_start('Title & thumbnail', 'youtube', $admin);
         <small class="muted">Words with # (like <code>#messi</code>) are also added as video tags.</small></label>
       <div class="field"><span>Thumbnail</span>
         <div class="radios">
-          <label><input type="radio" name="thumb" value="default" <?= $thumbChoice === 'default' ? 'checked' : '' ?>> Ready-made <?= ['flags' => 'Flag Arena', 'war' => 'Territory War', 'tug' => 'Tug of War'][$game] ?? 'Ball Drop' ?> thumbnail</label>
+          <label><input type="radio" name="thumb" value="default" <?= $thumbChoice === 'default' ? 'checked' : '' ?>> Ready-made <?= ['flags' => 'Flag Arena', 'war' => 'Territory War', 'tug' => 'Tug of War', 'keeper' => 'Beat The Keeper'][$game] ?? 'Ball Drop' ?> thumbnail</label>
           <label><input type="radio" name="thumb" value="own" <?= $thumbChoice === 'own' ? 'checked' : '' ?>> My own picture</label>
           <label><input type="radio" name="thumb" value="none" <?= $thumbChoice === 'none' ? 'checked' : '' ?>> Don’t change the thumbnail</label>
         </div>

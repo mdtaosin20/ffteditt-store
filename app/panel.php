@@ -45,6 +45,7 @@ function games_list(): array
     $flags = flags_config();
     $war   = war_config();
     $tug   = tug_config();
+    $kp    = keeper_config();
     return [
         'ball'  => ['id' => 1, 'key' => 'ball',  'name' => 'Ball Drop',      'url' => '/ball/',  'settings' => 'game.php',
                     'title' => ucwords(strtolower($ball['players'][0]['name'])) . ' vs ' . ucwords(strtolower($ball['players'][1]['name'])), 'category' => 'football',
@@ -70,6 +71,12 @@ function games_list(): array
                     'desc' => 'Two countries, one rope. Every comment is one pull — the country with more fans wins!',
                     'autoplay' => (bool) $tug['autoplay'], 'pace' => (string) $tug['pace'],
                     'detail' => count($tug['pairs']) . ' pairs · ' . intdiv((int) $tug['round'], 60) . ':' . str_pad((string) ((int) $tug['round'] % 60), 2, '0', STR_PAD_LEFT) . ' rounds'],
+        'keeper' => ['id' => 5, 'key' => 'keeper', 'name' => 'Beat The Keeper', 'url' => '/keeper/', 'settings' => 'keeper.php',
+                    'title' => 'Beat The Keeper · World Cup', 'category' => 'football',
+                    'tags' => ['football', 'countries', 'chat'], 'thumb' => '/assets/site/keeper.jpg',
+                    'desc' => 'Flag balls shoot at the goal and the keeper moves to stop them. A full World Cup: groups, quarterfinals, semifinals and the final!',
+                    'autoplay' => (bool) $kp['autoplay'], 'pace' => (string) $kp['pace'],
+                    'detail' => count($kp['teams']) . ' countries · first to ' . (int) $kp['goals'] . ' goals'],
     ];
 }
 
@@ -89,6 +96,7 @@ function game_of_url(string $url): string
     $path = (string) parse_url($url, PHP_URL_PATH) . '?';
     if (preg_match('#/war/?(\?|$)#', $path)) return 'war';
     if (preg_match('#/tug/?(\?|$)#', $path)) return 'tug';
+    if (preg_match('#/keeper/?(\?|$)#', $path)) return 'keeper';
     return preg_match('#/flags/?(\?|$)#', $path) ? 'flags' : 'ball';
 }
 

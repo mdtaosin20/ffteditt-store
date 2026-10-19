@@ -27,6 +27,7 @@ require APP_DIR . '/game.php';
 require APP_DIR . '/flags.php';
 require APP_DIR . '/war.php';
 require APP_DIR . '/tug.php';
+require APP_DIR . '/keeper.php';
 require APP_DIR . '/music.php';
 require APP_DIR . '/voice.php';
 require APP_DIR . '/panel.php';

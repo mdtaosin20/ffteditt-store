@@ -158,6 +158,20 @@ function yt_revoke(string $refresh): void
 
 function yt_defaults(string $game): array
 {
+    if ($game === 'keeper') {
+        $k = keeper_config();
+        return [
+            'title' => '🔴 LIVE Beat The Keeper ⚽ ' . ucwords(strtolower($k['cup'])) . ' 🌍 36 Countries! Type Your Country for More Shots 🏆',
+            'desc'  => "⚽ BEAT THE KEEPER — {$k['cup']} LIVE 24/7!\n"
+                . "36 country flag balls roll down the track, a spinning paddle kicks them at the goal… and the KEEPER tries to stop them!\n\n"
+                . "🏆 Group stage → Quarterfinals → Semifinals → THE FINAL. First countries to {$k['goals']} goals go through!\n"
+                . "👇 TYPE YOUR COUNTRY in chat — its ball shoots faster! Every {$k['bonus_chats']} chats = a BONUS BALL!\n"
+                . "🔔 Subscribe = 2 bonus shots for your country · 🎙️ LUNA, our live host, answers your comments.\n\n"
+                . "🇵🇭 Philippines 🇲🇾 Malaysia 🇺🇸 USA 🇮🇳 India 🇧🇩 Bangladesh 🇧🇷 Brazil 🇵🇰 Pakistan 🇮🇩 Indonesia 🇬🇧 UK 🇯🇵 Japan 🇦🇷 Argentina 🇫🇷 France …\n\n"
+                . "📣 Share with friends from your country · 👍 Like if you are cheering!\n\n"
+                . "#beatthekeeper #worldcup #marblerace #countryballs #football #soccer #live #countries #flags #chatgame #philippines #malaysia #usa #india #bangladesh",
+        ];
+    }
     if ($game === 'tug') {
         return [
             'title' => '🔴 LIVE Country Tug of War 🪢 Bangladesh vs India, India vs Pakistan! Comment Your Country to Pull 💪',

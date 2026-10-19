@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beat The Keeper · World Cup · Type Your Country for More Shots</title>
+<link rel="stylesheet" href="/keeper/keeper.css?v=1">
+<link rel="stylesheet" href="/game/chat.css?v=3">
+</head>
+<body>
+<div id="stage">
+  <h1 id="title">BEAT THE KEEPER</h1>
+  <div class="sub"><span class="pill" id="pill">🌍 WORLD CUP · GROUP A</span><span class="timer" id="timer">60</span></div>
+  <div class="board" id="board"></div>
+  <div class="rule" id="rule">FIRST <em>3</em> COUNTRIES TO SCORE <em>5 GOALS</em> ADVANCE!</div>
+
+  <canvas id="track" aria-label="Flag balls shoot at the goal"></canvas>
+  <div class="card" id="card" hidden></div>
+
+  <div class="cta">✍️ TYPE YOUR COUNTRY = MORE SHOTS<small>👍 LIKE · 🔔 SUBSCRIBE · ↗️ SHARE</small></div>
+
+  <div class="table" id="table" hidden></div>
+
+  <div class="win" id="win" hidden>
+    <div class="win-t">WORLD CHAMPION</div>
+    <div class="cup" aria-hidden="true">🏆</div>
+    <span class="flag big" id="win-flag"></span>
+    <div class="win-name" id="win-name">BANGLADESH</div>
+    <div class="win-sub" id="win-sub">TOURNAMENT #1</div>
+    <div class="win-next">NEW TOURNAMENT STARTS NOW!<br><em>TYPE YOUR COUNTRY TO JOIN</em></div>
+  </div>
+
+  <button class="sound-btn" id="sound-btn" type="button" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    TAP FOR SOUND
+  </button>
+</div>
+<script type="module" src="/keeper/keeper.js?v=1"></script>
+</body>
+</html>
