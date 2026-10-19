@@ -186,6 +186,15 @@ function migrate(PDO $pdo): void
             sent_at INTEGER NOT NULL DEFAULT 0
         );
 
+        CREATE TABLE IF NOT EXISTS audience (
+            stream_id INTEGER NOT NULL,
+            ts        INTEGER NOT NULL,
+            video     TEXT NOT NULL DEFAULT '',
+            viewers   INTEGER NOT NULL DEFAULT 0,
+            likes     INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_audience ON audience(stream_id, ts);
+
         CREATE TABLE IF NOT EXISTS schedules (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             stream_id  INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,

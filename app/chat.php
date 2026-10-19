@@ -85,12 +85,12 @@ function chat_ingest(array $mine, array $batches): void
             db()->prepare('UPDATE streams SET chat_seen = ? WHERE id = ?')->execute([time(), $sid]);
         }
     }
-    // keep the table small: last 400 events per stream, nothing older than a day
+    // keep the table small: last 5000 events per stream, nothing older than 3 days (Audience Insights reads them)
     if (random_int(1, 20) === 1) {
-        db()->exec('DELETE FROM chat_events WHERE ts < ' . (time() - 86400));
+        db()->exec('DELETE FROM chat_events WHERE ts < ' . (time() - 3 * 86400));
         foreach (db()->query('SELECT DISTINCT stream_id FROM chat_events')->fetchAll(PDO::FETCH_COLUMN) as $sid) {
             db()->exec('DELETE FROM chat_events WHERE stream_id = ' . (int) $sid . ' AND id NOT IN
-                        (SELECT id FROM chat_events WHERE stream_id = ' . (int) $sid . ' ORDER BY id DESC LIMIT 400)');
+                        (SELECT id FROM chat_events WHERE stream_id = ' . (int) $sid . ' ORDER BY id DESC LIMIT 5000)');
         }
     }
 }

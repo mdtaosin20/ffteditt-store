@@ -474,7 +474,7 @@ function yt_tick(int $serverId): void
 
 /**
  * Likes and people watching now, for the games' LIKE / VIEWER goals. 1 unit per check,
- * once a minute per live video (only games that use it: Flag Arena, Territory War).
+ * once a minute per live video. Also kept as history for Admin → Audience Insights.
  */
 function yt_stats_tick(int $serverId): void
 {
@@ -483,7 +483,6 @@ function yt_stats_tick(int $serverId): void
                          AND yt_video_start = COALESCE(started_at, 0)");
     $st->execute([$serverId]);
     foreach ($st->fetchAll() as $s) {
-        if (!in_array(game_of_url($s['page_url']), ['flags', 'war'], true)) continue;
         $old = json_decode((string) setting_get('yt_stats_' . $s['id']), true) ?: [];
         if ((int) ($old['t'] ?? 0) > $now - 60) continue;
         setting_set('yt_stats_' . $s['id'], json_encode(['t' => $now] + $old));
@@ -497,6 +496,9 @@ function yt_stats_tick(int $serverId): void
                 'likes'   => (int) ($it['statistics']['likeCount'] ?? 0),
                 'viewers' => (int) ($it['liveStreamingDetails']['concurrentViewers'] ?? 0),
             ]));
+            db()->prepare('INSERT INTO audience (stream_id, ts, video, viewers, likes) VALUES (?,?,?,?,?)')->execute([
+                (int) $s['id'], $now, $s['yt_video'], (int) ($it['liveStreamingDetails']['concurrentViewers'] ?? 0), (int) ($it['statistics']['likeCount'] ?? 0)]);
+            if (random_int(1, 60) === 1) db()->exec('DELETE FROM audience WHERE ts < ' . ($now - 14 * 86400));
         } catch (Throwable $e) {
             // try again next minute
         }
