@@ -258,8 +258,10 @@ async function main() {
     return `${Math.max(0, BALL_CHATS - chatProg[t])} MORE CHATS = ONE MORE BALL!` + (x ? ` IT HAS +${x} EXTRA BALL${x > 1 ? 'S' : ''} NOW!` : '');
   };
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
-  const shareAt = new Map(), shareWait = new Map();
-  let shareCount = 0;
+  const shareAt = new Map(), giftWait = new Map(), subDone = new Set();
+  let shareCount = 0, subCount = 0;
+  // subscribed / subscribe done / sub done / সাবস্ক্রাইব করেছি …
+  const SUB_RX = /\bsubscribed\b|\bsubscriber?\s*(done|korsi|korlam|korechi|dilam|disi|kiya|kar\s*diya)\b|\bsub(bed|\s*done)\b|\bi\s*(just\s*)?subscribe\b|সাবস্ক্রাইব|সাবস্ক্রাইব|सब्सक्राइब/i;
   // share / shared / sharing / share done / share kiya / শেয়ার করেছি …
   const SHARE_RX = /\bshar(e|ed|ing|ed it)\b|\bshr\b|শেয়ার|শেয়ার|शेयर/i;
   let likeBase = -1, likeVideo = '';
@@ -314,30 +316,38 @@ async function main() {
       if (fans[t].length > FAN_MAX) fans[t].length = FAN_MAX;
       if (cfg.boost) boostUntil[t] = simT + BOOST_SECS;
     },
-    onSub: (name, code) => { // their country gets a ball — or comes back if it is out
+    onSub: (name, code) => { // YouTube told us about a new subscriber: their country gets a ball — or comes back if it is out
+      const who = name.toLowerCase();
+      if (subDone.has(who) || subDone.has('@' + who.replace(/^@/, ''))) return;   // already thanked from the chat
+      subDone.add(who);
       let t = code ? teamOf(code) : -1;
       if (t < 0) { for (let u = 0; u < N; u++) if (teamAlive[u] && (t < 0 || chatTotal[u] > chatTotal[t])) t = u; }
       if (t >= 0) reward(t, name.toUpperCase().slice(0, 12), 'SUBSCRIBE');
     },
-    onText: (name, text, code, author) => { // "share" in chat: we can't see shares, so we trust the viewer (once every 10 min)
-      const isShare = SHARE_RX.test(text) && !/\b(don'?t|do not|not|no|never|can'?t|won'?t)\s+shar/i.test(text);
+    // "share" / "subscribed" in chat: YouTube does not show us these, so we trust the viewer
+    // (share: once every 10 minutes per viewer · subscribe: once per viewer)
+    onText: (name, text, code, author) => {
+      const no = (w) => new RegExp("\\b(don'?t|do not|not|no|never|can'?t|won'?t|will)\\s+" + w, 'i').test(text);
+      let kind = SUB_RX.test(text) && !no('sub') ? 'sub' : SHARE_RX.test(text) && !no('shar') ? 'share' : '';
       const w = wall();
-      // said "share" earlier without a country: the gift goes to the first country they type in the next 5 minutes
-      const pend = shareWait.has(author) && shareWait.get(author) > w - 300;
-      if (!isShare && !(pend && code)) return null;
+      // said it earlier without a country: the gift goes to the first country they type in the next 5 minutes
+      const pend = giftWait.get(author);
+      if (!kind && pend && pend.at > w - 300 && code) kind = pend.kind;
+      else if (!kind) return null;
+      const VERB = kind === 'sub' ? 'SUBSCRIBING' : 'SHARING';
       const t = code ? teamOf(code) : -1;
+      if (kind === 'sub' && subDone.has(author)) return ['YOU ARE ALREADY IN THE FAMILY, ', { name }, '! THANK YOU! NOW SHARE THE LIVE AND TYPE "SHARED" FOR ONE MORE BALL!'];
+      if (kind === 'share' && shareAt.has(author) && shareAt.get(author) > w - SHARE_GAP) return ['THANK YOU FOR SHARING AGAIN, ', { name }, '! ONE SHARE GIFT EVERY 10 MINUTES', ...(code ? [' — KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'] : ['!'])];
       if (t < 0) {
-        shareWait.set(author, w);
-        return ['THANK YOU FOR SHARING, ', { name }, '! NOW TYPE YOUR COUNTRY AND IT GETS ONE MORE BALL — OR COMES BACK IF IT IS OUT!'];
+        giftWait.set(author, { kind, at: w });
+        return [`THANK YOU FOR ${VERB}, `, { name }, '! NOW TYPE YOUR COUNTRY AND IT GETS ONE MORE BALL — OR COMES BACK IF IT IS OUT!'];
       }
-      shareWait.delete(author);
-      if (shareAt.has(author) && shareAt.get(author) > w - SHARE_GAP) return ['THANK YOU FOR SHARING AGAIN, ', { name }, '! ONE SHARE GIFT EVERY 10 MINUTES — KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'];
-      if (phase !== 'play') { shareWait.set(author, w); return ['THANK YOU FOR SHARING, ', { name }, '! THE NEXT WAR STARTS IN A MOMENT — TYPE ', { node: flagNode(code) }, CN(code) + ' THEN AND IT GETS YOUR GIFT!']; }
+      if (phase !== 'play') { giftWait.set(author, { kind, at: w }); return [`THANK YOU FOR ${VERB}, `, { name }, '! THE NEXT WAR STARTS IN A MOMENT — TYPE ', { node: flagNode(code) }, CN(code) + ' THEN AND IT GETS YOUR GIFT!']; }
+      giftWait.delete(author);
       const was = teamAlive[t];
-      if (!reward(t, name.toUpperCase().slice(0, 12), 'SHARE', true)) return ['THANK YOU FOR SHARING, ', { name }, '! KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'];
-      shareAt.set(author, w);
-      shareCount++;
-      return ['THANK YOU FOR SHARING, ', { name }, '! ', { node: flagNode(code) }, CN(code) + (was ? ' GETS ONE MORE BALL!' : ' IS BACK IN THE WAR!') + ' MORE FRIENDS = MORE POWER!'];
+      if (!reward(t, name.toUpperCase().slice(0, 12), kind === 'sub' ? 'SUBSCRIBE' : 'SHARE', true)) return [`THANK YOU FOR ${VERB}, `, { name }, '! KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'];
+      if (kind === 'sub') { subDone.add(author); subCount++; } else { shareAt.set(author, w); shareCount++; }
+      return [`THANK YOU FOR ${VERB}, `, { name }, '! ', { node: flagNode(code) }, CN(code) + (was ? ' GETS ONE MORE BALL!' : ' IS BACK IN THE WAR!') + ' MORE FRIENDS = MORE POWER!'];
     },
     onStats: (st) => { // every LIKE_STEP new likes: the country closest to a comeback returns, or the chat's favourite gets a ball
       if (!LIKE_STEP || !st || phase !== 'play') return;
@@ -695,7 +705,7 @@ async function main() {
   updateUI();
   requestAnimationFrame(frame);
   autoUpdate('war', save);   // after a deploy: reload with the game where it was (no Restart needed)
-  window.__war = { reviveCall, shares: () => shareCount, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
+  window.__war = { reviveCall, shares: () => shareCount, subs: () => subCount, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
 }
 
 main();
