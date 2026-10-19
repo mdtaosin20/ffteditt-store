@@ -294,12 +294,14 @@ async function main() {
       const t = teamOf(code);
       if (t < 0 || phase !== 'play') return;
       const nm = name.toUpperCase().slice(0, 12);
-      chatTotal[t]++; renderPower();
+      chatTotal[t]++;
       if (!teamAlive[t]) {
         if (REV_CHATS && ++chatProg[t] >= REV_CHATS && revive(t, nm)) chatProg[t] = 0;
+        renderPower();
         return;
       }
       if (BALL_CHATS && ++chatProg[t] >= BALL_CHATS) { chatProg[t] = 0; addBonus(t, nm); }
+      renderPower();
       fans.forEach((list) => { const j = list.findIndex((f) => f.name === nm); if (j >= 0) list.splice(j, 1); }); // one viewer, one country
       fans[t].unshift({ name: nm, until: wall() + FAN_SECS, hot: wall() + BOOST_SECS + 4 });
       if (fans[t].length > FAN_MAX) fans[t].length = FAN_MAX;
