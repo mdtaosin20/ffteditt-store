@@ -100,6 +100,7 @@ async function main() {
   // a knocked-out country's place can be taken by a new country from the chat ("share Croatia"); undone at the next war
   const BASE = TEAMS.slice();
   let swaps = {};
+  let freeUsed = new Set([...BASE, ...(W && Array.isArray(W.free) ? W.free : [])]);   // the war's own countries count as already in   // countries that already joined once for free this war
   if (W && W.swaps) for (const [slot, code] of Object.entries(W.swaps)) if (byCode.has(code) && !TEAMS.includes(code) && TEAMS[slot]) { TEAMS[slot] = code; swaps[slot] = code; }
 
   let g = new Int16Array(TOTAL), cnt = new Int32Array(N), lastBy = new Int16Array(N).fill(-1);
@@ -134,7 +135,7 @@ async function main() {
     }
     balls = seeds.map(([x, y, t]) => startBall(t, x, y));
     colorOf = shuffle(Array.from({ length: Math.max(N, 1) }, (_, i) => PALETTE[i] || `hsl(${(i * 137.5) % 360} 70% ${45 + (i % 3) * 10}%)`));
-    BASE.forEach((c, i) => { TEAMS[i] = c; }); swaps = {};
+    BASE.forEach((c, i) => { TEAMS[i] = c; }); swaps = {}; freeUsed = new Set(BASE);
     teamAlive.fill(1); boostUntil.fill(0); outOrder = []; chatProg.fill(0); chatTotal.fill(0); bonus.forEach((l) => { l.length = 0; });
     alive = N; simT = 0; lastSudden = 0; phase = 'play'; phaseT = 0; champion = -1; lastBy.fill(-1);
   };
@@ -154,7 +155,7 @@ async function main() {
     try {
       localStorage.setItem(KEY, JSON.stringify({ sig, warNo, simT, lastSudden, colors: colorOf,
         g: String.fromCharCode(...Array.from(g, (v) => v + 65)),
-        alive: Array.from(teamAlive), outs: outOrder, swaps, chat: { t: Array.from(chatTotal), p: Array.from(chatProg) },
+        alive: Array.from(teamAlive), outs: outOrder, swaps, free: [...freeUsed], chat: { t: Array.from(chatTotal), p: Array.from(chatProg) },
         balls: balls.map((b) => [b.t, Math.round(b.x), Math.round(b.y), +b.vx.toFixed(3), +b.vy.toFixed(3)]) }));
     } catch (e) { /* ignore */ }
   };
@@ -306,9 +307,14 @@ async function main() {
     duck: (on) => sfx.duck(on),
     sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
     onFan: (code, name) => {
-      const t = teamOf(code);
-      if (t < 0 || phase !== 'play') return;
+      let t = teamOf(code);
       const nm = name.toUpperCase().slice(0, 12);
+      // a new country typed in chat joins a free place once per war, with no condition (after that: share / subscribe)
+      if (t < 0 && phase === 'play' && !freeUsed.has(code) && freeSlot() >= 0) {
+        t = join(code, nm);
+        if (t >= 0) { freeUsed.add(code); glog('free', name, code, 'joined'); save(); }
+      }
+      if (t < 0 || phase !== 'play') return;
       chatTotal[t]++;
       if (!teamAlive[t]) {
         if (REV_CHATS && ++chatProg[t] >= REV_CHATS && revive(t, nm)) { chatProg[t] = 0; glog('chats', nm, code, 'revive'); }
@@ -392,7 +398,7 @@ async function main() {
       ['SUBSCRIBE AND TYPE SUBSCRIBED WITH YOUR COUNTRY — IT GETS ONE MORE FLAG, AND IF IT IS OUT, I BRING IT BACK!'],
       ['YOUR COUNTRY IS OUT? SHARE THIS LIVE, THEN TYPE SHARE AND YOUR COUNTRY IN CHAT — IT COMES BACK! ONCE EVERY 10 MINUTES FOR EACH OF YOU!'],
       ...(LIKE_STEP ? [[`EVERY ${LIKE_STEP} LIKES I GIVE A COUNTRY ONE MORE FLAG OR BRING ONE BACK — PRESS LIKE NOW!`]] : []),
-      ['YOUR COUNTRY IS NOT ON THE MAP? WHEN A COUNTRY IS OUT, SHARE THIS LIVE AND TYPE SHARE + YOUR COUNTRY — IT JOINS THE WAR!'],
+      ['YOUR COUNTRY IS NOT ON THE MAP? JUST TYPE ITS NAME — IF THERE IS A FREE PLACE, IT JOINS THE WAR RIGHT AWAY!'],
       ['WHICH COUNTRY WILL TAKE THE WHOLE WORLD? COMMENT YOUR PICK!'],
       ['YOUR COMMENTS CHANGE THE WAR — CHEER FOR YOUR COUNTRY NOW!'],
     ],
@@ -402,7 +408,7 @@ async function main() {
       const s = state(code);
       if (s === 'alive') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + `! ${chatTotal[teamOf(code)]} CHAT${chatTotal[teamOf(code)] === 1 ? '' : 'S'} FOR IT SO FAR — ${perk(teamOf(code))}`];
       if (s === 'out') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (REV_CHATS ? `! IT IS OUT — SHARE THIS LIVE AND TYPE SHARE ${CN(code)}, AND IT COMES BACK RIGHT AWAY!` : '! IT WAS CONQUERED THIS WAR — CHEER IT IN THE NEXT ONE!')];
-      return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (freeSlot() >= 0 ? `! IT IS NOT IN THIS WAR YET — SHARE THIS LIVE AND TYPE SHARE ${CN(code)}, AND IT JOINS RIGHT AWAY!` : `! IT IS NOT IN THIS WAR — WHEN A COUNTRY IS OUT, SHARE THIS LIVE AND TYPE SHARE ${CN(code)} TO BRING IT IN!`)];
+      return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (freeSlot() < 0 ? `! THE MAP IS FULL RIGHT NOW — WHEN A COUNTRY IS OUT, TYPE ${CN(code)} AGAIN AND IT JOINS!` : `! IT WAS ALREADY IN THIS WAR — SHARE THIS LIVE AND TYPE SHARE ${CN(code)} TO BRING IT BACK!`)];
     },
     reply: (name, code, text) => {
       if (code) {
@@ -410,7 +416,7 @@ async function main() {
         if (s === 'alive') return [pick(['GO GO! ', 'YES ', 'COME ON ', 'NICE ']), { name }, '! ', { node: flagNode(code) }, CN(code) + ` HAS ${chatTotal[t]} CHATS! ` + perk(t)];
         if (s === 'out') return REV_CHATS ? [{ node: flagNode(code) }, CN(code) + ` IS OUT, `, { name }, `! ` + 'SHARE THIS LIVE AND TYPE SHARE ' + CN(code) + ' — IT COMES BACK RIGHT AWAY!']
           : [{ node: flagNode(code) }, CN(code) + ' IS ALREADY OUT, ', { name }, '… NEXT WAR STARTS SOON!'];
-        if (freeSlot() >= 0) return [{ node: flagNode(code) }, CN(code) + ' IS NOT IN THE WAR YET, ', { name }, '! SHARE THIS LIVE AND TYPE SHARE ' + CN(code) + ' — IT TAKES THE FREE PLACE!'];
+        if (freeSlot() >= 0) return [{ node: flagNode(code) }, CN(code) + ' IS OUT OF THE MAP, ', { name }, '! SHARE THIS LIVE AND TYPE SHARE ' + CN(code) + ' — IT COMES BACK RIGHT AWAY!'];
         return null;
       }
       if (/reviv|back|ফির|রিভাইভ/i.test(text)) {
@@ -530,6 +536,7 @@ async function main() {
     TEAMS[slot] = code; swaps[slot] = code;
     if (BASE[slot] === code) delete swaps[slot];
     fans[slot] = []; chatProg[slot] = 0; chatTotal[slot] = 0; bonus[slot] = [];
+    freeUsed.add(code);
     if (!revive(slot, by, true)) { TEAMS[slot] = old; if (BASE[slot] === old) delete swaps[slot]; else swaps[slot] = old; return -1; }
     return slot;
   };
@@ -687,7 +694,7 @@ async function main() {
     const el = $('revt');
     el.innerHTML = '<h4>♻️ BRING THEM BACK!</h4><div class="rv-row">' +
       outs.map((t) => `<span class="rv-c">${flagHTML(t, 40)}${NAME(t)} <small>${chatProg[t]}/${REV_CHATS}</small></span>`).join('') + '</div>' +
-      `<div class="rv-how">🔁 <b>Share the live</b> + type <b>SHARE + COUNTRY</b> → IT COMES BACK!<br>🆕 Not on the map? <b>SHARE + YOUR COUNTRY</b> → IT JOINS!<br>🔔 <b>Subscribe</b> + type SUBSCRIBED · 💬 Type it <b>${REV_CHATS}×</b> · ${LIKE_STEP ? `👍 <b>${LIKE_STEP} likes</b> · ` : ''}⭐ <b>Super Chat</b></div>`;
+      `<div class="rv-how">🔁 <b>Share the live</b> + type <b>SHARE + COUNTRY</b> → IT COMES BACK!<br>🆕 Not on the map? <b>Type your country</b> → IT JOINS!<br>🔔 <b>Subscribe</b> + type SUBSCRIBED · 💬 Type it <b>${REV_CHATS}×</b> · ${LIKE_STEP ? `👍 <b>${LIKE_STEP} likes</b> · ` : ''}⭐ <b>Super Chat</b></div>`;
     el.hidden = false; el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
     clearTimeout(reviveCall.t); reviveCall.t = setTimeout(() => { el.hidden = true; }, 9000);
     const two = outs.slice(0, 2);
@@ -737,7 +744,7 @@ async function main() {
   updateUI();
   requestAnimationFrame(frame);
   autoUpdate('war', save);   // after a deploy: reload with the game where it was (no Restart needed)
-  window.__war = { reviveCall, teams: () => TEAMS.slice(), shares: () => shareCount, subs: () => subCount, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
+  window.__war = { reviveCall, free: () => [...freeUsed], teams: () => TEAMS.slice(), shares: () => shareCount, subs: () => subCount, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
 }
 
 main();
