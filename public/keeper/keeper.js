@@ -35,14 +35,18 @@ const BOWL = { x: 230, y: 668, r: 118 };
 const PADDLE = { half: 102, w: 8, spin: Number(new URLSearchParams(location.search).get('spin')) || 5.4 };   // a fast paddle: hard, quick shots
 const KEEPER = { x: 850, half: 52, w: 9, mid: 520, amp: 140, period: 2.6 };   // floats in front of the goal, up and down
 const GOAL = { x: 930, top: 330, line: 958 };   // a ball whose centre passes x=line under the bar scores
-const SPAWN = [62, 168];
-const RAMP = [[330, 64], [52, 128]];            // queued balls wait on this ramp (drawn only)
+// the waiting balls roll down this ramp to a gate; the gate opens to let one ball at a time drop into the chute
+const RAMP = [[345, 60], [66, 120]];
+const GATE = { x: 100, y1: 66, y2: 112 };
+const SPAWN = [324, 36];
+const onRamp = (b) => b.y < 150 && b.x > GATE.x - 4;
 const PLAIN = { sa: ['#006c35', 'KSA'], af: ['#007a36', 'AFG'], iq: ['#ce1126', 'IRQ'] };
 
 // static walls: [x1, y1, x2, y2, half thickness]
 const WALLS = [];
 const seg = (x1, y1, x2, y2, t = 8) => WALLS.push([x1, y1, x2, y2, t]);
 seg(14, 0, 14, TH); seg(1066, 0, 1066, TH); seg(0, 14, TW, 14);
+seg(RAMP[0][0], RAMP[0][1], RAMP[1][0], RAMP[1][1], 7); seg(RAMP[0][0], 14, RAMP[0][0], RAMP[0][1], 7);   // the ramp and its back wall
 seg(110, 176, 110, 452, 11);                                    // inner wall of the chute
 seg(14, 470, 158, 572, 9);                                      // slide into the bowl
 seg(250, 455, 250, 300, 18); seg(250, 300, 268, 220, 18); seg(268, 220, 320, 160, 18); seg(320, 160, 420, 128, 18); seg(420, 128, TW, 128, 18); // roof (high: room for big arcs)
@@ -188,11 +192,12 @@ async function main() {
   const active = (c) => S.m && !S.m.qual.includes(c) && teamIdx(c) >= 0;
   const resetBalls = () => {
     balls = []; queue = shuffle(S.m.teams.filter((c) => active(c)).map((c) => ({ c, bonus: false })));
-    releaseT = 0.6;
+    releaseT = 0.6; spawnT = 0;
   };
-  const release = () => {
+  let spawnT = 0, gateOpen = 0, gateBall = null;
+  const spawn = () => { // the next ball in line appears at the top of the ramp and rolls down to the gate
     const q = queue.shift(); if (!q) return;
-    balls.push({ c: q.c, bonus: q.bonus, x: SPAWN[0] + (Math.random() - 0.5) * 10, y: SPAWN[1], vx: 0, vy: 40, still: 0, age: 0, spin: 0, gone: 0 });
+    balls.push({ c: q.c, bonus: q.bonus, x: SPAWN[0], y: SPAWN[1], vx: -60, vy: 0, still: 0, age: 0, spin: 0, gone: 0 });
   };
   const recycle = (b) => { // back to the end of the queue (a bonus ball is used up)
     b.gone = 1;
@@ -239,11 +244,13 @@ async function main() {
       for (const w of WALLS) { const hit = collideSeg(b, ...w); if (hit > 160) sfx.bounce(); }
       const kick = collideSeg(b, P[0], P[1], P[2], P[3], PADDLE.w, 0, 0, { w: PADDLE.spin, cx: BOWL.x, cy: BOWL.y });
       if (kick > 80) { sfx.kick(); ST.kick++; }
+      if (gateOpen <= 0) collideSeg(b, GATE.x, GATE.y1, GATE.x, GATE.y2, 6);
+      if (onRamp(b)) { b.age = 0; b.still = 0; }
       const save = collideSeg(b, KEEPER.x, keeperY - KEEPER.half, KEEPER.x, keeperY + KEEPER.half, KEEPER.w, 0, kvy, null, 0.95);   // the keeper punches it back
       if (save > 120) { sfx.save(); b.saved = simT; ST.save++; }
       const sp = Math.hypot(b.vx, b.vy);
       if (sp > 1900) { b.vx *= 1900 / sp; b.vy *= 1900 / sp; }
-      b.still = sp < 18 ? b.still + dt : 0;
+      if (!onRamp(b)) b.still = sp < 18 ? b.still + dt : 0;
       // scored? (centre past the goal line, under the bar)
       if (b.x > GOAL.line && b.y > GOAL.top + 10) { goal(b); continue; }
       if (b.y > TH + 30) { ST.pit++; recycle(b); continue; }                 // fell into a pit: try again
@@ -446,7 +453,6 @@ async function main() {
     for (const [x1, y1, x2, y2, t] of WALLS) { if (y1 === 0 && y2 === TH) continue; bc.lineWidth = t * 2; bc.beginPath(); bc.moveTo(x1, y1); bc.lineTo(x2, y2); bc.stroke(); }
     bc.fillStyle = '#000'; bc.fillRect(0, 0, 14, TH); bc.fillRect(TW - 14, 0, 14, TH); bc.fillRect(0, 0, TW, 10);
     // ramp where the next balls wait
-    bc.lineWidth = 12; bc.beginPath(); bc.moveTo(RAMP[0][0] + 20, RAMP[0][1] + 18); bc.lineTo(RAMP[1][0] - 20, RAMP[1][1] + 26); bc.stroke();
     // ground under the pitch + pits
     bc.fillStyle = '#000'; bc.fillRect(490, 712, TW - 490, TH - 712); bc.fillRect(354, 702, 26, TH - 702);
     bc.fillStyle = '#ff2d6f'; bc.fillRect(14, TH - 18, 96, 18);
@@ -475,12 +481,8 @@ async function main() {
   };
   const draw = (dt) => {
     c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(bg, 0, 0); c.setTransform(k, 0, 0, k, 0, 0);
-    // waiting balls on the ramp
-    const n = Math.min(queue.length, 6);
-    for (let i = 0; i < n; i++) {
-      const t = 1 - (i + 0.5) / 6.4, x = RAMP[1][0] + (RAMP[0][0] - RAMP[1][0]) * t, y = RAMP[1][1] + (RAMP[0][1] - RAMP[1][1]) * t;
-      drawBall(queue[i].c, x, y - 2, 15, 0, queue[i].bonus);
-    }
+    // the gate (red when closed)
+    if (gateOpen <= 0) { c.fillStyle = '#ff2d6f'; c.fillRect(GATE.x - 5, GATE.y1, 10, GATE.y2 - GATE.y1); }
     // paddle
     c.save(); c.translate(BOWL.x, BOWL.y); c.rotate(paddleA); c.fillStyle = '#f4c430'; c.fillRect(-PADDLE.half, -PADDLE.w, PADDLE.half * 2, PADDLE.w * 2); c.restore();
     c.fillStyle = '#111'; c.beginPath(); c.arc(BOWL.x, BOWL.y, 6, 0, 7); c.fill();
@@ -525,11 +527,21 @@ async function main() {
     if (S.phase === 'card' && S.phaseT > CARD_SECS) setPhase('play');
     if (S.phase === 'end' && S.phaseT > END_SECS) { nextAfterMatch(); return; }
     if (S.phase === 'champ' && S.phaseT > CHAMP_SECS) { $('win').hidden = true; newTournament(); S.tableKind = 'G1'; setPhase('table'); showTable('G1'); return; }
+    if (gateOpen > 0) { // the gate closes as soon as that ball is through
+      gateOpen -= dt;
+      if (!gateBall || gateBall.gone || gateBall.x < GATE.x - BR - 3) gateOpen = 0;
+    }
     if (S.m && (S.phase === 'play' || S.phase === 'card')) {
+      spawnT -= dt;   // keep the ramp filled (up to 6 waiting)
+      if (spawnT <= 0 && queue.length && balls.filter(onRamp).length < 6 && !balls.some((b) => Math.hypot(b.x - SPAWN[0], b.y - SPAWN[1]) < BR * 2.4)) { spawn(); spawnT = 0.3; }
       if (S.phase === 'play') {
         S.m.time += dt;
         releaseT -= dt;
-        if (releaseT <= 0 && queue.length && balls.length < 8) { release(); releaseT = 0.85; }
+        const inPlay = balls.filter((b) => !onRamp(b)).length;
+        if (releaseT <= 0 && inPlay < 8 && balls.some(onRamp)) { // open the gate: the first ball rolls through
+          gateBall = balls.filter(onRamp).sort((a, b) => a.x - b.x)[0];
+          gateBall.vx = Math.min(gateBall.vx, -170); gateOpen = 1.2; releaseT = 0.85;
+        }
         if (S.m.time >= limit()) endMatch();
       }
     }
