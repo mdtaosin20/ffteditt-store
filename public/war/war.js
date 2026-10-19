@@ -353,6 +353,11 @@ async function main() {
         else if (t < 0) {
           if (freeSlot() >= 0) { t = join(code, nm); if (t >= 0) { if (author) joinMark(author); glog('free', name, code, 'joined'); save(); } }
         } else if (revive(t, nm)) { if (author) joinMark(author); glog('free', name, code, 'revive'); chatProg[t] = 0; renderPower(); return; }
+      } else if (t >= 0 && teamAlive[t] && phase === 'play' && firstTime && author && joinWait(author) === 0) {
+        // a new viewer whose country is already fighting: it gets a new flag right away, so they see it work
+        joinMark(author);
+        addBonus(t, nm, 'NEW FIGHTER');
+        glog('free', name, code, 'flag');
       }
       if (t < 0 || phase !== 'play') return;
       chatTotal[t]++;
@@ -546,7 +551,8 @@ async function main() {
     armies();
     feed(`➕ ${flagHTML(t, 40)}<span>${NAME(t)} GETS ONE MORE FLAG — THANKS ${by}!</span>`);
     sfx.tone({ freq: 660, to: 1320, type: 'triangle', dur: 0.3, vol: 0.12 });
-    host(why ? [`THANK YOU `, { name: by }, ` FOR THE ${why}! `, { node: flagNode(TEAMS[t]) }, NAME(t) + ' GETS ONE MORE FLAG ON THE MAP!']
+    host(why === 'NEW FIGHTER' ? [`WELCOME `, { name: by }, `! `, { node: flagNode(TEAMS[t]) }, NAME(t) + ' GETS A NEW FLAG FOR YOU — KEEP TYPING ' + NAME(t) + '!']
+      : why ? [`THANK YOU `, { name: by }, ` FOR THE ${why}! `, { node: flagNode(TEAMS[t]) }, NAME(t) + ' GETS ONE MORE FLAG ON THE MAP!']
       : [{ node: flagNode(TEAMS[t]) }, NAME(t) + ` GETS ONE MORE FLAG ON THE MAP! THANK YOU `, { name: by }, `! ${BALL_CHATS} MORE CHATS AND ` + NAME(t) + ` GETS ANOTHER ONE!`], why ? 3 : 2);
     renderPower();
   };
