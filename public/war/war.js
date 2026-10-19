@@ -4,6 +4,7 @@
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
 import { liveChat, countryMatcher } from '/game/chat.js?v=7';
+import { autoUpdate } from '/game/update.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -663,6 +664,7 @@ async function main() {
   };
   updateUI();
   requestAnimationFrame(frame);
+  autoUpdate('war', save);   // after a deploy: reload with the game where it was (no Restart needed)
   window.__war = { cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
 }
 
