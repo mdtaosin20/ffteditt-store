@@ -29,11 +29,11 @@ const STAGES = {
 const GROUPS = 'ABCDEF';
 
 /* ---------------------------------------------------------------- the track (canvas units) */
-const TW = 1080, TH = 790, BR = 22, FIXED = 1 / 240;
+const TW = 1080, TH = 790, BR = Number(new URLSearchParams(location.search).get('br')) || 16, FIXED = 1 / 240;
 const GRAV = 980;
 const BOWL = { x: 230, y: 668, r: 118 };
-const PADDLE = { half: 102, w: 8 };
-const KEEPER = { x: 840, half: 52, w: 10, mid: 556, amp: 88, speed: 1.15 };
+const PADDLE = { half: 102, w: 8, spin: Number(new URLSearchParams(location.search).get('spin')) || 5.4 };   // a fast paddle: hard, quick shots
+const KEEPER = { x: 850, half: 52, w: 9, mid: 520, amp: 140, period: 2.6 };   // floats in front of the goal, up and down
 const GOAL = { x: 930, top: 330, line: 958 };   // a ball whose centre passes x=line under the bar scores
 const SPAWN = [62, 168];
 const RAMP = [[330, 64], [52, 128]];            // queued balls wait on this ramp (drawn only)
@@ -45,7 +45,7 @@ const seg = (x1, y1, x2, y2, t = 8) => WALLS.push([x1, y1, x2, y2, t]);
 seg(14, 0, 14, TH); seg(1066, 0, 1066, TH); seg(0, 14, TW, 14);
 seg(110, 176, 110, 452, 11);                                    // inner wall of the chute
 seg(14, 470, 158, 572, 9);                                      // slide into the bowl
-seg(250, 455, 250, 300, 18); seg(250, 300, 272, 238, 18); seg(272, 238, 322, 200, 18); seg(322, 200, 400, 190, 18); seg(400, 190, TW, 190, 18); // roof
+seg(250, 455, 250, 300, 18); seg(250, 300, 268, 220, 18); seg(268, 220, 320, 160, 18); seg(320, 160, 420, 128, 18); seg(420, 128, TW, 128, 18); // roof (high: room for big arcs)
 for (let i = 0; i < 18; i++) {                                  // the bowl (bottom half circle)
   const a1 = (i / 18) * Math.PI, a2 = ((i + 1) / 18) * Math.PI;
   seg(BOWL.x + BOWL.r * Math.cos(a1), BOWL.y + BOWL.r * Math.sin(a1), BOWL.x + BOWL.r * Math.cos(a2), BOWL.y + BOWL.r * Math.sin(a2), 8);
@@ -53,7 +53,8 @@ for (let i = 0; i < 18; i++) {                                  // the bowl (bot
 seg(348, 668, 360, 702, 6);                                     // lip after the bowl
 seg(490, 700, 930, 712, 6);                                     // the pitch, a little downhill to the goal
 seg(930, 712, TW, 712, 6);
-seg(GOAL.x, GOAL.top, TW, GOAL.top, 7); seg(GOAL.x, GOAL.top, GOAL.x, GOAL.top + 16, 7); // crossbar
+seg(GOAL.x, GOAL.top, TW, GOAL.top - 14, 7);   // the top of the goal slopes, balls roll off it
+ seg(GOAL.x, GOAL.top, GOAL.x, GOAL.top + 16, 7); // crossbar
 
 async function fetchConfig() {
   try { const r = await fetch('/api/keeper.php', { cache: 'no-store' }); if (r.ok) return await r.json(); } catch (e) { /* offline */ }
@@ -180,6 +181,7 @@ async function main() {
   };
 
   /* ---------------------------------------------------------------- balls */
+  const ST = { kick: 0, save: 0, pit: 0, stuck: 0, goal: 0 };
   let balls = [], queue = [], releaseT = 0, paddleA = 0, keeperY = KEEPER.mid, simT = 0, flash = [], confetti = [];
   let plane = null, nextPlane = 40;
   const teamIdx = (c) => (S.m ? S.m.teams.indexOf(c) : -1);
@@ -197,7 +199,7 @@ async function main() {
     if (!b.bonus && active(b.c) && !queue.some((q) => q.c === b.c && !q.bonus) && !balls.some((o) => o !== b && !o.gone && o.c === b.c && !o.bonus)) queue.push({ c: b.c, bonus: false });
   };
 
-  const collideSeg = (b, x1, y1, x2, y2, t, vx0 = 0, vy0 = 0, rot = null) => {
+  const collideSeg = (b, x1, y1, x2, y2, t, vx0 = 0, vy0 = 0, rot = null, bounce = 0.5) => {
     const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
     let u = L2 ? ((b.x - x1) * dx + (b.y - y1) * dy) / L2 : 0; u = clamp(u, 0, 1);
     const px = x1 + dx * u, py = y1 + dy * u;
@@ -211,7 +213,7 @@ async function main() {
     let rx = b.vx - wx, ry = b.vy - wy;
     const vn = rx * nx + ry * ny;
     if (vn < 0) {
-      const e = rot ? 0.75 : 0.5;
+      const e = rot ? 0.9 : bounce;
       rx -= (1 + e) * vn * nx; ry -= (1 + e) * vn * ny;
       // a little rolling friction along the wall
       const tx = -ny, ty = nx, vt = rx * tx + ry * ty;
@@ -223,9 +225,9 @@ async function main() {
   };
 
   const physics = (dt) => {
-    paddleA += 3.4 * dt;
+    paddleA += PADDLE.spin * dt;
     const kPrev = keeperY;
-    keeperY = KEEPER.mid + KEEPER.amp * Math.sin(simT * KEEPER.speed * 2 * Math.PI / 3.2);
+    keeperY = KEEPER.mid + KEEPER.amp * Math.sin(simT * 2 * Math.PI / KEEPER.period);
     const kvy = (keeperY - kPrev) / dt;
     const pc = Math.cos(paddleA), ps = Math.sin(paddleA);
     const P = [BOWL.x - pc * PADDLE.half, BOWL.y - ps * PADDLE.half, BOWL.x + pc * PADDLE.half, BOWL.y + ps * PADDLE.half];
@@ -235,17 +237,17 @@ async function main() {
       b.x += b.vx * dt; b.y += b.vy * dt; b.age += dt;
       b.spin += (b.vx / BR) * dt;
       for (const w of WALLS) { const hit = collideSeg(b, ...w); if (hit > 160) sfx.bounce(); }
-      const kick = collideSeg(b, P[0], P[1], P[2], P[3], PADDLE.w, 0, 0, { w: 3.4, cx: BOWL.x, cy: BOWL.y });
-      if (kick > 80) sfx.kick();
-      const save = collideSeg(b, KEEPER.x, keeperY - KEEPER.half, KEEPER.x, keeperY + KEEPER.half, KEEPER.w, 0, kvy);
-      if (save > 120) { sfx.save(); b.saved = simT; }
+      const kick = collideSeg(b, P[0], P[1], P[2], P[3], PADDLE.w, 0, 0, { w: PADDLE.spin, cx: BOWL.x, cy: BOWL.y });
+      if (kick > 80) { sfx.kick(); ST.kick++; }
+      const save = collideSeg(b, KEEPER.x, keeperY - KEEPER.half, KEEPER.x, keeperY + KEEPER.half, KEEPER.w, 0, kvy, null, 0.95);   // the keeper punches it back
+      if (save > 120) { sfx.save(); b.saved = simT; ST.save++; }
       const sp = Math.hypot(b.vx, b.vy);
-      if (sp > 1400) { b.vx *= 1400 / sp; b.vy *= 1400 / sp; }
+      if (sp > 1900) { b.vx *= 1900 / sp; b.vy *= 1900 / sp; }
       b.still = sp < 18 ? b.still + dt : 0;
       // scored? (centre past the goal line, under the bar)
       if (b.x > GOAL.line && b.y > GOAL.top + 10) { goal(b); continue; }
-      if (b.y > TH + 30) { recycle(b); continue; }                 // fell into a pit: try again
-      if (b.still > 3 || b.age > 28) { recycle(b); continue; }    // stuck: back to the start
+      if (b.y > TH + 30) { ST.pit++; recycle(b); continue; }                 // fell into a pit: try again
+      if (b.still > 3 || b.age > 28) { ST.stuck++; recycle(b); continue; }    // stuck: back to the start
     }
     // balls bump into each other
     for (let i = 0; i < balls.length; i++) {
@@ -266,7 +268,7 @@ async function main() {
   /* ---------------------------------------------------------------- goals and the match */
   let lastGoalTalk = 0;
   const goal = (b) => {
-    b.gone = 1;
+    b.gone = 1; ST.goal++;
     const i = teamIdx(b.c);
     if (i < 0 || S.m.done || S.m.qual.includes(b.c)) { recycle(b); return; }
     S.m.goals[i]++;
@@ -477,7 +479,7 @@ async function main() {
     const n = Math.min(queue.length, 6);
     for (let i = 0; i < n; i++) {
       const t = 1 - (i + 0.5) / 6.4, x = RAMP[1][0] + (RAMP[0][0] - RAMP[1][0]) * t, y = RAMP[1][1] + (RAMP[0][1] - RAMP[1][1]) * t;
-      drawBall(queue[i].c, x, y - 4, 18, 0, queue[i].bonus);
+      drawBall(queue[i].c, x, y - 2, 15, 0, queue[i].bonus);
     }
     // paddle
     c.save(); c.translate(BOWL.x, BOWL.y); c.rotate(paddleA); c.fillStyle = '#f4c430'; c.fillRect(-PADDLE.half, -PADDLE.w, PADDLE.half * 2, PADDLE.w * 2); c.restore();
@@ -564,7 +566,7 @@ async function main() {
     if (n.rev !== cfg.rev && S.phase !== 'champ') { save(); location.reload(); }
   }, 20000);
 
-  window.__keeper = { S: () => S, balls: () => balls, queue: () => queue, cfg };
+  window.__keeper = { ST, simT: () => simT, S: () => S, balls: () => balls, queue: () => queue, cfg };
 }
 
 main();
