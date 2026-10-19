@@ -42,6 +42,18 @@ switch ($do) {
         }
         break;
 
+    case 'restart': // one running stream: the game starts fresh (YouTube opens a new live video)
+        $id = (int) ($_POST['id'] ?? 0);
+        $st = db()->prepare("UPDATE streams SET rev = rev + 1, run_id = ?, updated_at = ? WHERE id = ? AND desired = 'on'");
+        $st->execute([$now, $now, $id]);
+        if ($st->rowCount()) {
+            log_activity("Restart requested: stream #{$id}");
+            flash('Restarting… it comes back in about 20 seconds.');
+        } else {
+            flash('This stream is not running.', 'error');
+        }
+        break;
+
     case 'start_all':
         $n = db()->prepare($startSql);
         $n->execute([$now, $now]);

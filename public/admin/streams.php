@@ -87,6 +87,12 @@ page_start('Live Stream Manager', 'streams', $admin);
           <button class="btn btn-green" type="submit" <?= ($srv && $s['stream_key'] !== '') ? '' : 'disabled' ?>><?= icon('play') ?>Start</button>
         <?php endif; ?>
       </form>
+      <?php if ($s['desired'] === 'on'): ?>
+        <form method="post" action="stream_action.php" onsubmit="return confirm('Restart this stream? The game starts again and YouTube opens a NEW live video. For game updates you do not need this — the game updates itself after Deploy.')"><?= csrf_field() ?>
+          <input type="hidden" name="id" value="<?= (int) $s['id'] ?>"><input type="hidden" name="do" value="restart">
+          <button class="btn btn-ghost" type="submit"><?= icon('refresh') ?>Restart</button>
+        </form>
+      <?php endif; ?>
       <?php if ($s['desired'] === 'on' && watch_url($s['channel_url'])): ?><a class="btn btn-blue" href="<?= e(watch_url($s['channel_url'])) ?>" target="_blank" rel="noopener"><?= icon('eye') ?>Watch</a><?php endif; ?>
       <a class="btn btn-ghost" href="stream_edit.php?id=<?= (int) $s['id'] ?>"><?= icon('gear') ?>Edit</a>
     </div>
