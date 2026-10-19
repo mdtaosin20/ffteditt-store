@@ -345,7 +345,7 @@ export function liveChat(o) {
     if (key) {
       counts.set(key, (counts.get(key) || 0) + 1); saveFans(); renderFans();
       authorKey.delete(name.toLowerCase()); authorKey.set(name.toLowerCase(), key); saveWho();
-      o.onFan && o.onFan(key, cleanName(name));
+      o.onFan && o.onFan(key, cleanName(name), name.toLowerCase());
     }
     if (ev.k === 'super') o.onSuper?.(key || authorKey.get(name.toLowerCase()) || null, cleanName(name));
     const author = name.toLowerCase();

@@ -3,7 +3,7 @@
 // another country it takes that square and bounces back. A country whose land gets too small is out
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=12';
+import { liveChat, countryMatcher } from '/game/chat.js?v=13';
 import { autoUpdate } from '/game/update.js?v=1';
 
 const $ = (id) => document.getElementById(id);
@@ -264,6 +264,28 @@ async function main() {
     return `${Math.max(0, BALL_CHATS - chatProg[t])} MORE CHATS AND ${NAME(t)} GETS ONE MORE FLAG ON THE MAP!` + (x ? ` IT HAS ${x} EXTRA FLAG${x > 1 ? 'S' : ''} NOW!` : '');
   };
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  // who brought in a new country, and when (Date.now): one new country per viewer every 10 minutes
+  const JKEY = 'fft_war_joins', JOIN_GAP = 600000;
+  let joinAt = {};
+  try { joinAt = JSON.parse(localStorage.getItem(JKEY) || '{}') || {}; } catch (e) { /* ignore */ }
+  const joinBlocked = new Map();
+  const joinWait = (a) => Math.max(0, (joinAt[a] || 0) + JOIN_GAP - Date.now());
+  const joinMark = (a) => {
+    const now = Date.now(); joinAt[a] = now;
+    for (const k of Object.keys(joinAt)) if (joinAt[k] < now - JOIN_GAP) delete joinAt[k];
+    try { localStorage.setItem(JKEY, JSON.stringify(joinAt)); } catch (e) { /* ignore */ }
+  };
+  const blockedLine = (name, code) => {
+    const a = '@' + String(name).toLowerCase(), b = String(name).toLowerCase();
+    for (const k of [a, b]) {
+      if (code && joinBlocked.get(k) === code && teamOf(code) < 0) {
+        joinBlocked.delete(k);
+        const m = Math.max(1, Math.ceil(joinWait(k) / 60000));
+        return [{ name }, ', YOU ALREADY BROUGHT A NEW COUNTRY IN! ONE NEW COUNTRY EVERY 10 MINUTES — TRY ', { node: flagNode(code) }, CN(code) + ` AGAIN IN ${m} MINUTE${m === 1 ? '' : 'S'}!`];
+      }
+    }
+    return null;
+  };
   const glog = (...a) => { try { chat.log?.(...a); } catch (e) { /* chat not ready */ } };
   const shareAt = new Map(), giftWait = new Map(), subDone = new Set();
   let shareCount = 0, subCount = 0;
@@ -306,13 +328,17 @@ async function main() {
     badge: (code) => flagNode(code, 34),
     duck: (on) => sfx.duck(on),
     sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
-    onFan: (code, name) => {
+    onFan: (code, name, author) => {
       let t = teamOf(code);
       const nm = name.toUpperCase().slice(0, 12);
-      // a new country typed in chat joins a free place once per war, with no condition (after that: share / subscribe)
+      // a new country typed in chat joins a free place once per war, with no condition (after that: share / subscribe).
+      // One viewer can bring in one new country every 10 minutes (kept across reloads).
       if (t < 0 && phase === 'play' && !freeUsed.has(code) && freeSlot() >= 0) {
-        t = join(code, nm);
-        if (t >= 0) { freeUsed.add(code); glog('free', name, code, 'joined'); save(); }
+        if (author && joinWait(author) > 0) { joinBlocked.set(author, code); }
+        else {
+          t = join(code, nm);
+          if (t >= 0) { freeUsed.add(code); if (author) joinMark(author); glog('free', name, code, 'joined'); save(); }
+        }
       }
       if (t < 0 || phase !== 'play') return;
       chatTotal[t]++;
@@ -404,6 +430,7 @@ async function main() {
     ],
     welcome: (name, code, text) => {
       const hi = isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'WELCOME ';
+      const bw = blockedLine(name, code); if (bw) return bw;
       if (!code) return [hi, { name }, `! WHERE ARE YOU FROM? TYPE YOUR COUNTRY — EVERY ${BALL_CHATS || 15} CHATS GIVE IT ONE MORE FLAG ON THE MAP!`];
       const s = state(code);
       if (s === 'alive') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + `! ${chatTotal[teamOf(code)]} CHAT${chatTotal[teamOf(code)] === 1 ? '' : 'S'} FOR IT SO FAR — ${perk(teamOf(code))}`];
@@ -411,6 +438,7 @@ async function main() {
       return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (freeSlot() < 0 ? `! THE MAP IS FULL RIGHT NOW — WHEN A COUNTRY IS OUT, TYPE ${CN(code)} AGAIN AND IT JOINS!` : `! IT WAS ALREADY IN THIS WAR — SHARE THIS LIVE AND TYPE SHARE ${CN(code)} TO BRING IT BACK!`)];
     },
     reply: (name, code, text) => {
+      const bw = blockedLine(name, code); if (bw) return bw;
       if (code) {
         const s = state(code), t = teamOf(code);
         if (s === 'alive') return [pick(['GO GO! ', 'YES ', 'COME ON ', 'NICE ']), { name }, '! ', { node: flagNode(code) }, CN(code) + ` HAS ${chatTotal[t]} CHATS! ` + perk(t)];
