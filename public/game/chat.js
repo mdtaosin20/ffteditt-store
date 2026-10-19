@@ -28,7 +28,7 @@ const ALIAS = {
   bd: ['bangladesh', 'bangla', 'bd', 'ban', 'বাংলাদেশ', 'bangladeshi'], in: ['india', 'bharat', 'ind', 'ভারত', 'indian', 'hindustan'],
   pk: ['pakistan', 'pak', 'পাকিস্তান', 'pakistani'], us: ['usa', 'america', 'united states', 'us of a', 'american'],
   gb: ['uk', 'united kingdom', 'england', 'britain', 'great britain', 'scotland', 'wales'], ae: ['uae', 'emirates', 'dubai'],
-  sa: ['saudi', 'ksa', 'saudi arabia', 'সৌদি'], tr: ['turkey', 'turkiye', 'türkiye', 'turkish'], br: ['brazil', 'brasil', 'bra'],
+  sa: ['saudi', 'ksa', 'saudi arabia', 'arabia', 'সৌদি'], tr: ['turkey', 'turkiye', 'türkiye', 'turkish'], br: ['brazil', 'brasil', 'bra'],
   ar: ['argentina', 'arg'], de: ['germany', 'deutschland', 'ger'], fr: ['france', 'fra'], es: ['spain', 'espana', 'españa'],
   pt: ['portugal', 'por'], nl: ['netherlands', 'holland'], kr: ['south korea', 'korea'], kp: ['north korea'],
   ru: ['russia', 'rus'], cn: ['china', 'chn'], jp: ['japan', 'jpn'], id: ['indonesia', 'indo'], my: ['malaysia'],
@@ -91,6 +91,8 @@ export function countryMatcher(countries) {
     }
     const toks = all.filter((x) => x.length >= 4 && !NOT_COUNTRY.has(x));
     const tries = toks.concat(all.length > 1 ? all.slice(0, -1).map((x, i) => x + all[i + 1]).filter((x) => x.length >= 6) : []);   // "new zeland" too
+    // stretched letters: "turkeeyyy", "indiaaaa", "nepalll" -> squeeze the repeats
+    for (const x of toks) { const q = x.replace(/(.)\1+/g, '$1'); if (q !== x && q.length >= 4) tries.push(q); }
     let best = null, bestD = 9;
     for (const tok of tries) {
       for (const [w, code] of fuzzyWords.concat(shortList)) { // the same name typed twice: "malaysiamalaysia", "usausa"
