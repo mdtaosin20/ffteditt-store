@@ -3,7 +3,7 @@
 // another country it takes that square and bounces back. A country whose land gets too small is out
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=6';
+import { liveChat, countryMatcher } from '/game/chat.js?v=7';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -11,7 +11,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const FAST = clamp(Number(QS.get('fast')) || 1, 1, 400); // testing only: run the war faster
 
 const DEF = { title: 'TERRITORY WAR', teams: ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'ru', 'cn', 'jp', 'de', 'fr', 'gb'],
-  grid: 40, speed: 100, sudden: 60, boost: true, fill: 'color', ball_chats: 15, revive_chats: 30, rev: '', reset: '' };
+  grid: 40, speed: 100, sudden: 60, boost: true, fill: 'color', ball_chats: 15, revive_chats: 30, like_step: 20, rev: '', reset: '' };
 const BONUS_SECS = 180, BONUS_MAX = 4;   // chat-won extra balls last 3 minutes, at most 4 at a time
 
 // clear, different colours for the countries' land (in team order, shuffled each war)
@@ -75,6 +75,7 @@ async function main() {
   const R = clamp(CELL * 1.45, 14, 40);                   // ball radius (big round flags)
   const BALL_CHATS = Math.max(0, Math.round(cfg.ball_chats) || 0), REV_CHATS = Math.max(0, Math.round(cfg.revive_chats) || 0);
   const FLAGFILL = cfg.fill !== 'color';
+  const LIKE_STEP = Math.max(0, Math.round(cfg.like_step) || 0), SHARE_GAP = 600;   // one share reward per viewer every 10 minutes
 
   const flagCss = (i, w) => { const h = w * 0.75; return `width:${w}px;height:${h}px;background-size:${COLS_A * w}px ${ROWS_A * h}px;background-position:${-(i % COLS_A) * w}px ${-Math.floor(i / COLS_A) * h}px`; };
   // Flags with holy writing (the Kalima, Allahu Akbar) are not drawn on the land or the balls,
@@ -218,12 +219,13 @@ async function main() {
   const isGreeting = (s) => /\b(hi|hii+|hello|hey|salam|salaam|assalam\w*|asalam\w*)\b|হাই|হ্যালো|সালাম|আসসালামু/i.test(s);
   const isSalam = (s) => /salam|salaam|assalam|asalam|সালাম|আসসালামু/i.test(s);
   /* ---------- chat power panel + how to help ---------- */
+  // in the field: one more ball · out: it comes back
   $('how').innerHTML = [
-    BALL_CHATS ? `💬 ${BALL_CHATS} chats → <b>+1 BALL</b>` : '',
-    REV_CHATS ? `💬 ${REV_CHATS} chats if OUT → <b class="hr">REVIVE</b>` : '',
-    `🔔 Subscribe → <b class="hv">+1 BALL</b>`,
-    `⭐ Super Chat → <b class="hg">+2 BALLS</b>`,
-    `♾️ <b class="hg">NO LIMIT</b> — keep chatting!`,
+    (BALL_CHATS ? `💬 ${BALL_CHATS} chats → <b>+1 BALL</b>` : '') + (REV_CHATS ? ` · OUT: ${REV_CHATS} → <b class="hr">BACK</b>` : ''),
+    `🔔 Subscribe → <b class="hv">+1 BALL</b> or <b class="hr">BACK</b>`,
+    `🔁 Share + type <b class="hg">SHARED</b> → <b class="hv">+1 BALL</b> or <b class="hr">BACK</b>`,
+    LIKE_STEP ? `👍 Every ${LIKE_STEP} likes → <b class="hv">+1 BALL</b> or <b class="hr">BACK</b>` : '',
+    `⭐ Super Chat → <b class="hg">+2 BALLS</b> or <b class="hr">BACK</b>`,
   ].filter(Boolean).map((h) => `<div class="how-r">${h}</div>`).join('');
   const extraNow = (t) => bonus[t].filter((u) => u > simT).length;
   // every country people typed, 4 at a time; the pages turn every 5 seconds
@@ -252,6 +254,15 @@ async function main() {
     return `${Math.max(0, BALL_CHATS - chatProg[t])} MORE CHATS = ONE MORE BALL!` + (x ? ` IT HAS +${x} EXTRA BALL${x > 1 ? 'S' : ''} NOW!` : '');
   };
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const shareAt = new Map();
+  let likeBase = -1, likeVideo = '';
+  // a gift for a country: one more ball if it is fighting, back in the war if it is out
+  const reward = (t, by, why, quiet) => {
+    if (phase !== 'play') return false;
+    if (!teamAlive[t]) return revive(t, by);
+    addBonus(t, by, quiet ? '' : why);
+    return true;
+  };
   // LUNA reads the chat meter out loud now and then: who is ahead, who is close to a ball or a comeback
   let standN = 0;
   const standings = () => {
@@ -294,10 +305,33 @@ async function main() {
       if (fans[t].length > FAN_MAX) fans[t].length = FAN_MAX;
       if (cfg.boost) boostUntil[t] = simT + BOOST_SECS;
     },
-    onSub: (name, code) => {
+    onSub: (name, code) => { // their country gets a ball — or comes back if it is out
       let t = code ? teamOf(code) : -1;
-      if (t < 0 || !teamAlive[t]) { t = -1; for (let u = 0; u < N; u++) if (teamAlive[u] && (t < 0 || chatTotal[u] > chatTotal[t])) t = u; }
-      if (t >= 0 && phase === 'play') addBonus(t, name.toUpperCase().slice(0, 12), 'SUBSCRIBE');
+      if (t < 0) { for (let u = 0; u < N; u++) if (teamAlive[u] && (t < 0 || chatTotal[u] > chatTotal[t])) t = u; }
+      if (t >= 0) reward(t, name.toUpperCase().slice(0, 12), 'SUBSCRIBE');
+    },
+    onText: (name, text, code, author) => { // "shared" in chat: we can't see shares, so we trust the viewer (once every 10 min)
+      if (!/\bshared\b|\bshare\s*(done|korsi|korchi|korlam|korechi|korsi|dilam|disi|diyechi|kore\s*disi)|শেয়ার\s*(করেছি|করলাম|দিলাম|করছি|দিছি|দিয়েছি)/i.test(text)) return null;
+      const t = code ? teamOf(code) : -1;
+      if (t < 0) return ['THANK YOU FOR SHARING, ', { name }, '! TYPE "SHARED" WITH YOUR COUNTRY NAME AND IT GETS ONE MORE BALL!'];
+      const w = wall();
+      if ((shareAt.get(author) || 0) > w - SHARE_GAP) return ['THANK YOU FOR SHARING AGAIN, ', { name }, '! ONE SHARE GIFT EVERY 10 MINUTES — KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'];
+      shareAt.set(author, w);
+      const was = teamAlive[t];
+      reward(t, name.toUpperCase().slice(0, 12), 'SHARE', true);
+      return ['THANK YOU FOR SHARING, ', { name }, '! ', { node: flagNode(code) }, CN(code) + (was ? ' GETS ONE MORE BALL!' : ' IS BACK IN THE WAR!') + ' MORE FRIENDS = MORE POWER!'];
+    },
+    onStats: (st) => { // every LIKE_STEP new likes: the country closest to a comeback returns, or the chat's favourite gets a ball
+      if (!LIKE_STEP || !st || phase !== 'play') return;
+      if (likeBase < 0 || st.video !== likeVideo) { likeBase = st.likes; likeVideo = st.video; return; }
+      while (st.likes - likeBase >= LIKE_STEP) {
+        likeBase += LIKE_STEP;
+        const outs = [...Array(N).keys()].filter((u) => !teamAlive[u] && chatProg[u] > 0).sort((a, b) => chatProg[b] - chatProg[a]);
+        let t = outs[0] ?? -1;
+        if (t < 0) for (let u = 0; u < N; u++) if (teamAlive[u] && (t < 0 || chatTotal[u] > chatTotal[t])) t = u;
+        banner('LIKE GOAL!', `${st.likes} LIKES — THANK YOU!`);
+        if (t >= 0) reward(t, 'YOUR LIKES', 'LIKES');
+      }
     },
     onSuper: (code, name) => {
       const t = code ? teamOf(code) : -1;
@@ -311,6 +345,9 @@ async function main() {
       ['TYPE YOUR COUNTRY IN CHAT — ITS BALL GETS A SPEED BOOST AND CONQUERS FASTER!'],
       ...(BALL_CHATS ? [[`EVERY ${BALL_CHATS} CHATS GIVE YOUR COUNTRY ONE MORE BALL! TYPE IT NOW!`]] : []),
       ...(REV_CHATS ? [[`YOUR COUNTRY IS OUT? ${REV_CHATS} CHATS BRING IT BACK TO THE MAP!`]] : []),
+      ['SUBSCRIBE NOW — YOUR COUNTRY GETS ONE MORE BALL, AND IF IT IS OUT IT COMES BACK!'],
+      ['SHARE THIS LIVE WITH A FRIEND AND TYPE "SHARED" WITH YOUR COUNTRY — IT GETS ONE MORE BALL OR COMES BACK!'],
+      ...(LIKE_STEP ? [[`EVERY ${LIKE_STEP} LIKES I GIVE A COUNTRY ONE MORE BALL OR BRING ONE BACK — PRESS LIKE NOW!`]] : []),
       ['WHICH COUNTRY WILL TAKE THE WHOLE WORLD? COMMENT YOUR PICK!'],
       ['YOUR COMMENTS CHANGE THE WAR — CHEER FOR YOUR COUNTRY NOW!'],
     ],
@@ -343,7 +380,7 @@ async function main() {
       if (isGreeting(text)) return [isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'HELLO AGAIN ', { name }, '! WHICH COUNTRY ARE YOU CHEERING FOR?'];
       return null;
     },
-    demoTexts: ['Bangladesh 🇧🇩', 'India!', 'Brasil 🔥', 'Go Pakistan', 'hello', 'USA USA', 'who will win?', 'China', 'assalamu alaikum', 'Nepal', 'Saudi Arabia', 'Japan ❤️', 'বাংলাদেশ', 'nice game'],
+    demoTexts: ['shared Bangladesh', 'Bangladesh 🇧🇩', 'India!', 'Brasil 🔥', 'Go Pakistan', 'hello', 'USA USA', 'who will win?', 'China', 'assalamu alaikum', 'Nepal', 'Saudi Arabia', 'Japan ❤️', 'বাংলাদেশ', 'nice game'],
   });
   const host = (parts, prio = 2) => { if (chat.active) chat.say(parts, prio); };
   // LUNA's box is small here: make a long line smaller until it fits

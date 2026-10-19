@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $new['boost'] = isset($_POST['boost']);
     $new['fill'] = ($_POST['fill'] ?? '') === 'color' ? 'color' : 'flag';
-    foreach ([['ball_chats', 'Chats for one more ball'], ['revive_chats', 'Chats to revive']] as [$k, $label]) {
+    foreach ([['ball_chats', 'Chats for one more ball'], ['revive_chats', 'Chats to revive'], ['like_step', 'Like goal']] as [$k, $label]) {
         $v = (int) ($_POST[$k] ?? -1);
         if ($v < 0 || $v > 1000) $errors[] = "{$label} must be between 0 and 1000."; else $new[$k] = $v;
     }
@@ -115,6 +115,9 @@ page_start('Territory War', 'games', $admin);
       <label class="field"><span>Chats to revive a country that is out</span>
         <input name="revive_chats" type="number" min="0" max="1000" required value="<?= (int) $cfg['revive_chats'] ?>">
         <small class="muted">It comes back with a piece of the biggest country's land — as often as the chat wants. 0 = off.</small></label>
+      <label class="field"><span>Like goal: every … new likes</span>
+        <input name="like_step" type="number" min="0" max="1000" required value="<?= (int) $cfg['like_step'] ?>">
+        <small class="muted">Each goal: the country closest to a comeback returns, or the chat's favourite gets one more ball. Needs the channel connected to YouTube. 0 = off.</small></label>
     </div>
 
     <label class="field" style="margin-top:14px"><span>Countries (2–200, two-letter codes)</span>

@@ -290,6 +290,8 @@ export function liveChat(o) {
     }
     if (ev.k === 'super') o.onSuper?.(key || authorKey.get(name.toLowerCase()) || null, cleanName(name));
     const author = name.toLowerCase();
+    const special = ev.k === 'chat' && o.onText ? o.onText(cleanName(name), text, key || authorKey.get(author) || null, author) : null;
+    if (special) { seen.add(author); lastSaid.set(author, performance.now()); say(special, 3); return; }
     const first = !seen.has(author);
     seen.add(author);
     const recent = performance.now() - (lastSaid.get(author) || -1e9) < 20000;

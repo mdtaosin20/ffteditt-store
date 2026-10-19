@@ -23,6 +23,7 @@ function war_defaults(): array
         'fill'     => 'color',  // land shows the country's flag ('flag') or a plain colour ('color')
         'ball_chats'   => 15,  // chats for one extra ball (lasts 3 minutes); 0 = off
         'revive_chats' => 30,  // chats that bring a country that is out back; 0 = off
+        'like_step'    => 20,  // every this many new likes: one more ball (or a comeback); 0 = off
         'autoplay' => true,
         'pace'     => 'normal',
         'rev'      => '1',

@@ -474,7 +474,7 @@ function yt_tick(int $serverId): void
 
 /**
  * Likes and people watching now, for the games' LIKE / VIEWER goals. 1 unit per check,
- * once a minute per live video (only games that use it: Flag Arena).
+ * once a minute per live video (only games that use it: Flag Arena, Territory War).
  */
 function yt_stats_tick(int $serverId): void
 {
@@ -483,7 +483,7 @@ function yt_stats_tick(int $serverId): void
                          AND yt_video_start = COALESCE(started_at, 0)");
     $st->execute([$serverId]);
     foreach ($st->fetchAll() as $s) {
-        if (game_of_url($s['page_url']) !== 'flags') continue;
+        if (!in_array(game_of_url($s['page_url']), ['flags', 'war'], true)) continue;
         $old = json_decode((string) setting_get('yt_stats_' . $s['id']), true) ?: [];
         if ((int) ($old['t'] ?? 0) > $now - 60) continue;
         setting_set('yt_stats_' . $s['id'], json_encode(['t' => $now] + $old));
