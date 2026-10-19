@@ -221,11 +221,11 @@ async function main() {
   /* ---------- chat power panel + how to help ---------- */
   // in the field: one more ball · out: it comes back
   $('how').innerHTML = [
-    (BALL_CHATS ? `💬 ${BALL_CHATS} chats → <b>+1 BALL</b>` : '') + (REV_CHATS ? ` · OUT: ${REV_CHATS} → <b class="hr">BACK</b>` : ''),
-    `🔔 Subscribe → <b class="hv">+1 BALL</b> or <b class="hr">BACK</b>`,
-    `🔁 Share + type <b class="hg">SHARED</b> → <b class="hv">+1 BALL</b> or <b class="hr">BACK</b>`,
-    LIKE_STEP ? `👍 Every ${LIKE_STEP} likes → <b class="hv">+1 BALL</b> or <b class="hr">BACK</b>` : '',
-    `⭐ Super Chat → <b class="hg">+2 BALLS</b> or <b class="hr">BACK</b>`,
+    (BALL_CHATS ? `💬 ${BALL_CHATS} chats → <b>+1 BALL</b>` : '') + (REV_CHATS ? ` · OUT: ${REV_CHATS} → <b class="hr">REVIVE</b>` : ''),
+    `🔔 Subscribe → <b class="hv">+1 BALL</b> or <b class="hr">REVIVE</b>`,
+    `🔁 Share + type <b class="hg">SHARED</b> → <b class="hv">+1 BALL</b> or <b class="hr">REVIVE</b>`,
+    LIKE_STEP ? `👍 Every ${LIKE_STEP} likes → <b class="hv">+1 BALL</b> or <b class="hr">REVIVE</b>` : '',
+    `⭐ Super Chat → <b class="hg">+2 BALLS</b> or <b class="hr">REVIVE</b>`,
   ].filter(Boolean).map((h) => `<div class="how-r">${h}</div>`).join('');
   const extraNow = (t) => bonus[t].filter((u) => u > simT).length;
   // every country people typed, 4 at a time; the pages turn every 5 seconds
