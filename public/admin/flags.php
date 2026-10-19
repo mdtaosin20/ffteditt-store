@@ -103,6 +103,7 @@ page_start('Flag Arena', 'flags', $admin);
       </label>
       <label class="field"><span>Revives in one round</span>
         <input name="revives" type="number" min="0" max="30" required value="<?= (int) $cfg['revives'] ?>">
+        <small class="muted">0 = no limit: a country can come back again and again.</small>
       </label>
       <label class="field"><span>Like goal: every … new likes</span>
         <input name="likes" type="number" min="5" max="5000" required value="<?= (int) $cfg['likes'] ?>">

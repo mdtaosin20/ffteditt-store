@@ -44,26 +44,26 @@ body { position: fixed; inset: 0; overflow: clip; }
 @keyframes beat { to { transform: scale(1.15); } }
 
 /* ---------- panels ---------- */
-.panel { position: absolute; top: 138px; width: 334px; height: 208px; padding: 12px 16px; border-radius: 18px; background: rgba(8, 12, 30, .9); }
+.panel { position: absolute; top: 126px; width: 334px; height: 178px; padding: 8px 16px; border-radius: 18px; background: rgba(8, 12, 30, .9); }
 .panel h3 { font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: 2px; }
 .power { left: 22px; border: 3px solid var(--gold); box-shadow: 0 0 24px rgba(255, 201, 58, .25); }
 .power h3 { color: var(--gold); }
-.prow { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 27px; font-weight: 700; white-space: nowrap; }
+.prow { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 26px; font-weight: 700; white-space: nowrap; }
 .prow .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .prow b { color: var(--gold); font-variant-numeric: tabular-nums; }
 .prow.empty { color: #9fb2dc; font-size: 22px; white-space: normal; }
 .save { right: 22px; border: 3px solid #2ee6a6; box-shadow: 0 0 24px rgba(46, 230, 166, .22); }
 .save h3 { color: #2ee6a6; font-size: 21px; white-space: nowrap; }
-.rules { margin-top: 4px; font-size: 20px; font-weight: 700; line-height: 1.38; white-space: nowrap; }
+.rules { margin-top: 2px; font-size: 20px; font-weight: 700; line-height: 1.26; white-space: nowrap; }
 .rules b.s { color: #7dd3fc; } .rules b.r { color: #f9a8d4; } .rules b.f { color: #c4b5fd; } .rules b.x { color: var(--gold); }
-.left-rev { position: absolute; left: 0; right: 0; bottom: 5px; text-align: center; font-size: 19px; color: var(--gold); letter-spacing: 1px; }
-.hook { position: absolute; left: 364px; width: 352px; top: 146px; text-align: center; font-family: var(--display); font-weight: 700; line-height: 1.02; }
+.left-rev { position: absolute; left: 0; right: 0; bottom: 3px; text-align: center; font-size: 19px; color: var(--gold); letter-spacing: 1px; }
+.hook { position: absolute; left: 364px; width: 352px; top: 132px; text-align: center; font-family: var(--display); font-weight: 700; line-height: 1.02; }
 .hook span { display: block; font-size: 34px; color: #cfe0ff; letter-spacing: 3px; }
 .hook b { display: block; font-size: 64px; }
 .hook em { display: block; font-style: normal; font-size: 42px; color: var(--gold); }
 
 /* ---------- like / viewer goals ---------- */
-.goals { position: absolute; top: 356px; left: 22px; right: 22px; height: 46px; display: flex; gap: 14px; }
+.goals { position: absolute; top: 412px; left: 22px; right: 22px; height: 40px; display: flex; gap: 14px; }
 .goals[hidden] { display: none; }
 .goal { flex: 1; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-radius: 14px; background: rgba(8, 12, 30, .9); border: 2px solid #3b4a7a; font-size: 21px; font-weight: 700; white-space: nowrap; }
 .goal i { flex: 1; height: 12px; border-radius: 6px; background: #1b2440; overflow: hidden; }
@@ -72,8 +72,8 @@ body { position: fixed; inset: 0; overflow: clip; }
 .goal small { font-size: 16px; color: #9fb2dc; }
 
 /* ---------- arena ---------- */
-#arena { position: absolute; left: 0; top: 408px; width: 1080px; height: 680px; }
-.pops { position: absolute; left: 0; top: 408px; width: 1080px; height: 680px; pointer-events: none; }
+#arena { position: absolute; left: 0; top: 450px; width: 1080px; height: 990px; }
+.pops { position: absolute; left: 0; top: 450px; width: 1080px; height: 990px; pointer-events: none; }
 .pop { position: absolute; display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-radius: 18px; white-space: nowrap;
   font-family: var(--display); animation: pop 3.2s ease-out forwards; }
 .pop small { display: block; font-family: var(--ui); font-size: 18px; letter-spacing: 2px; }
@@ -83,21 +83,21 @@ body { position: fixed; inset: 0; overflow: clip; }
 .pop.shd { background: rgba(2, 40, 60, .94); border: 3px solid #7dd3fc; } .pop.shd small { color: #7dd3fc; }
 @keyframes pop { 0% { transform: scale(.5); opacity: 0; } 10% { transform: scale(1.06); opacity: 1; } 18%, 80% { transform: none; opacity: 1; } 100% { opacity: 0; transform: translateY(-20px); } }
 
-.grave { position: absolute; top: 1064px; left: 30px; right: 30px; height: 40px; display: flex; align-items: center; gap: 10px; overflow: hidden; }
+.grave { position: absolute; top: 1446px; left: 30px; right: 30px; height: 40px; display: flex; align-items: center; gap: 10px; overflow: hidden; }
 .grave > span { font-size: 22px; letter-spacing: 2px; color: #9fb2dc; }
 .grave > div { display: flex; gap: 8px; }
 .gf { width: 38px; height: 38px; border-radius: 50%; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; border: 2px solid #777; filter: grayscale(.45); opacity: .85; }
-.prog { position: absolute; top: 1110px; left: 30px; right: 30px; height: 10px; border-radius: 5px; background: #1b2440; overflow: hidden; }
+.prog { position: absolute; top: 1492px; left: 30px; right: 30px; height: 10px; border-radius: 5px; background: #1b2440; overflow: hidden; }
 .prog i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .6s; }
 
 /* ---------- under the phone-chat line: extras only ---------- */
-.below { position: absolute; top: 1290px; left: 40px; right: 40px; text-align: center; }
+.below { position: absolute; top: 1520px; left: 40px; right: 40px; text-align: center; }
 .cta { padding: 18px; border-radius: 20px; border: 3px solid var(--line); background: rgba(8, 12, 30, .9); font-family: var(--display); font-size: 44px; font-weight: 700; }
 .cta2 { margin-top: 22px; font-family: var(--display); font-size: 34px; color: #cfe0ff; }
 .next { margin-top: 30px; font-size: 30px; letter-spacing: 3px; color: #9fb2dc; }
 
 /* ---------- banner + winner ---------- */
-.banner { position: absolute; left: 0; right: 0; top: 640px; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
+.banner { position: absolute; left: 0; right: 0; top: 760px; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
 .banner[hidden] { display: none; }
 .banner-in { font-family: var(--display); font-weight: 700; font-size: 76px; letter-spacing: 3px; line-height: 1; padding: 18px 44px; text-align: center;
   border-radius: 24px; background: rgba(6, 10, 26, .93); border: 4px solid #5a8cff; box-shadow: 0 0 40px rgba(90, 140, 255, .5); animation: banner 3.4s ease-in-out forwards; }
@@ -120,19 +120,19 @@ body { position: fixed; inset: 0; overflow: clip; }
 .win .heroes { margin-top: 14px; font-size: 32px; color: #9fe8ff; }
 .win .heroes b { display: block; color: #fff; font-size: 38px; margin-top: 4px; }
 
-.sound-btn { position: absolute; right: 30px; top: 1560px; display: flex; align-items: center; gap: 14px; padding: 16px 26px; border-radius: 999px;
+.sound-btn { position: absolute; right: 30px; top: 1790px; display: flex; align-items: center; gap: 14px; padding: 16px 26px; border-radius: 999px;
   border: 3px solid #fff; background: rgba(0, 0, 0, .75); color: #fff; font-family: var(--ui); font-weight: 700; font-size: 32px; letter-spacing: 2px; cursor: pointer; z-index: 40; }
 .sound-btn svg { width: 42px; height: 42px; }
 .sound-btn[hidden] { display: none; }
 
 /* live chat pieces (from /game/chat.css): LUNA and the chat box side by side above the phone-chat line */
-.lc.lc-flags .lc-sub { top: 420px; }
+.lc.lc-flags .lc-sub { top: 470px; }
 .lc.lc-flags .lc-fans { display: none !important; }
-.lc.lc-flags .lc-box { top: 1126px; right: 22px; width: 360px; height: 100px; padding: 4px 14px; overflow: hidden; }
+.lc.lc-flags .lc-box { top: 310px; right: 22px; width: 360px; height: 96px; padding: 4px 14px; overflow: hidden; }
 .lc.lc-flags .lc-box-h { font-size: 16px; padding-bottom: 1px; }
 .lc.lc-flags .lc-box .lc-row { font-size: 20px; padding: 2px 0; }
 .lc.lc-flags .lc-box .lc-row .flag { transform: scale(.75); }
-.lc.lc-flags .lc-robot, .lc.lc-flags .lc-robot.girl { top: 1126px; bottom: auto; left: 22px; right: auto; width: 672px; height: 100px; min-height: 0; padding: 4px 12px 4px 120px; gap: 0; border-width: 4px; border-radius: 22px; overflow: visible; }
+.lc.lc-flags .lc-robot, .lc.lc-flags .lc-robot.girl { top: 310px; bottom: auto; left: 22px; right: auto; width: 672px; height: 96px; min-height: 0; padding: 4px 12px 4px 120px; gap: 0; border-width: 4px; border-radius: 22px; overflow: visible; }
 .lc.lc-flags .lc-robot .lc-rb-face { position: absolute; left: 2px; bottom: -4px; width: 112px; }
 .lc.lc-flags .lc-robot.girl .lc-rb-face { width: 118px; }
 .lc.lc-flags .lc-rb-name { font-size: 17px; letter-spacing: 3px; }

@@ -23,15 +23,15 @@ const CORE = ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'eg', 
 const PLAIN = { sa: ['#006c35', 'KSA'], af: ['#007a36', 'AFG'], iq: ['#ce1126', 'IRQ'] };
 
 /* ---------------------------------------------------------------- arena geometry (canvas units) */
-const W = 1080, H = 680;                 // canvas size (stage y 408 … 1088)
-const CX = 540, CY = 335, RW = 322;      // arena centre and inner wall radius
-const HOLE = 30;                         // black centre of the hole when fully open (about a flag)
-const RING = 92;                         // the pink ring around it (flags roll over it)
+const W = 1080, H = 990;                 // canvas size (stage y 450 … 1440) — the arena fills the width
+const CX = 540, CY = 492, RW = 474;      // arena centre and inner wall radius
+const HOLE = 40;                         // black centre of the hole when fully open (about a flag)
+const RING = 132;                        // the pink ring around it (flags roll over it)
 // Like the arena games on YouTube: the hole is closed ~4.4 s, then its iris turns open (0.4 s),
 // stays open 0.8 s and closes (0.4 s) — about every 6 seconds. A flag over the open hole falls in.
 const OPEN = 1.2, OPEN_IN = 0.35;      // the iris opens (0.35 s), stays open, closes (0.35 s)
 const openness = (left) => { const t = OPEN - left; return t < OPEN_IN ? t / OPEN_IN : left < OPEN_IN ? left / OPEN_IN : 1; };
-const BAR_LEN = 118, BAR_W = 8, BARS = 6, BAR_TILT = 0.32;   // six bars fixed to the wall, turning with it
+const BAR_LEN = 172, BAR_W = 11, BARS = 6, BAR_TILT = 0.32;   // six bars fixed to the wall, turning with it
 const FIXED = 1 / 120;
 const DRAW_SECS = 0.9;                   // how long a flag takes to fall in
 const WIN_SECS = 16;
@@ -89,8 +89,8 @@ async function main() {
   const flagHTML = (code, w) => `<span class="flag" style="${flagCss(code, w)}"></span>`;
   const flagNode = (code, w = 40) => { const d = document.createElement('span'); d.className = 'flag'; d.style.cssText = flagCss(code, w); return d; };
   const COUNT = clamp(Math.round(cfg.count) || 64, 16, 100);
-  const R = COUNT > 72 ? 24 : COUNT > 48 ? 27 : 31;      // ball radius
-  const SPEED = 135;
+  const R = COUNT > 72 ? 31 : COUNT > 48 ? 36 : 41;      // ball radius
+  const SPEED = 190;
   const CYCLE = clamp(Number(cfg.gap) || 5, 2, 30);   // seconds the hole stays closed between openings
 
   { const [a, b] = cfg.title.split(' '); $('title').innerHTML = b ? `${a} <b>${cfg.title.slice(a.length + 1)}</b>` : a; }
@@ -111,6 +111,7 @@ async function main() {
   };
 
   /* ---------------------------------------------------------------- round state */
+  const NOLIMIT = !(Number(cfg.revives) > 0);   // 0 = revive as often as the chat wants
   let teams = [], alive = new Set(), out = [], balls = [], shield = new Map(), revived = new Set(), revLeft = cfg.revives;
   let power = new Map();                 // country -> chats this round (CHAT POWER)
   let prog = new Map();                  // country -> chats towards the next shield / revive
@@ -214,8 +215,8 @@ async function main() {
     return true;
   };
   const revive = (code, by, free) => {
-    if (alive.has(code) || alive.size <= 2 || phase !== 'play' || (free && revived.has(code)) || (!free && revLeft <= 0)) return false;
-    if (!free) revLeft--;
+    if (alive.has(code) || alive.size <= 2 || phase !== 'play' || (free && revived.has(code)) || (!free && !NOLIMIT && revLeft <= 0)) return false;
+    if (!free && !NOLIMIT) revLeft--;
     revived.add(code); alive.add(code); out = out.filter((c) => c !== code);
     const [x, y] = freeSpot(); const b = ball(code, x, y); b.hot = 4; balls.push(b);
     popAt('rev', code, 'REVIVED!', NAME(code), x, y - 60);
@@ -241,7 +242,7 @@ async function main() {
   const statusLine = (code) => {
     if (!teams.includes(code)) return `IT JOINS THE NEXT ROUND — KEEP COMMENTING ${NAME(code)}!`;
     if (!alive.has(code)) {
-      if (revLeft <= 0 || alive.size <= 2) return 'NO REVIVES LEFT THIS ROUND — CHEER FOR IT NEXT ROUND!';
+      if ((!NOLIMIT && revLeft <= 0) || alive.size <= 2) return 'NO REVIVES LEFT THIS ROUND — CHEER FOR IT NEXT ROUND!';
       return `IT IS OUT! ${Math.max(0, cfg.revive - (prog.get(code) || 0))} MORE CHATS AND IT COMES BACK!`;
     }
     if (shield.has(code)) return 'IT HAS A SHIELD — SAFE FOR THE NEXT DRAW!';
@@ -329,7 +330,7 @@ async function main() {
     balls = balls.filter((x) => x !== b);
     sfx.gone(); flashT = 0.35; shakeT = 0.3;   // flash + boom + a light shake   // a short white flash, like a camera
     alive.delete(b.code); out.push(b.code); prog.set(b.code, 0);
-    const canRev = revLeft > 0 && alive.size > 2;
+    const canRev = (NOLIMIT || revLeft > 0) && alive.size > 2;
     popAt('out', b.code, 'ELIMINATED', NAME(b.code), CX - 150, CY + 120);
     if (canRev) host([{ node: flagNode(b.code) }, NAME(b.code) + ` IS OUT! ${NAME(b.code)} FANS — ${cfg.revive} CHATS AND IT COMES BACK!`], 2);
     else host([{ node: flagNode(b.code) }, NAME(b.code) + ` IS OUT! ${alive.size} COUNTRIES LEFT!`], 1);
@@ -543,7 +544,7 @@ async function main() {
     $('power-rows').innerHTML = top.length
       ? top.map(([code, n], i) => `<div class="prow">${i + 1}. ${flagHTML(code, 40)}<span class="nm">${NAME(code)}</span><b>${n}</b></div>`).join('')
       : `<div class="prow empty">Type your country in chat — the top 3 show here!</div>`;
-    $('rev-left').textContent = `REVIVES LEFT ${revLeft}/${cfg.revives}`;
+    $('rev-left').textContent = NOLIMIT ? '♾️ REVIVE: NO LIMIT' : `REVIVES LEFT ${revLeft}/${cfg.revives}`;
     $('grave').innerHTML = out.slice(-18).reverse().map((code) => `<span class="gf">${flagHTML(code, 52)}</span>`).join('');
     $('prog').style.width = (out.length / Math.max(1, COUNT - 1) * 100) + '%';
     $('out-count').textContent = `${out.length} / ${COUNT} ELIMINATED`;

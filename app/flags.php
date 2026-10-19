@@ -11,7 +11,7 @@ function flags_defaults(): array
         'minutes'  => 55,      // (old setting, not used)
         'shield'   => 20,      // chats for a country -> it gets a shield
         'revive'   => 40,      // chats for a country that is out -> it comes back
-        'revives'  => 5,       // revives allowed in one round
+        'revives'  => 0,       // revives allowed in one round
         'likes'    => 50,      // every this many new likes: the hole closes for 30 s
         'viewers'  => 100,     // people watching reach this: top 3 chat countries get shields
         'events'   => true,    // mystery boxes (double draw, lucky shields, …)
@@ -35,6 +35,12 @@ function flags_config(): array
         setting_set('mig_flag_arena', '1');
         $c['title'] = $d['title'];
         $c['reset'] = bin2hex(random_bytes(4));
+        $c['rev'] = bin2hex(random_bytes(4));
+        flags_save($c);
+    }
+    if (setting_get('mig_flag_unlim') === null) {   // once: revives with no limit (the owner asked)
+        setting_set('mig_flag_unlim', '1');
+        $c['revives'] = 0;
         $c['rev'] = bin2hex(random_bytes(4));
         flags_save($c);
     }
