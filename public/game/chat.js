@@ -344,8 +344,9 @@ export function liveChat(o) {
 
     if (key) {
       counts.set(key, (counts.get(key) || 0) + 1); saveFans(); renderFans();
+      const firstTime = !authorKey.has(name.toLowerCase());   // never named a country here before
       authorKey.delete(name.toLowerCase()); authorKey.set(name.toLowerCase(), key); saveWho();
-      o.onFan && o.onFan(key, cleanName(name), name.toLowerCase());
+      o.onFan && o.onFan(key, cleanName(name), name.toLowerCase(), firstTime);
     }
     if (ev.k === 'super') o.onSuper?.(key || authorKey.get(name.toLowerCase()) || null, cleanName(name));
     const author = name.toLowerCase();
@@ -404,5 +405,7 @@ export function liveChat(o) {
     fetch('/api/gift.php', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stream: Number(stream), sig, kind, author, country: country || '', result }) }).catch(() => {});
   };
-  return { active: true, say, counts, voiceOn, log };
+  // the game can show the subscriber banner for a viewer who wrote "subscribed"
+  const subBanner = (name) => { if (cfg.subs) { subQ.push(name); nextSub(); } };
+  return { active: true, say, counts, voiceOn, log, subBanner };
 }

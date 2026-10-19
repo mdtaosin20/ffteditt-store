@@ -139,3 +139,15 @@ h1 {
 .revt .rv-how { font-size: 22px; font-weight: 700; color: #fff; line-height: 1.35; }
 .revt .rv-how b { color: var(--gold); }
 @keyframes revt { 0% { transform: translateY(-30px) scale(.9); opacity: 0; } 6%, 92% { transform: none; opacity: 1; } 100% { transform: translateY(-20px); opacity: 0; } }
+
+/* 👍 like goal in the top bar */
+.stats .like { position: relative; }
+.stats .like b { font-size: 30px; color: #fff; }
+.stats .like b small { font-size: 22px; color: #cfe0ff; }
+.stats .like .lk-g { color: var(--gold); }
+.stats .like > i { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: rgba(255, 255, 255, .12); }
+.stats .like > i > i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, #22c55e, #facc15); transition: width .6s; }
+.stats .like[hidden] { display: none; }
+.stats .like b, .stats .like b * { white-space: nowrap; display: inline; }
+.stats .like b { display: block; }
+.stats .like .lk-g { font-size: 30px; }
