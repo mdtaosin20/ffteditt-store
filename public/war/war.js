@@ -3,7 +3,7 @@
 // another country it takes that square and bounces back. A country whose land gets too small is out
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=14';
+import { liveChat, countryMatcher } from '/game/chat.js?v=15';
 import { autoUpdate } from '/game/update.js?v=1';
 
 const $ = (id) => document.getElementById(id);
@@ -286,6 +286,7 @@ async function main() {
     }
     return null;
   };
+  let welShown = [];
   const recent = new Map();   // author -> { name, code, at } of the last chat (for asks by name)
   const glog = (...a) => { try { chat.log?.(...a); } catch (e) { /* chat not ready */ } };
   const shareAt = new Map(), giftWait = new Map(), subDone = new Set();
@@ -442,6 +443,13 @@ async function main() {
       ['WHICH COUNTRY WILL TAKE THE WHOLE WORLD? COMMENT YOUR PICK!'],
       ['YOUR COMMENTS CHANGE THE WAR — CHEER FOR YOUR COUNTRY NOW!'],
     ],
+    welcomeHint: 'TYPE YOUR COUNTRY — IT JOINS THE WAR, OR COMES BACK IF IT IS OUT!',
+    onWelcome: (name, code) => { // every new chatter is greeted on screen right away (up to 3 names together)
+      const nm = String(name).replace(/^@+/, '').replace(/[-_.][a-z0-9]{2,6}$/i, '').replace(/[<>&"]/g, '').slice(0, 14).toUpperCase();
+      const now = performance.now();
+      welShown = welShown.filter((x) => x.at > now - 5000).concat({ nm, code, at: now }).slice(-3);
+      feed('👋 <span>WELCOME</span>' + welShown.map((x) => `<b style="color:var(--gold)">${x.nm}</b>` + (x.code ? `<span class="flag" style="${flagCss(byCode.get(x.code), 36)}"></span>` : '')).join('<span class="dot">·</span>') + '<span>!</span>');
+    },
     welcome: (name, code, text) => {
       const hi = isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'WELCOME ';
       const bw = blockedLine(name, code); if (bw) return bw;

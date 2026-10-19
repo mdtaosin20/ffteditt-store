@@ -240,6 +240,26 @@ export function liveChat(o) {
       else line.voice = 'none';
     } catch (e) { line.voice = 'none'; }
   };
+  const wq = [];
+  let wTimer = 0;
+  const flushWelcome = () => {
+    wTimer = 0;
+    if (!wq.length) return;
+    const list = wq.splice(0, wq.length);
+    if (list.length === 1) { const w = list[0]; say(o.welcome(w.name, w.key, w.text), 2); return; }
+    // everyone is named: groups of three, at most three lines (the newest people if even more came)
+    const all = list.slice(-9);
+    for (let g = 0; g < all.length; g += 3) {
+      const shown = all.slice(g, g + 3), parts = ['WELCOME '];
+      shown.forEach((w, i) => {
+        parts.push({ name: w.name });
+        if (w.key && o.badge) parts.push({ node: o.badge(w.key) });
+        parts.push(i < shown.length - 2 ? ', ' : i === shown.length - 2 ? ' AND ' : '');
+      });
+      parts.push('! ' + (o.welcomeHint || 'TYPE YOUR COUNTRY IN CHAT!'));
+      say(parts, 2);
+    }
+  };
   const say = (parts, prio = 1) => {
     if (!cfg.robot || !parts) return;
     const line = { parts, prio, t: performance.now() };
@@ -359,7 +379,12 @@ export function liveChat(o) {
     let line = null, prio = 1;
     if (ev.k === 'super') { line = ['WOW! THANK YOU ', { name }, ` FOR THE SUPER CHAT${ev.amt ? ' ' + ev.amt : ''}! YOU ARE A LEGEND!`]; prio = 3; }
     else if (ev.k === 'member') { line = ['WELCOME TO THE CLUB, ', { name }, '! THANKS FOR BECOMING A MEMBER!']; prio = 3; }
-    else if (first) { line = o.welcome(name, key, text); prio = 2; }
+    else if (first) { // greet every new chatter: alone if LUNA is free, together with others if she is busy
+      wq.push({ name, key, text }); o.onWelcome?.(name, key);
+      if (!wTimer) wTimer = setTimeout(flushWelcome, queue.length || performance.now() < speakUntil ? 6000 : 300);
+      lastSaid.set(author, performance.now());
+      return;
+    }
     else if (!recent) line = o.reply(name, key, text) || generic(name, text);
     if (line) { lastSaid.set(author, performance.now()); say(line, prio); }
   };
