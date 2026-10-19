@@ -94,7 +94,7 @@ page_start('Territory War', 'games', $admin);
       </label>
       <label class="field"><span>Map size (squares across)</span>
         <input name="grid" type="number" min="20" max="120" required value="<?= (int) $cfg['grid'] ?>">
-        <small class="muted">56 = normal (small squares). Bigger number = smaller squares and a longer war. With many countries the map is made bigger by itself.</small>
+        <small class="muted">48 = normal (small squares). Bigger number = smaller squares and a longer war. With many countries the map is made bigger by itself.</small>
       </label>
       <label class="field"><span>Ball speed (%)</span>
         <input name="speed" type="number" min="40" max="300" required value="<?= (int) $cfg['speed'] ?>">

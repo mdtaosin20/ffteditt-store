@@ -12,7 +12,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const FAST = clamp(Number(QS.get('fast')) || 1, 1, 400); // testing only: run the war faster
 
 const DEF = { title: 'TERRITORY WAR', teams: ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'ru', 'cn', 'jp', 'de', 'fr', 'gb'],
-  grid: 56, speed: 100, sudden: 60, boost: true, fill: 'color', ball_chats: 15, revive_chats: 30, like_step: 20, rev: '', reset: '' };
+  grid: 48, speed: 100, sudden: 60, boost: true, fill: 'color', ball_chats: 15, revive_chats: 30, like_step: 20, rev: '', reset: '' };
 const BONUS_SECS = 180, BONUS_MAX = 4;   // chat-won extra balls last 3 minutes, at most 4 at a time
 
 // clear, different colours for the countries' land (in team order, shuffled each war)
@@ -67,13 +67,14 @@ async function main() {
   const NAME = (t) => C[byCode.get(TEAMS[t])].name.toUpperCase().replace('UNITED ARAB EMIRATES', 'UAE').replace('UNITED KINGDOM', 'UK').replace('UNITED STATES', 'USA');
 
   // many countries need a finer map (about 30 squares each at the start)
+  if (QS.get('grid')) cfg.grid = Number(QS.get('grid'));   // preview: ?grid=48
   const GC = clamp(Math.max(Math.round(cfg.grid) || 40, Math.ceil(Math.sqrt(30 * N * MAP_W / MAP_H))), 20, 120);
   const ARMY_MAX = N > 40 ? 2 : ARMY_MAX_BIG;   // with 100+ countries: fewer balls each (screen and CPU)
   const CELL = MAP_W / GC, GR = Math.floor(MAP_H / CELL), CH = MAP_H / GR;
   const TOTAL = GC * GR;
   const ELIM = Math.max(4, Math.round(TOTAL / N * 0.3));  // land smaller than 30% of a fair share = out
   if (QS.get('fill')) cfg.fill = QS.get('fill');   // preview: ?fill=color
-  const SPD_K = Number(QS.get("spk")) || 1.7;   // ball speed for the small squares (a war lasts about an hour)
+  const SPD_K = Number(QS.get("spk")) || 1;   // ball speed, the same calm speed as the first Territory War
   const R = N > 60 ? clamp(CELL * 1.2, 14, 26) : 30;      // ball radius (round flags; the squares are smaller than the ball)
   const BALL_CHATS = Math.max(0, Math.round(cfg.ball_chats) || 0), REV_CHATS = Math.max(0, Math.round(cfg.revive_chats) || 0);
   const FLAGFILL = cfg.fill !== 'color';
