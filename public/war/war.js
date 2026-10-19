@@ -3,7 +3,7 @@
 // another country it takes that square and bounces back. A country whose land gets too small is out
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=16';
+import { liveChat, countryMatcher } from '/game/chat.js?v=17';
 import { autoUpdate } from '/game/update.js?v=1';
 
 const $ = (id) => document.getElementById(id);
@@ -287,6 +287,48 @@ async function main() {
     return null;
   };
   let welShown = [];
+  // LUNA reads what people mean, not only country names: questions, wishes, complaints, greetings in many languages.
+  // Returns a line, or null when nothing special was asked.
+  const statusOf = (code) => {
+    const t = teamOf(code), cn = CN(code);
+    if (t >= 0 && teamAlive[t]) return `${cn} HAS ${chatTotal[t]} CHATS — ${perk(t)}`;
+    if (t >= 0) return `${cn} IS OUT — SHARE THIS LIVE AND TYPE SHARE ${cn}, AND IT COMES BACK!`;
+    return freeSlot() >= 0 ? `${cn} IS NOT ON THE MAP — SHARE AND TYPE SHARE ${cn}, AND IT JOINS!` : `${cn} CAN JOIN WHEN A COUNTRY IS OUT — TYPE IT THEN!`;
+  };
+  const understand = (name, code, text) => {
+    const t = ' ' + String(text || '').toLowerCase() + ' ';
+    const f = code ? [{ node: flagNode(code) }] : [];
+    const yours = code ? CN(code) : 'YOUR COUNTRY';
+    // revive / bring back
+    if (/reviv|bring .*back|come ?back|\bback\b|ফির|রিভাইভ/.test(t)) {
+      if (code) return [{ name }, ', ', ...f, statusOf(code)];
+      const outs = outOrder.filter((u) => !teamAlive[u]).slice(-2);
+      if (!outs.length) return ['NO COUNTRY IS OUT YET, ', { name }, '! TYPE YOUR COUNTRY TO MAKE IT STRONGER!'];
+      return [{ name }, ', TO BRING A COUNTRY BACK: SHARE THE LIVE AND TYPE SHARE + COUNTRY! OUT NOW: ', ...outs.flatMap((u) => [{ node: flagNode(TEAMS[u]) }, NAME(u) + ' '])];
+    }
+    // how to play
+    if (/how (to|do|can|does)|rules?\b|what (do|should) (i|we)|explain|kaise|kivabe|kemne|কিভাবে|কীভাবে|কেমনে/.test(t))
+      return ['HOW TO PLAY, ', { name }, `: TYPE YOUR COUNTRY! EVERY ${BALL_CHATS || 15} CHATS = +1 FLAG. OUT? SHARE THE LIVE AND TYPE SHARE + COUNTRY — IT COMES BACK!`];
+    // wants more balls / flags / power for a country
+    if (/\b(add|more|extra|another|give|need|want)\b[^.!?]{0,20}\b(balls?|flags?|power|army|soldiers?)\b|\bone more\b|\bballs?\b|\bboost\b/.test(t))
+      return [{ name }, ', MORE FLAGS FOR ', ...f, yours + '? SHARE THE LIVE AND TYPE SHARE, OR SUBSCRIBE AND TYPE SUBSCRIBED — +1 FLAG RIGHT AWAY! ' + (code && teamOf(code) >= 0 && teamAlive[teamOf(code)] ? perk(teamOf(code)) : '')];
+    // "why is X not boosting / not counting / not back"
+    if (/\bwhy\b[^?]{0,40}\b(not|no|isn'?t|doesn'?t|don'?t|never|nobody|no ?one)\b|not (working|counting|boosting)|\bbug\b|\bbroken\b/.test(t))
+      return [{ name }, ', I COUNT EVERY MESSAGE WITH A COUNTRY NAME! ', ...f, code ? statusOf(code) : 'WRITE THE COUNTRY NAME IN YOUR MESSAGE AND WATCH ITS FLAG!'];
+    // unfair / cheating
+    if (/unfair|not fair|cheat|hack|rigged|fake game/.test(t))
+      return [{ name }, ', EVERY COUNTRY CAN WIN! THE MORE ITS FANS CHAT, SHARE AND SUBSCRIBE, THE MORE FLAGS IT GETS — CHEER FOR ', ...f, yours + '!'];
+    // is X out? / how many chats?
+    if (code && (/\bout\b|\balive\b|\bdead\b|eliminat|how many|how much|\bscore\b|\bchats?\b/.test(t))) return [{ name }, ', ', ...f, statusOf(code)];
+    // where is my country / can't find it
+    if (/where|can'?t (see|find)|not (on|in) the map|missing/.test(t) && code) return [{ name }, ', ', ...f, statusOf(code)];
+    // greetings in many languages
+    const hi = [[/\bhola\b|\bbuenas\b/, 'HOLA'], [/\bbonjour\b|\bsalut\b/, 'BONJOUR'], [/\bnamaste\b|\bnamaskar\b/, 'NAMASTE'], [/\bmarhaba\b|\bmarhaban\b|\bahlan\b/, 'MARHABA'],
+      [/\bmerhaba\b|\bselam\b/, 'MERHABA'], [/\bciao\b/, 'CIAO'], [/\bkumusta\b|\bmabuhay\b/, 'MABUHAY'], [/\bapa kabar\b|\bhalo\b/, 'HALO'], [/\bolá\b|\bola\b|\boi\b/, 'OLÁ'], [/\bhallo\b|\bguten tag\b/, 'HALLO']]
+      .find(([re]) => re.test(t));
+    if (hi) return [hi[1] + ' ', { name }, '! ', ...(code ? [...f, statusOf(code)] : ['WHICH COUNTRY ARE YOU CHEERING FOR? TYPE IT!'])];
+    return null;
+  };
   const recent = new Map();   // author -> { name, code, at } of the last chat (for asks by name)
   const glog = (...a) => { try { chat.log?.(...a); } catch (e) { /* chat not ready */ } };
   const shareAt = new Map(), giftWait = new Map(), subDone = new Set();
@@ -464,8 +506,10 @@ async function main() {
       if (s === 'out') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (REV_CHATS ? `! IT IS OUT — SHARE THIS LIVE AND TYPE SHARE ${CN(code)}, AND IT COMES BACK RIGHT AWAY!` : '! IT WAS CONQUERED THIS WAR — CHEER IT IN THE NEXT ONE!')];
       return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (freeSlot() < 0 ? `! THE MAP IS FULL RIGHT NOW — WHEN A COUNTRY IS OUT, TYPE ${CN(code)} AGAIN AND IT JOINS!` : `! IT WAS ALREADY IN THIS WAR — SHARE THIS LIVE AND TYPE SHARE ${CN(code)} TO BRING IT BACK!`)];
     },
+    understand: (name, code, text) => understand(name, code, text),
     reply: (name, code, text) => {
       const bw = blockedLine(name, code); if (bw) return bw;
+      const u = understand(name, code, text); if (u) return u;
       if (code) {
         const s = state(code), t = teamOf(code);
         if (s === 'alive') return [pick(['GO GO! ', 'YES ', 'COME ON ', 'NICE ']), { name }, '! ', { node: flagNode(code) }, CN(code) + ` HAS ${chatTotal[t]} CHATS! ` + perk(t)];
@@ -473,12 +517,6 @@ async function main() {
           : [{ node: flagNode(code) }, CN(code) + ' IS ALREADY OUT, ', { name }, '… NEXT WAR STARTS SOON!'];
         if (freeSlot() >= 0) return [{ node: flagNode(code) }, CN(code) + ' IS OUT OF THE MAP, ', { name }, '! SHARE THIS LIVE AND TYPE SHARE ' + CN(code) + ' — IT COMES BACK RIGHT AWAY!'];
         return null;
-      }
-      if (/reviv|back|ফির|রিভাইভ/i.test(text)) {
-        const outs = [...Array(N).keys()].filter((u) => !teamAlive[u]);
-        if (!outs.length) return ['NO COUNTRY IS OUT YET, ', { name }, '! TYPE YOUR COUNTRY — ' + (BALL_CHATS ? `${BALL_CHATS} CHATS GIVE IT ONE MORE FLAG!` : 'BOOST IT!')];
-        const near = outs.sort((a, b) => chatProg[b] - chatProg[a]).slice(0, 2);
-        return [{ name }, `, TO REVIVE A COUNTRY TYPE ITS NAME ${REV_CHATS} TIMES! `, ...near.flatMap((u) => [{ node: flagNode(TEAMS[u]) }, `${NAME(u)} ${chatProg[u]}/${REV_CHATS}, NEEDS ${Math.max(0, REV_CHATS - chatProg[u])} MORE. `])];
       }
       if (/who.*(win|lead)|winner|kon|কে জিতবে/i.test(text)) {
         const l = leaderT();
@@ -820,7 +858,7 @@ async function main() {
   updateUI();
   requestAnimationFrame(frame);
   autoUpdate('war', save);   // after a deploy: reload with the game where it was (no Restart needed)
-  window.__war = { reviveCall, askByName, renderLikes, free: () => [...freeUsed], teams: () => TEAMS.slice(), shares: () => shareCount, subs: () => subCount, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
+  window.__war = { reviveCall, askByName, understand, match: countryMatcher(C), renderLikes, free: () => [...freeUsed], teams: () => TEAMS.slice(), shares: () => shareCount, subs: () => subCount, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
 }
 
 main();

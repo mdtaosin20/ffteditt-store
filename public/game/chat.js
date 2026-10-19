@@ -390,6 +390,7 @@ export function liveChat(o) {
     let line = null, prio = 1;
     if (ev.k === 'super') { line = ['WOW! THANK YOU ', { name }, ` FOR THE SUPER CHAT${ev.amt ? ' ' + ev.amt : ''}! YOU ARE A LEGEND!`]; prio = 3; }
     else if (ev.k === 'member') { line = ['WELCOME TO THE CLUB, ', { name }, '! THANKS FOR BECOMING A MEMBER!']; prio = 3; }
+    else if (first && o.understand && (line = o.understand(name, key, text))) { prio = 2; o.onWelcome?.(name, key); } // a new viewer asked something: answer it
     else if (first) { // greet every new chatter: alone if LUNA is free, together with others if she is busy
       wq.push({ name, key, text }); o.onWelcome?.(name, key);
       if (!wTimer) wTimer = setTimeout(flushWelcome, queue.length || performance.now() < speakUntil ? 6000 : 300);
