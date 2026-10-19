@@ -48,7 +48,7 @@ const ALIAS = {
 
 /** Finds a country in a chat message: flag emoji, a name, or a short code typed alone ("BD"). */
 export function countryMatcher(countries) {
-  const norm = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const norm = (x) => String(x || '').replace(/ı/g, 'i').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
   const codes = new Set(countries.map((c) => c.code));
   const words = [], short = new Map();
@@ -79,6 +79,8 @@ export function countryMatcher(countries) {
     return p[b.length];
   };
   const fuzzyWords = words.filter(([w]) => isLatin(w) && w.replace(/ /g, '').length >= 5).map(([w, code]) => [w.replace(/ /g, ''), code]);
+  const squeeze = (x) => x.replace(/(.)\1+/g, '$1');
+  const fuzzySq = fuzzyWords.map(([w, code]) => [w, code, squeeze(w)]);
   const shortList = [...short].filter(([w]) => /^[a-z]{2,3}$/.test(w));
   const SAFE2 = new Set(['bd', 'uk', 'pk', 'np', 'ph']);   // two letters that are never an English word
   const NOT_COUNTRY = new Set(['child', 'chill', 'chain', 'being', 'sedan', 'petal', 'mails', 'chats']);
@@ -102,6 +104,15 @@ export function countryMatcher(countries) {
       for (const [w, code] of fuzzyWords) {
         const max = w.length >= 10 ? 3 : w.length >= 8 ? 2 : 1;
         const d = dist(tok, w, max);
+        if (d <= max && d < bestD) { best = code; bestD = d; }
+      }
+    }
+    if (best) return best;
+    // doubled or missing letters together ("morrco" = morocco): compare with repeats squeezed on both sides
+    for (const tok of toks) {
+      const q = squeeze(tok); if (q.length < 5) continue;
+      for (const [w, code, wq] of fuzzySq) {
+        const max = wq.length >= 8 ? 2 : 1, d = dist(q, wq, max);
         if (d <= max && d < bestD) { best = code; bestD = d; }
       }
     }
