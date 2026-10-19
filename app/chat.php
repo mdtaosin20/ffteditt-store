@@ -79,8 +79,19 @@ function chat_ingest(array $mine, array $batches): void
             db()->commit();
         }
         $n = count($items);
+        $status = chat_clean((string) ($b['status'] ?? ''), 160);
         db()->prepare('UPDATE streams SET chat_status = ?, chat_count = chat_count + ? WHERE id = ?')
-            ->execute([chat_clean((string) ($b['status'] ?? ''), 160), $n, $sid]);
+            ->execute([$status, $n, $sid]);
+        // The video we told the worker to read has no live chat (the live ended and YouTube made a new one,
+        // e.g. after the stream reconnected): forget it, so the channel's /live page or a fresh lookup finds the new one.
+        if (preg_match('/not live|chat ended|chat is off/i', $status)) {
+            $v = (string) db()->query('SELECT yt_video FROM streams WHERE id = ' . $sid)->fetchColumn();
+            if ($v !== '') {
+                setting_set('chat_dead_' . $sid, $v);
+                db()->prepare("UPDATE streams SET yt_video = '', yt_video_start = 0, yt_find_at = 0 WHERE id = ?")->execute([$sid]);
+                log_activity("Live chat: the old video {$v} has no live chat any more — looking for the new live video", 'warn');
+            }
+        }
         if ($n > 0) {
             db()->prepare('UPDATE streams SET chat_seen = ? WHERE id = ?')->execute([time(), $sid]);
         }
@@ -101,6 +112,7 @@ function chat_target(array $row): ?array
     if (!chat_cfg()['enabled']) return null;
     $started = (int) ($row['started_at'] ?? 0);
     $video = ($row['yt_video'] ?? '') !== '' && $started > 0 && (int) ($row['yt_video_start'] ?? 0) === $started ? $row['yt_video'] : '';
+    if ($video !== '' && $video === (string) (setting_get('chat_dead_' . (int) ($row['id'] ?? 0)) ?? '')) $video = '';   // that live already ended
     $channel = (string) ($row['channel_url'] ?? '');
     if ($video === '' && $channel === '') return null;
     // with several streams on one channel the channel's /live page could show the wrong one, so wait for the video
