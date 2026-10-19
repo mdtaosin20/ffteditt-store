@@ -3,7 +3,7 @@
 // another country it takes that square and bounces back. A country whose land gets too small is out
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=8';
+import { liveChat, countryMatcher } from '/game/chat.js?v=9';
 import { autoUpdate } from '/game/update.js?v=1';
 
 const $ = (id) => document.getElementById(id);
@@ -624,6 +624,22 @@ async function main() {
     lastLeader = lead;
   };
 
+  /* ---------- every ~100 s: the countries that are out and how to bring them back ---------- */
+  const reviveCall = () => {
+    if (phase !== 'play' || !REV_CHATS) return;
+    const outs = outOrder.slice().reverse().filter((t) => !teamAlive[t]).slice(0, 6);
+    if (!outs.length) return;
+    const el = $('revt');
+    el.innerHTML = '<h4>♻️ BRING THEM BACK!</h4><div class="rv-row">' +
+      outs.map((t) => `<span class="rv-c">${flagHTML(t, 40)}${NAME(t)} <small>${chatProg[t]}/${REV_CHATS}</small></span>`).join('') + '</div>' +
+      `<div class="rv-how">💬 Type the country <b>${REV_CHATS}×</b> · 🔔 <b>Subscribe</b> · 🔁 <b>Share</b> + type SHARED · ${LIKE_STEP ? `👍 <b>${LIKE_STEP} likes</b> · ` : ''}⭐ <b>Super Chat</b></div>`;
+    el.hidden = false; el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    clearTimeout(reviveCall.t); reviveCall.t = setTimeout(() => { el.hidden = true; }, 9000);
+    const two = outs.slice(0, 2);
+    host([...two.flatMap((t) => [{ node: flagNode(TEAMS[t]) }, NAME(t) + ' ']), `${two.length > 1 ? 'ARE' : 'IS'} OUT! TYPE ${NAME(two[0])} ${REV_CHATS} TIMES, SUBSCRIBE OR SHARE THE LIVE TO BRING IT BACK!`], 2);
+  };
+  setInterval(reviveCall, 100000);
+
   /* ---------- settings from the admin panel ---------- */
   setInterval(async () => {
     const n = await fetchConfig();
@@ -666,7 +682,7 @@ async function main() {
   updateUI();
   requestAnimationFrame(frame);
   autoUpdate('war', save);   // after a deploy: reload with the game where it was (no Restart needed)
-  window.__war = { cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
+  window.__war = { reviveCall, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
 }
 
 main();

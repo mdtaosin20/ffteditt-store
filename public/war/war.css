@@ -127,3 +127,15 @@ h1 {
 .panel h3 small { float: right; font-size: 18px; color: #9fb2dc; letter-spacing: 1px; margin-top: 4px; }
 .cp-row .lbl em { font-style: normal; color: var(--gold); }
 .stats div { flex: 1; }
+
+/* every ~100 s: which countries are out and how to bring them back */
+.revt { position: absolute; left: 60px; right: 60px; top: 440px; z-index: 4; padding: 14px 20px 12px; border-radius: 22px; text-align: center;
+  background: rgba(40, 6, 30, .94); border: 4px solid #f9a8d4; box-shadow: 0 0 40px rgba(249, 168, 212, .55); animation: revt 9s ease-in-out forwards; pointer-events: none; }
+.revt[hidden] { display: none; }
+.revt h4 { font-family: var(--display); font-size: 40px; letter-spacing: 3px; color: #f9a8d4; line-height: 1.1; }
+.revt .rv-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; margin: 10px 0 8px; }
+.revt .rv-c { display: inline-flex; align-items: center; gap: 8px; font-family: var(--display); font-size: 26px; }
+.revt .rv-c small { font-family: var(--ui); font-size: 22px; color: var(--gold); }
+.revt .rv-how { font-size: 22px; font-weight: 700; color: #fff; line-height: 1.35; }
+.revt .rv-how b { color: var(--gold); }
+@keyframes revt { 0% { transform: translateY(-30px) scale(.9); opacity: 0; } 6%, 92% { transform: none; opacity: 1; } 100% { transform: translateY(-20px); opacity: 0; } }

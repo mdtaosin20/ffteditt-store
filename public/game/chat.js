@@ -221,7 +221,7 @@ export function liveChat(o) {
   const api = (q, body) => fetch('/api/robot.php' + q, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : { failed: true }));
   const fetchVoice = async (line) => {
-    line.voice = 'wait';
+    line.voice = 'wait'; line.vt = performance.now();
     try {
       let j = await api('', { stream: Number(stream), sig, text: spoken(line.parts) });
       const t0 = performance.now();
@@ -238,9 +238,12 @@ export function liveChat(o) {
     const line = { parts, prio, t: performance.now() };
     queue.push(line);
     queue.sort((a, b) => b.prio - a.prio || a.t - b.t);
-    if (queue.length > 5) queue.length = 5;          // never fall far behind the chat
-    if (voiceOn() && queue.includes(line)) fetchVoice(line);
+    if (queue.length > 4) queue.length = 4;          // never fall far behind the chat
+    prefetch();
   };
+  // Ask the VPS for a voice only for the next two lines (not for every line that may be dropped later),
+  // so in a busy chat the voice keeps up instead of falling minutes behind.
+  const prefetch = () => { if (voiceOn()) for (const l of queue.slice(0, 2)) if (!l.voice) fetchVoice(l); };
   const stopAudio = () => { if (audio) { audio.onended = audio.onerror = null; audio.pause(); audio = null; o.duck && o.duck(false); } };
   const show = (line) => {
     const wantLook = cfg.look === 'robot' ? 'robot' : 'girl';
@@ -276,10 +279,11 @@ export function liveChat(o) {
       else if (now > speakUntil) { if (!o.alwaysOn) robot.hidden = true; robot.classList.remove('talk'); speaking = null; pauseUntil = now + 700; }
       else if (!audio && now > speakUntil - 1500) robot.classList.remove('talk');
     }
+    if (queue.length) prefetch();
     if (!speaking && queue.length && now > pauseUntil && !(o.busy && o.busy())) {
       const line = queue[0];
       // wait (up to 14 s) for the robot's voice, then show it with or without sound
-      if (!(line.voice === 'wait' && now - line.t < 14000)) {
+      if (!(line.voice === 'wait' && now - (line.vt || line.t) < 14000)) {
         queue.shift();
         if (now - line.t < 45000 || line.prio >= 3) show(line);
       }
