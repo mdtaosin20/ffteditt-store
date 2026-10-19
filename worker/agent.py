@@ -49,6 +49,11 @@ HOST_VOICES = {
     "hfc": "en/en_US/hfc_female/medium/en_US-hfc_female-medium",
     "jenny": "en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium",
     "cori": "en/en_GB/cori/medium/en_GB-cori-medium",
+    "lj": "en/en_US/ljspeech/high/en_US-ljspeech-high",
+    "lessac_hd": "en/en_US/lessac/high/en_US-lessac-high",
+    "cori_hd": "en/en_GB/cori/high/en_GB-cori-high",
+    "alba": "en/en_GB/alba/medium/en_GB-alba-medium",
+    "southern": "en/en_GB/southern_english_female/low/en_GB-southern_english_female-low",
 }
 HOST_VOICE_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
 

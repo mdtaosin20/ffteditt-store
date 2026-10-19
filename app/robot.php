@@ -15,6 +15,11 @@ function robot_voices(): array
         'hfc'     => ['Hannah', 'Woman · American · young and cheerful'],
         'jenny'   => ['Jenny', 'Woman · British · sweet and calm'],
         'cori'    => ['Cori', 'Woman · British · gentle'],
+        'lj'        => ['Linda (HD)', 'NEW · Woman · American · clear, natural, like a news reader'],
+        'lessac_hd' => ['Lessac (HD)', 'NEW · Woman · American · soft and warm, better quality'],
+        'cori_hd'   => ['Cori (HD)', 'NEW · Woman · British · gentle, better quality'],
+        'alba'      => ['Alba', 'NEW · Woman · Scottish · friendly'],
+        'southern'  => ['Sophie', 'NEW · Woman · British · calm'],
         'ryan'    => ['Ryan', 'Man · American (the robot voice until now)'],
     ];
 }
