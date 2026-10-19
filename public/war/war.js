@@ -282,7 +282,7 @@ async function main() {
     const outs = all.filter((t) => !teamAlive[t]).sort((a, b) => chatProg[b] - chatProg[a]);
     if (standN % 3 === 2 && outs.length && REV_CHATS) {
       const u = outs[0];
-      return [{ node: flagNode(TEAMS[u]) }, NAME(u) + ` IS OUT BUT ${chatProg[u]} OF ${REV_CHATS} CHATS ARE DONE — ${Math.max(0, REV_CHATS - chatProg[u])} MORE AND IT COMES BACK! TYPE ${NAME(u)}!`];
+      return [{ node: flagNode(TEAMS[u]) }, NAME(u) + ` IS OUT! SHARE THIS LIVE AND TYPE SHARE ${NAME(u)} — IT COMES BACK RIGHT AWAY! OR ${Math.max(0, REV_CHATS - chatProg[u])} MORE CHATS BRING IT BACK!`];
     }
     const top = all.filter((t) => teamAlive[t]).sort((a, b) => chatTotal[b] - chatTotal[a]);
     if (!top.length) return null;
@@ -374,7 +374,7 @@ async function main() {
       ...(BALL_CHATS ? [[`EVERY ${BALL_CHATS} CHATS, YOUR COUNTRY GETS ONE MORE FLAG ON THE MAP! TYPE IT NOW!`]] : []),
       ...(REV_CHATS ? [[`YOUR COUNTRY IS OUT? ${REV_CHATS} CHATS BRING IT BACK TO THE MAP!`]] : []),
       ['SUBSCRIBE AND TYPE SUBSCRIBED WITH YOUR COUNTRY — IT GETS ONE MORE FLAG, AND IF IT IS OUT, I BRING IT BACK!'],
-      ['SHARE THIS LIVE AND TYPE SHARED WITH YOUR COUNTRY — ONCE EVERY 10 MINUTES IT GETS ONE MORE FLAG, AND IF IT IS OUT, IT COMES BACK!'],
+      ['YOUR COUNTRY IS OUT? SHARE THIS LIVE, THEN TYPE SHARE AND YOUR COUNTRY IN CHAT — IT COMES BACK! ONCE EVERY 10 MINUTES FOR EACH OF YOU!'],
       ...(LIKE_STEP ? [[`EVERY ${LIKE_STEP} LIKES I GIVE A COUNTRY ONE MORE FLAG OR BRING ONE BACK — PRESS LIKE NOW!`]] : []),
       ['WHICH COUNTRY WILL TAKE THE WHOLE WORLD? COMMENT YOUR PICK!'],
       ['YOUR COMMENTS CHANGE THE WAR — CHEER FOR YOUR COUNTRY NOW!'],
@@ -384,14 +384,14 @@ async function main() {
       if (!code) return [hi, { name }, `! WHERE ARE YOU FROM? TYPE YOUR COUNTRY — EVERY ${BALL_CHATS || 15} CHATS GIVE IT ONE MORE FLAG ON THE MAP!`];
       const s = state(code);
       if (s === 'alive') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + `! ${chatTotal[teamOf(code)]} CHAT${chatTotal[teamOf(code)] === 1 ? '' : 'S'} FOR IT SO FAR — ${perk(teamOf(code))}`];
-      if (s === 'out') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (REV_CHATS ? `! IT IS OUT — ${Math.max(0, REV_CHATS - chatProg[teamOf(code)])} MORE CHATS AND IT COMES BACK!` : '! IT WAS CONQUERED THIS WAR — CHEER IT IN THE NEXT ONE!')];
+      if (s === 'out') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (REV_CHATS ? `! IT IS OUT — SHARE THIS LIVE AND TYPE SHARE ${CN(code)}, AND IT COMES BACK RIGHT AWAY!` : '! IT WAS CONQUERED THIS WAR — CHEER IT IN THE NEXT ONE!')];
       return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + `! IT IS NOT IN THIS WAR — PICK ONE OF THE ${N} COUNTRIES ON THE MAP!`];
     },
     reply: (name, code, text) => {
       if (code) {
         const s = state(code), t = teamOf(code);
         if (s === 'alive') return [pick(['GO GO! ', 'YES ', 'COME ON ', 'NICE ']), { name }, '! ', { node: flagNode(code) }, CN(code) + ` HAS ${chatTotal[t]} CHATS! ` + perk(t)];
-        if (s === 'out') return REV_CHATS ? [{ node: flagNode(code) }, CN(code) + ` IS OUT, `, { name }, `! ` + perk(t) + ' TELL YOUR FRIENDS TO CHAT!']
+        if (s === 'out') return REV_CHATS ? [{ node: flagNode(code) }, CN(code) + ` IS OUT, `, { name }, `! ` + 'SHARE THIS LIVE AND TYPE SHARE ' + CN(code) + ' — IT COMES BACK RIGHT AWAY!']
           : [{ node: flagNode(code) }, CN(code) + ' IS ALREADY OUT, ', { name }, '… NEXT WAR STARTS SOON!'];
         return null;
       }
@@ -454,7 +454,7 @@ async function main() {
     cnt[by] += cnt[o]; cnt[o] = 0;
     feed(`💥 ${flagHTML(o, 40)}<span>${NAME(o)} IS OUT — CONQUERED BY</span>${flagHTML(by, 40)}<span>${NAME(by)}</span>`);
     sfx.out();
-    host([{ node: flagNode(TEAMS[o]) }, NAME(o) + ' IS OUT! CONQUERED BY ', { node: flagNode(TEAMS[by]) }, NAME(by) + `! ${alive} COUNTRIES LEFT!`], 2);
+    host([{ node: flagNode(TEAMS[o]) }, NAME(o) + ' IS OUT! CONQUERED BY ', { node: flagNode(TEAMS[by]) }, NAME(by) + `! ${NAME(o)} FANS — SHARE THIS LIVE, THEN TYPE SHARE ${NAME(o)} IN CHAT AND IT COMES BACK!`], 2);
     if (alive === 1) crown(by);
     else if (alive === 2) {
       const two = [...Array(N).keys()].filter((t) => teamAlive[t]);
@@ -655,13 +655,13 @@ async function main() {
     const el = $('revt');
     el.innerHTML = '<h4>♻️ BRING THEM BACK!</h4><div class="rv-row">' +
       outs.map((t) => `<span class="rv-c">${flagHTML(t, 40)}${NAME(t)} <small>${chatProg[t]}/${REV_CHATS}</small></span>`).join('') + '</div>' +
-      `<div class="rv-how">💬 Type the country <b>${REV_CHATS}×</b> · 🔔 <b>Subscribe</b> + type SUBSCRIBED · 🔁 <b>Share</b> + type SHARED · ${LIKE_STEP ? `👍 <b>${LIKE_STEP} likes</b> · ` : ''}⭐ <b>Super Chat</b></div>`;
+      `<div class="rv-how">🔁 <b>Share the live</b> + type <b>SHARE + COUNTRY</b> → IT COMES BACK!<br>🔔 <b>Subscribe</b> + type SUBSCRIBED · 💬 Type it <b>${REV_CHATS}×</b> · ${LIKE_STEP ? `👍 <b>${LIKE_STEP} likes</b> · ` : ''}⭐ <b>Super Chat</b></div>`;
     el.hidden = false; el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
     clearTimeout(reviveCall.t); reviveCall.t = setTimeout(() => { el.hidden = true; }, 9000);
     const two = outs.slice(0, 2);
-    host([...two.flatMap((t) => [{ node: flagNode(TEAMS[t]) }, NAME(t) + ' ']), `${two.length > 1 ? 'ARE' : 'IS'} OUT! FANS OF ${NAME(two[0])}: SUBSCRIBE AND TYPE SUBSCRIBED ${NAME(two[0])} — I WILL BRING IT BACK RIGHT AWAY! OR SHARE THE LIVE AND TYPE SHARED — ONCE EVERY 10 MINUTES!`], 2);
+    host([...two.flatMap((t) => [{ node: flagNode(TEAMS[t]) }, NAME(t) + ' ']), `${two.length > 1 ? 'ARE' : 'IS'} OUT! WANT IT BACK? SHARE THIS LIVE, THEN TYPE SHARE ${NAME(two[0])} IN CHAT — I BRING IT BACK RIGHT AWAY! EVERYONE CAN DO IT ONCE EVERY 10 MINUTES!`], 2);
   };
-  setInterval(reviveCall, 100000);
+  setInterval(reviveCall, 60000);
 
   /* ---------- settings from the admin panel ---------- */
   setInterval(async () => {
