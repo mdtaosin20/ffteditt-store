@@ -214,7 +214,7 @@ async function main() {
     return true;
   };
   const revive = (code, by, free) => {
-    if (alive.has(code) || alive.size <= 2 || phase !== 'play' || revived.has(code) || (!free && revLeft <= 0)) return false;
+    if (alive.has(code) || alive.size <= 2 || phase !== 'play' || (free && revived.has(code)) || (!free && revLeft <= 0)) return false;
     if (!free) revLeft--;
     revived.add(code); alive.add(code); out = out.filter((c) => c !== code);
     const [x, y] = freeSpot(); const b = ball(code, x, y); b.hot = 4; balls.push(b);
@@ -241,7 +241,7 @@ async function main() {
   const statusLine = (code) => {
     if (!teams.includes(code)) return `IT JOINS THE NEXT ROUND — KEEP COMMENTING ${NAME(code)}!`;
     if (!alive.has(code)) {
-      if (revived.has(code) || revLeft <= 0) return 'IT IS OUT — CHEER FOR IT NEXT ROUND!';
+      if (revLeft <= 0 || alive.size <= 2) return 'NO REVIVES LEFT THIS ROUND — CHEER FOR IT NEXT ROUND!';
       return `IT IS OUT! ${Math.max(0, cfg.revive - (prog.get(code) || 0))} MORE CHATS AND IT COMES BACK!`;
     }
     if (shield.has(code)) return 'IT HAS A SHIELD — SAFE FOR THE NEXT DRAW!';
@@ -329,7 +329,7 @@ async function main() {
     balls = balls.filter((x) => x !== b);
     sfx.gone(); flashT = 0.35; shakeT = 0.3;   // flash + boom + a light shake   // a short white flash, like a camera
     alive.delete(b.code); out.push(b.code); prog.set(b.code, 0);
-    const canRev = revLeft > 0 && !revived.has(b.code) && alive.size > 2;
+    const canRev = revLeft > 0 && alive.size > 2;
     popAt('out', b.code, 'ELIMINATED', NAME(b.code), CX - 150, CY + 120);
     if (canRev) host([{ node: flagNode(b.code) }, NAME(b.code) + ` IS OUT! ${NAME(b.code)} FANS — ${cfg.revive} CHATS AND IT COMES BACK!`], 2);
     else host([{ node: flagNode(b.code) }, NAME(b.code) + ` IS OUT! ${alive.size} COUNTRIES LEFT!`], 1);
