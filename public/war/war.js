@@ -3,7 +3,7 @@
 // another country it takes that square and bounces back. A country whose land gets too small is out
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=3';
+import { liveChat, countryMatcher } from '/game/chat.js?v=6';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -11,14 +11,15 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const FAST = clamp(Number(QS.get('fast')) || 1, 1, 400); // testing only: run the war faster
 
 const DEF = { title: 'TERRITORY WAR', teams: ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'ru', 'cn', 'jp', 'de', 'fr', 'gb'],
-  grid: 40, speed: 100, sudden: 60, boost: true, rev: '', reset: '' };
+  grid: 40, speed: 100, sudden: 60, boost: true, fill: 'color', ball_chats: 15, revive_chats: 30, rev: '', reset: '' };
+const BONUS_SECS = 180, BONUS_MAX = 4;   // chat-won extra balls last 3 minutes, at most 4 at a time
 
 // clear, different colours for the countries' land (in team order, shuffled each war)
 const PALETTE = ['#ff9f1c', '#3c5bd6', '#2ec4b6', '#e63946', '#f4d21b', '#74b9ff', '#9b5de5', '#06d6a0', '#ff5a8a', '#8ac926',
   '#b30000', '#1e8f4e', '#ffffff', '#555c6e', '#00b3a4', '#8a1538', '#c77dff', '#ffb4a2', '#4cc9f0', '#fb5607',
   '#80b918', '#3a0ca3', '#ffd166', '#118ab2', '#ef476f', '#7f5539', '#90e0ef', '#d00000', '#fcbf49', '#2b9348', '#e0aaff', '#a3b18a'];
 
-const MAP_W = 1000, MAP_H = 700, FIXED = 1 / 120;   // the map stays above YouTube's phone chat
+const MAP_W = 1000, MAP_H = 600, FIXED = 1 / 120;   // the map stays above YouTube's phone chat
 const SUDDEN_EVERY = 90;            // seconds between Sudden Death eliminations (16 or fewer countries left)
 const suddenEvery = (alive) => (alive <= 16 ? SUDDEN_EVERY : clamp(Math.round(1440 / alive), 15, SUDDEN_EVERY)); // faster while many are left
 const BOOST_SECS = 8, BOOST_MULT = 1.5;
@@ -70,7 +71,10 @@ async function main() {
   const CELL = MAP_W / GC, GR = Math.floor(MAP_H / CELL), CH = MAP_H / GR;
   const TOTAL = GC * GR;
   const ELIM = Math.max(4, Math.round(TOTAL / N * 0.3));  // land smaller than 30% of a fair share = out
-  const R = clamp(CELL * 0.95, 12, 30);                   // ball radius
+  if (QS.get('fill')) cfg.fill = QS.get('fill');   // preview: ?fill=color
+  const R = clamp(CELL * 1.45, 14, 40);                   // ball radius (big round flags)
+  const BALL_CHATS = Math.max(0, Math.round(cfg.ball_chats) || 0), REV_CHATS = Math.max(0, Math.round(cfg.revive_chats) || 0);
+  const FLAGFILL = cfg.fill !== 'color';
 
   const flagCss = (i, w) => { const h = w * 0.75; return `width:${w}px;height:${h}px;background-size:${COLS_A * w}px ${ROWS_A * h}px;background-position:${-(i % COLS_A) * w}px ${-Math.floor(i / COLS_A) * h}px`; };
   // Flags with holy writing (the Kalima, Allahu Akbar) are not drawn on the land or the balls,
@@ -97,6 +101,9 @@ async function main() {
   // viewers who cheered for each country (newest first): each of its balls carries one of their names
   const FAN_SECS = 240, FAN_MAX = 6, wall = () => performance.now() / 1000;
   const fans = Array.from({ length: N }, () => []);
+  // chat power: every BALL_CHATS chats for a country = one extra ball for 3 minutes;
+  // a country that is out comes back after REV_CHATS chats (as often as the chat wants)
+  const chatProg = new Int32Array(N), chatTotal = new Int32Array(N), bonus = Array.from({ length: N }, () => []);
 
   const speedBase = () => 260 * (cfg.speed / 100);
   const startBall = (t, x, y) => { const a = Math.random() * Math.PI * 2; return { t, x, y, vx: Math.cos(a), vy: Math.sin(a) }; };
@@ -119,7 +126,7 @@ async function main() {
     }
     balls = seeds.map(([x, y, t]) => startBall(t, x, y));
     colorOf = shuffle(Array.from({ length: Math.max(N, 1) }, (_, i) => PALETTE[i] || `hsl(${(i * 137.5) % 360} 70% ${45 + (i % 3) * 10}%)`));
-    teamAlive.fill(1); boostUntil.fill(0); outOrder = [];
+    teamAlive.fill(1); boostUntil.fill(0); outOrder = []; chatProg.fill(0); chatTotal.fill(0); bonus.forEach((l) => { l.length = 0; });
     alive = N; simT = 0; lastSudden = 0; phase = 'play'; phaseT = 0; champion = -1; lastBy.fill(-1);
   };
 
@@ -173,10 +180,11 @@ async function main() {
     const sx = (fi % COLS_A) * FW + clamp((x * CELL - fx) / s, 0, FW - 0.5), sy = Math.floor(fi / COLS_A) * FH + clamp((y * CH - fy) / s, 0, FH - 0.5);
     const plain = PLAIN[TEAMS[t]];
     lc.fillStyle = plain ? plain[0] : colorOf[t]; lc.fillRect(px, py, pw, ph);
-    if (!plain && atlas.naturalWidth) lc.drawImage(atlas, sx, sy, Math.max(0.5, CELL / s), Math.max(0.5, CH / s), px, py, pw, ph);
+    if (FLAGFILL && !plain && atlas.naturalWidth) lc.drawImage(atlas, sx, sy, Math.max(0.5, CELL / s), Math.max(0.5, CH / s), px, py, pw, ph);
     lc.fillStyle = 'rgba(0,0,0,.10)'; lc.fillRect(px, py, pw, 1); lc.fillRect(px, py, 1, ph);
   };
   const refreshFlags = () => { // a country's land grew or shrank: lay its flag again
+    if (!FLAGFILL) return;
     const ch = boxes();
     if (!ch.length) return;
     const on = new Uint8Array(N); ch.forEach((t) => { on[t] = 1; });
@@ -209,42 +217,124 @@ async function main() {
   };
   const isGreeting = (s) => /\b(hi|hii+|hello|hey|salam|salaam|assalam\w*|asalam\w*)\b|হাই|হ্যালো|সালাম|আসসালামু/i.test(s);
   const isSalam = (s) => /salam|salaam|assalam|asalam|সালাম|আসসালামু/i.test(s);
+  /* ---------- chat power panel + how to help ---------- */
+  $('how').innerHTML = [
+    BALL_CHATS ? `💬 ${BALL_CHATS} chats → <b>+1 BALL</b>` : '',
+    REV_CHATS ? `💬 ${REV_CHATS} chats if OUT → <b class="hr">REVIVE</b>` : '',
+    `🔔 Subscribe → <b class="hv">+1 BALL</b>`,
+    `⭐ Super Chat → <b class="hg">+2 BALLS</b>`,
+    `♾️ <b class="hg">NO LIMIT</b> — keep chatting!`,
+  ].filter(Boolean).map((h) => `<div class="how-r">${h}</div>`).join('');
+  const extraNow = (t) => bonus[t].filter((u) => u > simT).length;
+  // every country people typed, 4 at a time; the pages turn every 5 seconds
+  let powPage = 0;
+  const renderPower = () => {
+    const all = [...Array(N).keys()].filter((t) => chatTotal[t] > 0).sort((a, b) => chatTotal[b] - chatTotal[a]);
+    const pages = Math.max(1, Math.ceil(all.length / 4));
+    if (powPage >= pages) powPage = 0;
+    $('cpow-pg').textContent = pages > 1 ? `${powPage + 1}/${pages}` : '';
+    if (!all.length) { $('cpow').innerHTML = '<div class="cp-empty">TYPE YOUR COUNTRY IN CHAT — EVERY CHAT COUNTS HERE!</div>'; return; }
+    $('cpow').innerHTML = all.slice(powPage * 4, powPage * 4 + 4).map((t, n) => {
+      const on = !!teamAlive[t], need = on ? BALL_CHATS : REV_CHATS, w = need ? Math.min(100, chatProg[t] / need * 100) : 0;
+      const lbl = on ? (need ? `${chatProg[t]}/${need}` : '') : (need ? `OUT ${chatProg[t]}/${need}` : 'OUT');
+      const x = on ? extraNow(t) : 0;
+      return `<div class="cp-row${on ? '' : ' out'}"><span class="n">${powPage * 4 + n + 1}.</span>${flagHTML(t, 34)}<span class="nm">${NAME(t)}</span>` +
+        `<span class="c">💬${chatTotal[t]}</span><span class="bar"><i style="width:${w.toFixed(0)}%"></i></span><span class="lbl">${x ? `<em>+${x}⚽</em> ` : ''}${lbl}</span></div>`;
+    }).join('');
+  };
+  setInterval(() => { powPage++; renderPower(); }, 5000);
+  renderPower();
+  // what LUNA says about a country's chats: how many, and what more chats will give it
+  const perk = (t) => {
+    if (!teamAlive[t]) return REV_CHATS ? `${Math.max(0, REV_CHATS - chatProg[t])} MORE CHATS AND IT COMES BACK TO THE WAR!` : 'IT CAN COME BACK NEXT WAR!';
+    const x = extraNow(t);
+    if (!BALL_CHATS) return `IT HOLDS ${pct(t).toFixed(1)}% OF THE WORLD!`;
+    return `${Math.max(0, BALL_CHATS - chatProg[t])} MORE CHATS = ONE MORE BALL!` + (x ? ` IT HAS +${x} EXTRA BALL${x > 1 ? 'S' : ''} NOW!` : '');
+  };
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  // LUNA reads the chat meter out loud now and then: who is ahead, who is close to a ball or a comeback
+  let standN = 0;
+  const standings = () => {
+    if (phase !== 'play') return null;
+    const all = [...Array(N).keys()].filter((t) => chatTotal[t] > 0);
+    standN++;
+    if (!all.length) return [`NO CHATS YET! BE THE FIRST — TYPE YOUR COUNTRY AND ${BALL_CHATS || 15} CHATS GIVE IT ONE MORE BALL!`];
+    const outs = all.filter((t) => !teamAlive[t]).sort((a, b) => chatProg[b] - chatProg[a]);
+    if (standN % 3 === 2 && outs.length && REV_CHATS) {
+      const u = outs[0];
+      return [{ node: flagNode(TEAMS[u]) }, NAME(u) + ` IS OUT BUT ${chatProg[u]} OF ${REV_CHATS} CHATS ARE DONE — ${Math.max(0, REV_CHATS - chatProg[u])} MORE AND IT COMES BACK! TYPE ${NAME(u)}!`];
+    }
+    const top = all.filter((t) => teamAlive[t]).sort((a, b) => chatTotal[b] - chatTotal[a]);
+    if (!top.length) return null;
+    if (standN % 3 === 1 && top.length > 1) {
+      return [{ node: flagNode(TEAMS[top[0]]) }, NAME(top[0]) + ` LEADS THE CHAT WITH ${chatTotal[top[0]]}! `, { node: flagNode(TEAMS[top[1]]) }, NAME(top[1]) + ` HAS ${chatTotal[top[1]]} — CAN YOU CATCH UP?`];
+    }
+    const close = top.slice().sort((a, b) => chatProg[b] - chatProg[a])[0];
+    return [{ node: flagNode(TEAMS[close]) }, NAME(close) + ` HAS ${chatProg[close]}/${BALL_CHATS} — ONLY ${Math.max(0, BALL_CHATS - chatProg[close])} MORE CHATS FOR ONE MORE BALL! TYPE ${NAME(close)}!`];
+  };
+
   const chat = liveChat({
-    game: 'war', rows: 3,
+    game: 'war', rows: 3, alwaysOn: true, idleLine: standings,
     match: countryMatcher(C),
     badge: (code) => flagNode(code, 34),
     duck: (on) => sfx.duck(on),
     sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
     onFan: (code, name) => {
       const t = teamOf(code);
-      if (t < 0 || !teamAlive[t]) return;
+      if (t < 0 || phase !== 'play') return;
       const nm = name.toUpperCase().slice(0, 12);
+      chatTotal[t]++; renderPower();
+      if (!teamAlive[t]) {
+        if (REV_CHATS && ++chatProg[t] >= REV_CHATS && revive(t, nm)) chatProg[t] = 0;
+        return;
+      }
+      if (BALL_CHATS && ++chatProg[t] >= BALL_CHATS) { chatProg[t] = 0; addBonus(t, nm); }
       fans.forEach((list) => { const j = list.findIndex((f) => f.name === nm); if (j >= 0) list.splice(j, 1); }); // one viewer, one country
       fans[t].unshift({ name: nm, until: wall() + FAN_SECS, hot: wall() + BOOST_SECS + 4 });
       if (fans[t].length > FAN_MAX) fans[t].length = FAN_MAX;
       if (cfg.boost) boostUntil[t] = simT + BOOST_SECS;
     },
-    emptyHint: 'Type a country from the map — its ball gets a speed boost!',
-    hints: ['TYPE A COUNTRY FROM THE MAP TO BOOST ITS BALL!', 'DROP A LIKE IF YOU ARE ENJOYING THE WAR!', 'WHICH COUNTRY WILL TAKE THE WORLD? TELL ME IN CHAT!'],
+    onSub: (name, code) => {
+      let t = code ? teamOf(code) : -1;
+      if (t < 0 || !teamAlive[t]) { t = -1; for (let u = 0; u < N; u++) if (teamAlive[u] && (t < 0 || chatTotal[u] > chatTotal[t])) t = u; }
+      if (t >= 0 && phase === 'play') addBonus(t, name.toUpperCase().slice(0, 12), 'SUBSCRIBE');
+    },
+    onSuper: (code, name) => {
+      const t = code ? teamOf(code) : -1;
+      if (t < 0 || phase !== 'play') return;
+      if (!teamAlive[t]) { revive(t, name.toUpperCase().slice(0, 12)); return; }
+      addBonus(t, name.toUpperCase().slice(0, 12), 'SUPER CHAT'); addBonus(t, name.toUpperCase().slice(0, 12), 'SUPER CHAT');
+    },
+    emptyHint: 'Type your country — every chat counts!',
+    hints: [`TYPE YOUR COUNTRY — ${BALL_CHATS || 15} CHATS GIVE IT ONE MORE BALL!`, 'WHERE ARE YOU WATCHING FROM? TYPE YOUR COUNTRY!', 'TYPE A COUNTRY FROM THE MAP TO BOOST ITS BALL!', 'DROP A LIKE IF YOU ARE ENJOYING THE WAR!', 'WHICH COUNTRY WILL TAKE THE WORLD? TELL ME IN CHAT!'],
     idleLines: [
       ['TYPE YOUR COUNTRY IN CHAT — ITS BALL GETS A SPEED BOOST AND CONQUERS FASTER!'],
+      ...(BALL_CHATS ? [[`EVERY ${BALL_CHATS} CHATS GIVE YOUR COUNTRY ONE MORE BALL! TYPE IT NOW!`]] : []),
+      ...(REV_CHATS ? [[`YOUR COUNTRY IS OUT? ${REV_CHATS} CHATS BRING IT BACK TO THE MAP!`]] : []),
       ['WHICH COUNTRY WILL TAKE THE WHOLE WORLD? COMMENT YOUR PICK!'],
       ['YOUR COMMENTS CHANGE THE WAR — CHEER FOR YOUR COUNTRY NOW!'],
     ],
     welcome: (name, code, text) => {
       const hi = isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'WELCOME ';
-      if (!code) return [hi, { name }, '! TYPE A COUNTRY FROM THE MAP TO BOOST ITS BALL!'];
+      if (!code) return [hi, { name }, `! WHERE ARE YOU FROM? TYPE YOUR COUNTRY — EVERY ${BALL_CHATS || 15} CHATS GIVE IT ONE MORE BALL!`];
       const s = state(code);
-      if (s === 'alive') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + `! ${cfg.boost ? 'SPEED BOOST ON — WATCH IT CONQUER!' : 'YOUR COUNTRY IS FIGHTING NOW!'}`];
-      if (s === 'out') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + '! IT WAS CONQUERED THIS WAR — CHEER IT IN THE NEXT ONE!'];
+      if (s === 'alive') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + `! ${chatTotal[teamOf(code)]} CHAT${chatTotal[teamOf(code)] === 1 ? '' : 'S'} FOR IT SO FAR — ${perk(teamOf(code))}`];
+      if (s === 'out') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (REV_CHATS ? `! IT IS OUT — ${Math.max(0, REV_CHATS - chatProg[teamOf(code)])} MORE CHATS AND IT COMES BACK!` : '! IT WAS CONQUERED THIS WAR — CHEER IT IN THE NEXT ONE!')];
       return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + `! IT IS NOT IN THIS WAR — PICK ONE OF THE ${N} COUNTRIES ON THE MAP!`];
     },
     reply: (name, code, text) => {
       if (code) {
         const s = state(code), t = teamOf(code);
-        if (s === 'alive') return [{ name }, ' BOOSTS ', { node: flagNode(code) }, CN(code) + `! IT HOLDS ${pct(t).toFixed(1)}% OF THE WORLD!`];
-        if (s === 'out') return [{ node: flagNode(code) }, CN(code) + ' IS ALREADY OUT, ', { name }, '… NEXT WAR STARTS SOON!'];
+        if (s === 'alive') return [pick(['GO GO! ', 'YES ', 'COME ON ', 'NICE ']), { name }, '! ', { node: flagNode(code) }, CN(code) + ` HAS ${chatTotal[t]} CHATS! ` + perk(t)];
+        if (s === 'out') return REV_CHATS ? [{ node: flagNode(code) }, CN(code) + ` IS OUT, `, { name }, `! ` + perk(t) + ' TELL YOUR FRIENDS TO CHAT!']
+          : [{ node: flagNode(code) }, CN(code) + ' IS ALREADY OUT, ', { name }, '… NEXT WAR STARTS SOON!'];
         return null;
+      }
+      if (/reviv|back|ফির|রিভাইভ/i.test(text)) {
+        const outs = [...Array(N).keys()].filter((u) => !teamAlive[u]);
+        if (!outs.length) return ['NO COUNTRY IS OUT YET, ', { name }, '! TYPE YOUR COUNTRY — ' + (BALL_CHATS ? `${BALL_CHATS} CHATS GIVE IT ONE MORE BALL!` : 'BOOST IT!')];
+        const near = outs.sort((a, b) => chatProg[b] - chatProg[a]).slice(0, 2);
+        return [{ name }, `, TO REVIVE A COUNTRY TYPE ITS NAME ${REV_CHATS} TIMES! `, ...near.flatMap((u) => [{ node: flagNode(TEAMS[u]) }, `${NAME(u)} ${chatProg[u]}/${REV_CHATS}, NEEDS ${Math.max(0, REV_CHATS - chatProg[u])} MORE. `])];
       }
       if (/who.*(win|lead)|winner|kon|কে জিতবে/i.test(text)) {
         const l = leaderT();
@@ -264,8 +354,10 @@ async function main() {
   }).observe(rbt, { childList: true });
 
   /* ---------- the war ---------- */
+  let feedAt = 0;
   const feed = (html) => {
-    const f = $('feed'); f.innerHTML = html; f.style.fontSize = '';
+    feedAt = performance.now();
+    const f = $('feed'); f.classList.remove('rules'); f.innerHTML = html; f.style.fontSize = '';
     for (let size = 32; f.scrollWidth > 1050 && size > 18; size -= 2) f.style.fontSize = size + 'px'; // long names: smaller text
     f.classList.remove('pop'); void f.offsetWidth; f.classList.add('pop');
   };
@@ -290,7 +382,7 @@ async function main() {
   const eliminate = (o, by) => {
     if (!teamAlive[o] || alive <= 1) return;
     if (by < 0 || !teamAlive[by]) by = neighbourOf(o);
-    teamAlive[o] = 0; alive--; outOrder.push(o);
+    teamAlive[o] = 0; alive--; outOrder.push(o); chatProg[o] = 0; bonus[o].length = 0; renderPower();
     balls = balls.filter((b) => b.t !== o);
     for (let k2 = 0; k2 < TOTAL; k2++) if (g[k2] === o) g[k2] = by;
     redrawLand();
@@ -306,6 +398,42 @@ async function main() {
       host(['FINAL BATTLE! ', { node: flagNode(TEAMS[two[0]]) }, NAME(two[0]) + ' AGAINST ', { node: flagNode(TEAMS[two[1]]) }, NAME(two[1]) + '! WHO TAKES THE WORLD? COMMENT NOW!'], 3);
     }
     save();
+  };
+
+  const addBonus = (t, by, why) => {
+    const l = bonus[t].filter((u) => u > simT);
+    if (l.length >= BONUS_MAX) l.shift();
+    l.push(simT + BONUS_SECS); bonus[t] = l;
+    armies();
+    feed(`➕ ${flagHTML(t, 40)}<span>${NAME(t)} GETS ONE MORE BALL — THANKS ${by}!</span>`);
+    sfx.tone({ freq: 660, to: 1320, type: 'triangle', dur: 0.3, vol: 0.12 });
+    host(why ? [`THANK YOU `, { name: by }, ` FOR THE ${why}! `, { node: flagNode(TEAMS[t]) }, NAME(t) + ' GETS ONE MORE BALL!']
+      : [{ node: flagNode(TEAMS[t]) }, NAME(t) + ` GETS ONE MORE BALL! THANK YOU `, { name: by }, `! ${BALL_CHATS} MORE CHATS = ANOTHER BALL!`], why ? 3 : 2);
+    renderPower();
+  };
+  const revive = (t, by) => { // the chat brings a country back: it takes a piece of the biggest country's land
+    if (teamAlive[t] || phase !== 'play' || alive < 2) return false;
+    let big = -1; for (let u = 0; u < N; u++) if (teamAlive[u] && (big < 0 || cnt[u] > cnt[big])) big = u;
+    if (big < 0) return false;
+    const want = Math.max(ELIM * 3, Math.round(TOTAL / N * 0.6));
+    let start = -1; for (let tries = 0; tries < 400 && start < 0; tries++) { const i = Math.floor(Math.random() * TOTAL); if (g[i] === big) start = i; }
+    if (start < 0) return false;
+    const queue = [start], seen = new Uint8Array(TOTAL); seen[start] = 1; let took = 0;
+    while (queue.length && took < want) {
+      const i = queue.shift(); g[i] = t; took++;
+      const x = i % GC;
+      for (const n of [x > 0 ? i - 1 : -1, x < GC - 1 ? i + 1 : -1, i - GC, i + GC]) if (n >= 0 && n < TOTAL && !seen[n] && g[n] === big) { seen[n] = 1; queue.push(n); }
+    }
+    teamAlive[t] = 1; alive++; outOrder = outOrder.filter((o) => o !== t); boostUntil[t] = simT + BOOST_SECS;
+    recount(); redrawLand();
+    const x = start % GC, y = (start - x) / GC;
+    balls.push(startBall(t, clamp((x + 0.5) * CELL, R, MAP_W - R), clamp((y + 0.5) * CH, R, MAP_H - R)));
+    banner(`${NAME(t)} IS BACK!`, `REVIVED BY ${by} & THE CHAT`);
+    feed(`♻️ ${flagHTML(t, 40)}<span>${NAME(t)} IS BACK — THE CHAT REVIVED IT!</span>`);
+    sfx.tone({ freq: 523, type: 'sine', dur: 0.25, vol: 0.12 }); sfx.tone({ freq: 784, type: 'sine', dur: 0.35, vol: 0.12, delay: 0.15 });
+    host([{ node: flagNode(TEAMS[t]) }, NAME(t) + ' IS BACK IN THE WAR! THE CHAT REVIVED IT — THANK YOU ', { name: by }, '!'], 3);
+    save(); updateUI(); renderPower();
+    return true;
   };
 
   const crown = (t) => {
@@ -369,7 +497,8 @@ async function main() {
     for (const b of balls) have[b.t]++;
     for (let t = 0; t < N; t++) {
       if (!teamAlive[t]) continue;
-      const want = clamp(1 + Math.floor((cnt[t] / TOTAL * N - 1) / ARMY_STEP), 1, ARMY_MAX);
+      const extra = bonus[t].length ? (bonus[t] = bonus[t].filter((u) => u > simT)).length : 0;
+      const want = clamp(1 + Math.floor((cnt[t] / TOTAL * N - 1) / ARMY_STEP), 1, ARMY_MAX) + extra;
       if (have[t] < want) { // new ball on a random square of its own land
         for (let tries = 0; tries < 80; tries++) {
           const idx = Math.floor(Math.random() * TOTAL);
@@ -429,7 +558,6 @@ async function main() {
   /* ---------- scoreboard ---------- */
   let lastLeader = -1, lastLeaderTalk = 0;
   const updateUI = () => {
-    $('st-time').textContent = fmtTime(simT);
     $('st-left').textContent = `${alive} / ${N}`;
     const order = [...Array(N).keys()].filter((t) => teamAlive[t]).sort((a, b) => cnt[b] - cnt[a]);
     const lead = order[0];
@@ -439,7 +567,8 @@ async function main() {
     $('board').innerHTML = rows.map(([t, on], n) => {
       const p = pct(t);
       return `<div class="r${n === 0 && on ? ' top' : ''}${on ? '' : ' out'}"><span class="n">${on ? '#' + (n + 1) : '✖'}</span>${flagHTML(t, 34)}<span class="nm">${NAME(t)}</span>` +
-        `<span class="p">${on ? p.toFixed(1) + '%' : 'OUT'}</span></div>`;
+        `<span class="p">${on ? p.toFixed(1) + '%' : 'OUT'}</span>` +
+        ((on ? BALL_CHATS : REV_CHATS) ? `<i class="cp${on ? '' : ' rv'}" style="width:${Math.min(100, chatProg[t] / (on ? BALL_CHATS : REV_CHATS) * 100).toFixed(0)}%"></i>` : '') + '</div>';
     }).join('');
     const ph = $('phase');
     if (phase === 'play' && alive === 2) { ph.hidden = false; ph.className = 'phase final'; ph.textContent = '⚔ FINAL BATTLE'; }
@@ -480,12 +609,14 @@ async function main() {
     } else {
       acc = 0; phaseT += dt / FAST;
       if (phaseT > 14) { // next war
-        $('win').hidden = true; warNo++; newWar(); recount(); redrawLand(); save();
+        $('win').hidden = true; warNo++; newWar(); recount(); redrawLand(); save(); renderPower();
         banner(`WAR #${warNo}`, `${N} COUNTRIES · 1 WINNER`);
         host([`A NEW WAR BEGINS! ${N} COUNTRIES, ONE WORLD. COMMENT YOUR COUNTRY TO BOOST IT!`], 2);
       }
     }
-    if (now - lastUI > 1000) { updateUI(); refreshFlags(); lastUI = now; }
+    if (now - lastUI > 1000) {
+      updateUI(); refreshFlags(); lastUI = now;
+    }
     if (now - lastSave > 5000) { save(); lastSave = now; }
     if (now - lastDraw >= 31) { draw(); lastDraw = now; } // ~30 frames a second is plenty for a stream
     requestAnimationFrame(frame);

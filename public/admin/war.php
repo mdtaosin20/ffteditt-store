@@ -48,6 +48,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     $new['boost'] = isset($_POST['boost']);
+    $new['fill'] = ($_POST['fill'] ?? '') === 'color' ? 'color' : 'flag';
+    foreach ([['ball_chats', 'Chats for one more ball'], ['revive_chats', 'Chats to revive']] as [$k, $label]) {
+        $v = (int) ($_POST[$k] ?? -1);
+        if ($v < 0 || $v > 1000) $errors[] = "{$label} must be between 0 and 1000."; else $new[$k] = $v;
+    }
 
     if (!$errors) {
         $changedGame = $new['teams'] !== $cfg['teams'] || $new['grid'] !== $cfg['grid'];
@@ -99,12 +104,23 @@ page_start('Territory War', 'games', $admin);
         <input name="sudden" type="number" min="10" max="600" required value="<?= (int) $cfg['sudden'] ?>">
         <small class="muted">Then the smallest country is out every 90 seconds, so every war ends.</small>
       </label>
+      <label class="field"><span>Land looks like</span>
+        <select name="fill">
+          <option value="flag" <?= $cfg['fill'] === 'flag' ? 'selected' : '' ?>>The country's flag</option>
+          <option value="color" <?= $cfg['fill'] === 'color' ? 'selected' : '' ?>>A plain colour (round flag balls show the country)</option>
+        </select></label>
+      <label class="field"><span>Chats for one more ball</span>
+        <input name="ball_chats" type="number" min="0" max="1000" required value="<?= (int) $cfg['ball_chats'] ?>">
+        <small class="muted">Every this many chats a country gets one more ball for 3 minutes (max 4 extra). 0 = off.</small></label>
+      <label class="field"><span>Chats to revive a country that is out</span>
+        <input name="revive_chats" type="number" min="0" max="1000" required value="<?= (int) $cfg['revive_chats'] ?>">
+        <small class="muted">It comes back with a piece of the biggest country's land — as often as the chat wants. 0 = off.</small></label>
     </div>
 
     <label class="field" style="margin-top:14px"><span>Countries (2–200, two-letter codes)</span>
       <textarea name="teams" id="teams" rows="3" spellcheck="false"><?= e(implode(', ', $cfg['teams'])) ?></textarea>
       <span class="pick-row">
-        <?php foreach (['popular' => 'Popular 16', 'asia' => 'Asia 16', 'football' => 'Football 16', 'muslim' => 'Muslim world 16', 'world150' => 'World 150'] as $pk => $pl): ?>
+        <?php foreach (['popular20' => 'Popular 20', 'popular' => 'Popular 16', 'asia' => 'Asia 16', 'football' => 'Football 16', 'muslim' => 'Muslim world 16', 'world150' => 'World 150'] as $pk => $pl): ?>
           <button type="button" class="btn btn-ghost btn-sm" data-teams="<?= e(implode(', ', WAR_PRESETS[$pk])) ?>"><?= e($pl) ?></button>
         <?php endforeach; ?>
       </span>

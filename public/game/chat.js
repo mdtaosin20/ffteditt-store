@@ -240,7 +240,8 @@ export function liveChat(o) {
     const gap = o.alwaysOn ? (now - lastMsg > 30000 ? 14000 : 30000) : now - lastMsg > 60000 ? 50000 : 80000;
     if (cfg.idle && cfg.robot && !speaking && !queue.length && now - lastPromo > gap) {
       lastPromo = now;
-      say(pick(o.idleLines.concat(PROMO)), 0);
+      const live = o.idleLine && Math.random() < 0.6 ? o.idleLine() : null;   // the game's own news (e.g. chat standings)
+      say(live || pick(o.idleLines.concat(PROMO)), 0);
     }
   };
   setInterval(tick, 250);

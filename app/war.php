@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 const WAR_PRESETS = [
+    'popular20' => ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'ru', 'cn', 'jp', 'de', 'fr', 'gb', 'np', 'eg', 'ph', 'my'],
     'popular' => ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'ru', 'cn', 'jp', 'de', 'fr', 'gb'],
     'asia'    => ['bd', 'in', 'pk', 'np', 'lk', 'af', 'cn', 'jp', 'kr', 'id', 'my', 'th', 'vn', 'ph', 'sa', 'ae'],
     'football'=> ['ar', 'br', 'fr', 'gb', 'es', 'pt', 'de', 'it', 'nl', 'be', 'hr', 'uy', 'ma', 'jp', 'us', 'mx'],
@@ -14,11 +15,14 @@ function war_defaults(): array
 {
     return [
         'title'    => 'TERRITORY WAR',
-        'teams'    => WAR_PRESETS['popular'],
+        'teams'    => WAR_PRESETS['popular20'],
         'grid'     => 40,      // squares across the map (more = longer game)
         'speed'    => 100,     // ball speed, % of normal
         'sudden'   => 60,      // minutes before Sudden Death (smallest country out every 90 s)
         'boost'    => true,    // a comment with a country name speeds up its ball for a few seconds
+        'fill'     => 'color',  // land shows the country's flag ('flag') or a plain colour ('color')
+        'ball_chats'   => 15,  // chats for one extra ball (lasts 3 minutes); 0 = off
+        'revive_chats' => 30,  // chats that bring a country that is out back; 0 = off
         'autoplay' => true,
         'pace'     => 'normal',
         'rev'      => '1',
@@ -34,6 +38,14 @@ function war_config(): array
     if (setting_get('mig_war150') === null) {   // once: the war grows to 150 countries (owner's wish, Oct 2026)
         setting_set('mig_war150', '1');
         $c['teams'] = WAR_PRESETS['world150'];
+        $c['rev'] = bin2hex(random_bytes(4));
+        $c['reset'] = bin2hex(random_bytes(4));
+        war_save($c);
+    }
+    if (setting_get('mig_war20') === null) {   // once: 20 countries, chat balls + revive (owner's wish)
+        setting_set('mig_war20', '1');
+        $c['teams'] = WAR_PRESETS['popular20'];
+        $c['fill'] = 'color';
         $c['rev'] = bin2hex(random_bytes(4));
         $c['reset'] = bin2hex(random_bytes(4));
         war_save($c);

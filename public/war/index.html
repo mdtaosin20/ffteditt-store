@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Territory War · Which Country Conquers the World?</title>
-<link rel="stylesheet" href="/war/war.css?v=2">
+<link rel="stylesheet" href="/war/war.css?v=5">
 <link rel="stylesheet" href="/game/chat.css?v=3">
 </head>
 <body>
@@ -12,10 +12,12 @@
   <h1 id="title">TERRITORY WAR</h1>
   <div class="sub" id="sub">16 COUNTRIES · ONLY ONE TAKES THE WORLD</div>
   <div class="stats">
-    <div><span>TIME</span><b id="st-time">0:00</b></div>
     <div><span>COUNTRIES LEFT</span><b class="g" id="st-left">16 / 16</b></div>
     <div><span>LEADER</span><b id="st-lead">—</b></div>
   </div>
+
+  <section class="panel cpow"><h3>💬 CHATS → +BALL &amp; REVIVE <small id="cpow-pg"></small></h3><div id="cpow"></div></section>
+  <section class="panel how"><h3>💬 HELP YOUR COUNTRY</h3><div id="how"></div></section>
 
   <canvas id="map" aria-label="Map of squares owned by countries"></canvas>
   <div class="phase" id="phase" hidden></div>
@@ -41,6 +43,6 @@
     TAP FOR SOUND
   </button>
 </div>
-<script type="module" src="/war/war.js?v=5"></script>
+<script type="module" src="/war/war.js?v=8"></script>
 </body>
 </html>
