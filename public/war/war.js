@@ -137,6 +137,7 @@ async function main() {
     colorOf = W.colors; simT = W.simT; warNo = W.warNo || 1; lastSudden = W.lastSudden || 0;
     W.alive.forEach((a, t) => { teamAlive[t] = a; });
     outOrder = Array.isArray(W.outs) ? W.outs : [];
+    if (W.chat && W.chat.t && W.chat.t.length === N) { W.chat.t.forEach((v, t) => { chatTotal[t] = v; chatProg[t] = W.chat.p[t] || 0; }); }
     alive = W.alive.filter(Boolean).length;
   } else newWar();
   const recount = () => { cnt.fill(0); for (let k = 0; k < TOTAL; k++) cnt[g[k]]++; };
@@ -145,7 +146,7 @@ async function main() {
     try {
       localStorage.setItem(KEY, JSON.stringify({ sig, warNo, simT, lastSudden, colors: colorOf,
         g: String.fromCharCode(...Array.from(g, (v) => v + 65)),
-        alive: Array.from(teamAlive), outs: outOrder,
+        alive: Array.from(teamAlive), outs: outOrder, chat: { t: Array.from(chatTotal), p: Array.from(chatProg) },
         balls: balls.map((b) => [b.t, Math.round(b.x), Math.round(b.y), +b.vx.toFixed(3), +b.vy.toFixed(3)]) }));
     } catch (e) { /* ignore */ }
   };
