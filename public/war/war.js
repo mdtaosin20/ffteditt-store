@@ -97,6 +97,10 @@ async function main() {
   let W = null;
   try { W = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { /* private mode */ }
   if (!W || W.sig !== sig || typeof W.g !== 'string' || W.g.length !== TOTAL) W = null;
+  // a knocked-out country's place can be taken by a new country from the chat ("share Croatia"); undone at the next war
+  const BASE = TEAMS.slice();
+  let swaps = {};
+  if (W && W.swaps) for (const [slot, code] of Object.entries(W.swaps)) if (byCode.has(code) && !TEAMS.includes(code) && TEAMS[slot]) { TEAMS[slot] = code; swaps[slot] = code; }
 
   let g = new Int16Array(TOTAL), cnt = new Int32Array(N), lastBy = new Int16Array(N).fill(-1);
   let balls = [], alive = N, simT = 0, warNo = 1, lastSudden = 0, colorOf = [], phase = 'play', phaseT = 0, champion = -1;
@@ -130,6 +134,7 @@ async function main() {
     }
     balls = seeds.map(([x, y, t]) => startBall(t, x, y));
     colorOf = shuffle(Array.from({ length: Math.max(N, 1) }, (_, i) => PALETTE[i] || `hsl(${(i * 137.5) % 360} 70% ${45 + (i % 3) * 10}%)`));
+    BASE.forEach((c, i) => { TEAMS[i] = c; }); swaps = {};
     teamAlive.fill(1); boostUntil.fill(0); outOrder = []; chatProg.fill(0); chatTotal.fill(0); bonus.forEach((l) => { l.length = 0; });
     alive = N; simT = 0; lastSudden = 0; phase = 'play'; phaseT = 0; champion = -1; lastBy.fill(-1);
   };
@@ -149,7 +154,7 @@ async function main() {
     try {
       localStorage.setItem(KEY, JSON.stringify({ sig, warNo, simT, lastSudden, colors: colorOf,
         g: String.fromCharCode(...Array.from(g, (v) => v + 65)),
-        alive: Array.from(teamAlive), outs: outOrder, chat: { t: Array.from(chatTotal), p: Array.from(chatProg) },
+        alive: Array.from(teamAlive), outs: outOrder, swaps, chat: { t: Array.from(chatTotal), p: Array.from(chatProg) },
         balls: balls.map((b) => [b.t, Math.round(b.x), Math.round(b.y), +b.vx.toFixed(3), +b.vy.toFixed(3)]) }));
     } catch (e) { /* ignore */ }
   };
@@ -340,6 +345,14 @@ async function main() {
       const t = code ? teamOf(code) : -1;
       if (kind === 'sub' && subDone.has(author)) return L('already'), ['YOU ARE ALREADY IN THE FAMILY, ', { name }, '! THANK YOU! NOW SHARE THE LIVE AND TYPE "SHARED" FOR ONE MORE FLAG!'];
       if (kind === 'share' && shareAt.has(author) && shareAt.get(author) > w - SHARE_GAP) return L('wait-10-min'), ['THANK YOU FOR SHARING AGAIN, ', { name }, '! ONE SHARE GIFT EVERY 10 MINUTES', ...(code ? [' — KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'] : ['!'])];
+      if (t < 0 && code) { // a country that is not in this war: it takes an empty place
+        if (phase !== 'play') { giftWait.set(author, { kind, at: w }); L('between-wars'); return [`THANK YOU FOR ${VERB}, `, { name }, '! THE NEXT WAR STARTS IN A MOMENT — TYPE SHARE ', { node: flagNode(code) }, CN(code) + ' THEN!']; }
+        giftWait.delete(author);
+        if (join(code, name.toUpperCase().slice(0, 12)) < 0) return L('no-free-place'), [`THANK YOU FOR ${VERB}, `, { name }, '! ', { node: flagNode(code) }, CN(code) + ' CAN JOIN WHEN A COUNTRY IS OUT — NO FREE PLACE RIGHT NOW. TRY AGAIN SOON!'];
+        L('joined');
+        if (kind === 'sub') { subDone.add(author); subCount++; } else { shareAt.set(author, w); shareCount++; }
+        return [`THANK YOU FOR ${VERB}, `, { name }, '! ', { node: flagNode(code) }, CN(code) + ' JOINS THE WAR!'];
+      }
       if (t < 0) {
         giftWait.set(author, { kind, at: w }); L('no-country-yet');
         return [`THANK YOU FOR ${VERB}, `, { name }, '! NOW TYPE YOUR COUNTRY — IT GETS ONE MORE FLAG, OR COMES BACK IF IT IS OUT!'];
@@ -379,6 +392,7 @@ async function main() {
       ['SUBSCRIBE AND TYPE SUBSCRIBED WITH YOUR COUNTRY — IT GETS ONE MORE FLAG, AND IF IT IS OUT, I BRING IT BACK!'],
       ['YOUR COUNTRY IS OUT? SHARE THIS LIVE, THEN TYPE SHARE AND YOUR COUNTRY IN CHAT — IT COMES BACK! ONCE EVERY 10 MINUTES FOR EACH OF YOU!'],
       ...(LIKE_STEP ? [[`EVERY ${LIKE_STEP} LIKES I GIVE A COUNTRY ONE MORE FLAG OR BRING ONE BACK — PRESS LIKE NOW!`]] : []),
+      ['YOUR COUNTRY IS NOT ON THE MAP? WHEN A COUNTRY IS OUT, SHARE THIS LIVE AND TYPE SHARE + YOUR COUNTRY — IT JOINS THE WAR!'],
       ['WHICH COUNTRY WILL TAKE THE WHOLE WORLD? COMMENT YOUR PICK!'],
       ['YOUR COMMENTS CHANGE THE WAR — CHEER FOR YOUR COUNTRY NOW!'],
     ],
@@ -388,7 +402,7 @@ async function main() {
       const s = state(code);
       if (s === 'alive') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + `! ${chatTotal[teamOf(code)]} CHAT${chatTotal[teamOf(code)] === 1 ? '' : 'S'} FOR IT SO FAR — ${perk(teamOf(code))}`];
       if (s === 'out') return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (REV_CHATS ? `! IT IS OUT — SHARE THIS LIVE AND TYPE SHARE ${CN(code)}, AND IT COMES BACK RIGHT AWAY!` : '! IT WAS CONQUERED THIS WAR — CHEER IT IN THE NEXT ONE!')];
-      return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + `! IT IS NOT IN THIS WAR — PICK ONE OF THE ${N} COUNTRIES ON THE MAP!`];
+      return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (freeSlot() >= 0 ? `! IT IS NOT IN THIS WAR YET — SHARE THIS LIVE AND TYPE SHARE ${CN(code)}, AND IT JOINS RIGHT AWAY!` : `! IT IS NOT IN THIS WAR — WHEN A COUNTRY IS OUT, SHARE THIS LIVE AND TYPE SHARE ${CN(code)} TO BRING IT IN!`)];
     },
     reply: (name, code, text) => {
       if (code) {
@@ -396,6 +410,7 @@ async function main() {
         if (s === 'alive') return [pick(['GO GO! ', 'YES ', 'COME ON ', 'NICE ']), { name }, '! ', { node: flagNode(code) }, CN(code) + ` HAS ${chatTotal[t]} CHATS! ` + perk(t)];
         if (s === 'out') return REV_CHATS ? [{ node: flagNode(code) }, CN(code) + ` IS OUT, `, { name }, `! ` + 'SHARE THIS LIVE AND TYPE SHARE ' + CN(code) + ' — IT COMES BACK RIGHT AWAY!']
           : [{ node: flagNode(code) }, CN(code) + ' IS ALREADY OUT, ', { name }, '… NEXT WAR STARTS SOON!'];
+        if (freeSlot() >= 0) return [{ node: flagNode(code) }, CN(code) + ' IS NOT IN THE WAR YET, ', { name }, '! SHARE THIS LIVE AND TYPE SHARE ' + CN(code) + ' — IT TAKES THE FREE PLACE!'];
         return null;
       }
       if (/reviv|back|ফির|রিভাইভ/i.test(text)) {
@@ -479,7 +494,7 @@ async function main() {
       : [{ node: flagNode(TEAMS[t]) }, NAME(t) + ` GETS ONE MORE FLAG ON THE MAP! THANK YOU `, { name: by }, `! ${BALL_CHATS} MORE CHATS AND ` + NAME(t) + ` GETS ANOTHER ONE!`], why ? 3 : 2);
     renderPower();
   };
-  const revive = (t, by) => { // the chat brings a country back: it takes a piece of the biggest country's land
+  const revive = (t, by, joined) => { // the chat brings a country back: it takes a piece of the biggest country's land
     if (teamAlive[t] || phase !== 'play' || alive < 2) return false;
     let big = -1; for (let u = 0; u < N; u++) if (teamAlive[u] && (big < 0 || cnt[u] > cnt[big])) big = u;
     if (big < 0) return false;
@@ -496,14 +511,28 @@ async function main() {
     recount(); redrawLand();
     const x = start % GC, y = (start - x) / GC;
     balls.push(startBall(t, clamp((x + 0.5) * CELL, R, MAP_W - R), clamp((y + 0.5) * CH, R, MAP_H - R)));
-    banner(`${NAME(t)} IS BACK!`, `REVIVED BY ${by} & THE CHAT`);
-    feed(`♻️ ${flagHTML(t, 40)}<span>${NAME(t)} IS BACK — THE CHAT REVIVED IT!</span>`);
+    banner(joined ? `${NAME(t)} JOINS THE WAR!` : `${NAME(t)} IS BACK!`, joined ? `BROUGHT IN BY ${by}` : `REVIVED BY ${by} & THE CHAT`);
+    feed(joined ? `🆕 ${flagHTML(t, 40)}<span>${NAME(t)} JOINS THE WAR — THANKS ${by}!</span>` : `♻️ ${flagHTML(t, 40)}<span>${NAME(t)} IS BACK — THE CHAT REVIVED IT!</span>`);
     sfx.tone({ freq: 523, type: 'sine', dur: 0.25, vol: 0.12 }); sfx.tone({ freq: 784, type: 'sine', dur: 0.35, vol: 0.12, delay: 0.15 });
-    host([{ node: flagNode(TEAMS[t]) }, NAME(t) + ' IS BACK IN THE WAR! THE CHAT REVIVED IT — THANK YOU ', { name: by }, '!'], 3);
+    host(joined ? [{ node: flagNode(TEAMS[t]) }, NAME(t) + ' JOINS THE WAR! THANK YOU ', { name: by }, '! WANT YOUR COUNTRY IN TOO? SHARE THIS LIVE AND TYPE SHARE + YOUR COUNTRY!']
+      : [{ node: flagNode(TEAMS[t]) }, NAME(t) + ' IS BACK IN THE WAR! THE CHAT REVIVED IT — THANK YOU ', { name: by }, '!'], 3);
     save(); updateUI(); renderPower();
     return true;
   };
 
+  // a new country takes the place of the country that has been out the longest
+  const freeSlot = () => outOrder.find((u) => !teamAlive[u]) ?? -1;
+  const join = (code, by) => {
+    if (phase !== 'play' || alive < 2 || teamOf(code) >= 0) return -1;
+    const slot = freeSlot();
+    if (slot < 0) return -1;
+    const old = TEAMS[slot];
+    TEAMS[slot] = code; swaps[slot] = code;
+    if (BASE[slot] === code) delete swaps[slot];
+    fans[slot] = []; chatProg[slot] = 0; chatTotal[slot] = 0; bonus[slot] = [];
+    if (!revive(slot, by, true)) { TEAMS[slot] = old; if (BASE[slot] === old) delete swaps[slot]; else swaps[slot] = old; return -1; }
+    return slot;
+  };
   const crown = (t) => {
     champion = t; phase = 'won'; phaseT = 0;
     for (let k2 = 0; k2 < TOTAL; k2++) g[k2] = t;
@@ -658,7 +687,7 @@ async function main() {
     const el = $('revt');
     el.innerHTML = '<h4>♻️ BRING THEM BACK!</h4><div class="rv-row">' +
       outs.map((t) => `<span class="rv-c">${flagHTML(t, 40)}${NAME(t)} <small>${chatProg[t]}/${REV_CHATS}</small></span>`).join('') + '</div>' +
-      `<div class="rv-how">🔁 <b>Share the live</b> + type <b>SHARE + COUNTRY</b> → IT COMES BACK!<br>🔔 <b>Subscribe</b> + type SUBSCRIBED · 💬 Type it <b>${REV_CHATS}×</b> · ${LIKE_STEP ? `👍 <b>${LIKE_STEP} likes</b> · ` : ''}⭐ <b>Super Chat</b></div>`;
+      `<div class="rv-how">🔁 <b>Share the live</b> + type <b>SHARE + COUNTRY</b> → IT COMES BACK!<br>🆕 Not on the map? <b>SHARE + YOUR COUNTRY</b> → IT JOINS!<br>🔔 <b>Subscribe</b> + type SUBSCRIBED · 💬 Type it <b>${REV_CHATS}×</b> · ${LIKE_STEP ? `👍 <b>${LIKE_STEP} likes</b> · ` : ''}⭐ <b>Super Chat</b></div>`;
     el.hidden = false; el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
     clearTimeout(reviveCall.t); reviveCall.t = setTimeout(() => { el.hidden = true; }, 9000);
     const two = outs.slice(0, 2);
@@ -708,7 +737,7 @@ async function main() {
   updateUI();
   requestAnimationFrame(frame);
   autoUpdate('war', save);   // after a deploy: reload with the game where it was (no Restart needed)
-  window.__war = { reviveCall, shares: () => shareCount, subs: () => subCount, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
+  window.__war = { reviveCall, teams: () => TEAMS.slice(), shares: () => shareCount, subs: () => subCount, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
 }
 
 main();
