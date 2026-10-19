@@ -350,7 +350,7 @@ async function main() {
   const rbt = document.querySelector('.lc-war .lc-rb-text');
   if (rbt) new MutationObserver(() => {
     rbt.style.fontSize = '';
-    for (let size = 28; rbt.scrollHeight > rbt.clientHeight + 2 && size > 17; size -= 1) rbt.style.fontSize = size + 'px';
+    for (let size = 33; rbt.scrollHeight > rbt.clientHeight + 2 && size > 20; size -= 1) rbt.style.fontSize = size + 'px';
   }).observe(rbt, { childList: true });
 
   /* ---------- the war ---------- */

@@ -26,7 +26,7 @@ h1 {
   filter: drop-shadow(0 4px 0 #6a3a00);
 }
 .sub { display: none; position: absolute; top: 150px; left: 0; right: 0; text-align: center; font-family: var(--display); font-size: 34px; letter-spacing: 3px; color: #cfe0ff; }
-.stats { position: absolute; top: 86px; left: 24px; right: 24px; display: flex; gap: 14px; }
+.stats { position: absolute; top: 86px; left: 36px; right: 36px; display: flex; gap: 14px; }
 .stats div { flex: 1; text-align: center; border: 3px solid var(--line); border-radius: 14px; background: rgba(10, 18, 40, .85); padding: 3px 6px; overflow: hidden; }
 .stats span { display: block; font-size: 17px; letter-spacing: 2px; color: #8fb0ff; }
 .stats b { display: block; font-family: var(--display); font-size: 34px; line-height: 1.08; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
@@ -42,13 +42,13 @@ h1 {
 .phase[hidden] { display: none; }
 @keyframes pulse { to { transform: translateX(-50%) scale(1.06); } }
 
-.feed { position: absolute; top: 1084px; left: 0; right: 0; height: 40px; display: flex; justify-content: center; align-items: center; gap: 12px;
+.feed { position: absolute; top: 1084px; left: 36px; right: 36px; overflow: hidden; left: 0; right: 0; height: 40px; display: flex; justify-content: center; align-items: center; gap: 12px;
   font-family: var(--display); font-size: 30px; letter-spacing: 2px; color: #ff7b7b; white-space: nowrap; }
 .feed.pop { animation: feed .4s ease-out; }
 @keyframes feed { from { transform: scale(1.25); opacity: .2; } to { transform: none; opacity: 1; } }
 
 /* top 8 countries: 2 rows of small cards under the stats (above the map, so YouTube's chat on phones never covers them) */
-.board { position: absolute; left: 24px; right: 24px; top: 362px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 8px; }
+.board { position: absolute; left: 36px; right: 36px; top: 362px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 8px; }
 .r { display: flex; align-items: center; gap: 5px; height: 50px; padding: 0 6px; border: 2px solid var(--line); border-radius: 12px;
   background: rgba(10, 18, 40, .9); font-size: 23px; font-weight: 700; white-space: nowrap; overflow: hidden; }
 .r .n { flex: 0 0 auto; color: #8fb0ff; font-size: 19px; }
@@ -63,7 +63,7 @@ h1 {
 .r.out { opacity: .45; } .r.out .nm { text-decoration: line-through; } .r.out .p, .r.out .n { color: #ff7b7b; }
 
 /* under the line where YouTube's phone chat starts: only extras */
-.cta { position: absolute; left: 0; right: 0; top: 1300px; text-align: center; font-family: var(--display); font-weight: 700; font-size: 56px; letter-spacing: 3px; color: var(--gold); }
+.cta { position: absolute; left: 0; right: 0; top: 1330px; text-align: center; font-family: var(--display); font-weight: 700; font-size: 56px; letter-spacing: 3px; color: var(--gold); }
 .cta small { display: block; margin-top: 16px; font-size: 36px; color: #cfe0ff; font-weight: 500; }
 
 /* ---------- banner + champion ---------- */
@@ -95,23 +95,23 @@ h1 {
 /* live chat pieces (from /game/chat.css): LUNA and the chat box side by side right under the map */
 .lc.lc-war .lc-sub { top: 490px; }
 .lc.lc-war .lc-fans { display: none !important; }   /* the host announces boosts instead */
-.lc.lc-war .lc-box { top: 1128px; right: 24px; width: 372px; height: 100px; padding: 6px 14px; overflow: hidden; }
-.lc.lc-war .lc-box-h { font-size: 16px; padding-bottom: 1px; }
-.lc.lc-war .lc-box .lc-row { font-size: 20px; padding: 2px 0; }
+.lc.lc-war .lc-box { top: 1128px; right: 36px; width: 380px; height: 168px; padding: 8px 16px; overflow: hidden; }
+.lc.lc-war .lc-box-h { font-size: 19px; padding-bottom: 3px; }
+.lc.lc-war .lc-box .lc-row { font-size: 27px; padding: 4px 0; }
 .lc.lc-war .lc-box .lc-row .flag { transform: scale(.8); }
-.lc.lc-war .lc-robot, .lc.lc-war .lc-robot.girl { top: 1128px; bottom: auto; left: 24px; right: auto; width: 662px; height: 100px; min-height: 0; padding: 4px 12px 4px 124px; gap: 0; border-width: 4px; border-radius: 24px; overflow: visible; }
-.lc.lc-war .lc-robot .lc-rb-face { position: absolute; left: 2px; bottom: -4px; width: 112px; }
-.lc.lc-war .lc-robot.girl .lc-rb-face { width: 118px; }
-.lc.lc-war .lc-rb-name { font-size: 17px; letter-spacing: 3px; }
-.lc.lc-war .lc-rb-text { font-size: 26px; line-height: 1.06; max-height: 64px; overflow: hidden; }
+.lc.lc-war .lc-robot, .lc.lc-war .lc-robot.girl { top: 1128px; bottom: auto; left: 36px; right: auto; width: 616px; height: 168px; min-height: 0; padding: 8px 14px 8px 162px; gap: 0; border-width: 4px; border-radius: 24px; overflow: visible; }
+.lc.lc-war .lc-robot .lc-rb-face { position: absolute; left: 2px; bottom: -4px; width: 152px; }
+.lc.lc-war .lc-robot.girl .lc-rb-face { width: 160px; }
+.lc.lc-war .lc-rb-name { font-size: 20px; letter-spacing: 3px; }
+.lc.lc-war .lc-rb-text { font-size: 33px; line-height: 1.08; max-height: 122px; overflow: hidden; }
 .lc.lc-war .lc-rb-text.long { font-size: 24px; }
-.lc.lc-war .lc-rb-text .flag { transform: scale(.75); margin: 0 2px; }
+.lc.lc-war .lc-rb-text .flag { transform: scale(.9); margin: 0 2px; }
 
 /* chat power + how to help (above the map, never under the phone chat) */
 .panel { position: absolute; top: 172px; height: 182px; padding: 8px 14px; border-radius: 16px; background: rgba(8, 12, 30, .92); }
 .panel h3 { font-family: var(--display); font-weight: 700; font-size: 24px; letter-spacing: 2px; line-height: 1.1; }
-.cpow { left: 24px; width: 520px; border: 3px solid var(--gold); box-shadow: 0 0 22px rgba(255, 201, 58, .25); } .cpow h3 { color: var(--gold); }
-.how { right: 24px; width: 488px; border: 3px solid #2ee6a6; box-shadow: 0 0 22px rgba(46, 230, 166, .22); } .how h3 { color: #2ee6a6; }
+.cpow { left: 36px; width: 500px; border: 3px solid var(--gold); box-shadow: 0 0 22px rgba(255, 201, 58, .25); } .cpow h3 { color: var(--gold); }
+.how { right: 36px; width: 492px; border: 3px solid #2ee6a6; box-shadow: 0 0 22px rgba(46, 230, 166, .22); } .how h3 { color: #2ee6a6; }
 .cp-row { display: flex; align-items: center; gap: 8px; height: 34px; font-size: 23px; font-weight: 700; white-space: nowrap; }
 .cp-row .n { width: 26px; color: #8fb0ff; font-size: 20px; }
 .cp-row .nm { width: 150px; overflow: hidden; text-overflow: ellipsis; font-family: var(--display); font-weight: 500; font-size: 22px; }
@@ -122,7 +122,7 @@ h1 {
 .cp-row .lbl { width: 116px; font-size: 17px; color: #9fb2dc; text-align: right; }
 .cp-row.out .lbl { color: #f9a8d4; }
 .cp-empty { margin-top: 18px; font-size: 22px; color: #9fb2dc; white-space: normal; line-height: 1.3; }
-.how-r { font-size: 22px; font-weight: 700; line-height: 1.32; white-space: nowrap; }
+.how-r { font-size: 21px; font-weight: 700; line-height: 1.32; white-space: nowrap; }
 .how-r b { color: #7dd3fc; } .how-r b.hr { color: #f9a8d4; } .how-r b.hg { color: var(--gold); } .how-r b.hv { color: #c4b5fd; }
 .panel h3 small { float: right; font-size: 18px; color: #9fb2dc; letter-spacing: 1px; margin-top: 4px; }
 .cp-row .lbl em { font-style: normal; color: var(--gold); }
