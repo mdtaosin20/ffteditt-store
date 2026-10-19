@@ -60,8 +60,54 @@ export function countryMatcher(countries) {
   }
   words.sort((a, b) => b[0].length - a[0].length);
   const isLatin = (s) => /^[a-z0-9 ]+$/.test(s);
+  const sorted = (w) => [...w].sort().join('');
+  // Spelling mistakes (kids type fast): "malaysiq", "malqysia", "insia", "bandaglesh", "indonsia",
+  // "malaysiamalaysia", "usausa". Only names of 5+ letters, so short words ("chat", "mail") never turn into a country.
+  const dist = (a, b, max) => { // edit distance with swapped letters, stops early above max
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    let p2 = null, p = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      const c = [i]; let best = i;
+      for (let j = 1; j <= b.length; j++) {
+        let v = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        if (p2 && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, p2[j - 2] + 1);
+        c.push(v); if (v < best) best = v;
+      }
+      if (best > max) return max + 1;
+      p2 = p; p = c;
+    }
+    return p[b.length];
+  };
+  const fuzzyWords = words.filter(([w]) => isLatin(w) && w.replace(/ /g, '').length >= 5).map(([w, code]) => [w.replace(/ /g, ''), code]);
+  const shortList = [...short].filter(([w]) => /^[a-z]{2,3}$/.test(w));
+  const SAFE2 = new Set(['bd', 'uk', 'pk', 'np', 'ph']);   // two letters that are never an English word
+  const NOT_COUNTRY = new Set(['child', 'chill', 'chain', 'being', 'sedan', 'petal', 'mails', 'chats']);
+  const fuzzy = (t) => {
+    if (!isLatin(t)) return null;
+    const all = t.split(' ');
+    for (const w of all) { // a short code inside a message: "usa usa", "go bd", "IND!"
+      if (w.length === 3 && short.has(w)) return short.get(w);
+      if (w.length === 2 && short.has(w) && (SAFE2.has(w) || new RegExp('\\b' + w.toUpperCase() + '\\b').test(rawNow))) return short.get(w);
+    }
+    const toks = all.filter((x) => x.length >= 4 && !NOT_COUNTRY.has(x));
+    const tries = toks.concat(all.length > 1 ? all.slice(0, -1).map((x, i) => x + all[i + 1]).filter((x) => x.length >= 6) : []);   // "new zeland" too
+    let best = null, bestD = 9;
+    for (const tok of tries) {
+      for (const [w, code] of fuzzyWords.concat(shortList)) { // the same name typed twice: "malaysiamalaysia", "usausa"
+        if (tok.length >= w.length * 2 && tok.length % w.length === 0 && tok === w.repeat(tok.length / w.length)) return code;
+      }
+      if (tok.length < 5) continue;
+      for (const [w, code] of fuzzyWords) {
+        const max = w.length >= 10 ? 3 : w.length >= 8 ? 2 : 1;
+        const d = dist(tok, w, max);
+        if (d <= max && d < bestD) { best = code; bestD = d; }
+      }
+    }
+    return best;
+  };
+  let rawNow = '';
   return (text) => {
-    const raw = String(text || '');
+    const raw = String(text || ''); rawNow = raw;
     const fe = raw.match(/([\u{1F1E6}-\u{1F1FF}])([\u{1F1E6}-\u{1F1FF}])/u);
     if (fe) {
       const code = String.fromCharCode(fe[1].codePointAt(0) - 0x1F1E6 + 97, fe[2].codePointAt(0) - 0x1F1E6 + 97);
@@ -70,11 +116,13 @@ export function countryMatcher(countries) {
     const t = norm(raw);
     if (t.length <= 3) { // a short code typed alone: "bd", "IND"; plain two letters only in capitals ("NO" yes, "no" no)
       if (short.has(t)) return short.get(t);
-      return codes.has(t) && /^[A-Z]{2}$/.test(raw.trim()) ? t : null;
+      if (codes.has(t) && /^[A-Z]{2}$/.test(raw.trim())) return t;
+      if (t.length === 3) { const k = sorted(t); for (const [w, code] of short) if (w.length === 3 && sorted(w) === k) return code; } // "uas" = usa
+      return null;
     }
     const padded = ' ' + t + ' ';
     for (const [w, code] of words) if (isLatin(w) ? padded.includes(' ' + w + ' ') : t.includes(w)) return code;
-    return null;
+    return fuzzy(t);
   };
 }
 
