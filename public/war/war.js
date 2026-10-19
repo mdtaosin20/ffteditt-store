@@ -3,7 +3,7 @@
 // another country it takes that square and bounces back. A country whose land gets too small is out
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=9';
+import { liveChat, countryMatcher } from '/game/chat.js?v=10';
 import { autoUpdate } from '/game/update.js?v=1';
 
 const $ = (id) => document.getElementById(id);
@@ -258,6 +258,7 @@ async function main() {
     return `${Math.max(0, BALL_CHATS - chatProg[t])} MORE CHATS AND ${NAME(t)} GETS ONE MORE FLAG ON THE MAP!` + (x ? ` IT HAS ${x} EXTRA FLAG${x > 1 ? 'S' : ''} NOW!` : '');
   };
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const glog = (...a) => { try { chat.log?.(...a); } catch (e) { /* chat not ready */ } };
   const shareAt = new Map(), giftWait = new Map(), subDone = new Set();
   let shareCount = 0, subCount = 0;
   // subscribed / subscribe done / sub done / সাবস্ক্রাইব করেছি …
@@ -305,7 +306,7 @@ async function main() {
       const nm = name.toUpperCase().slice(0, 12);
       chatTotal[t]++;
       if (!teamAlive[t]) {
-        if (REV_CHATS && ++chatProg[t] >= REV_CHATS && revive(t, nm)) chatProg[t] = 0;
+        if (REV_CHATS && ++chatProg[t] >= REV_CHATS && revive(t, nm)) { chatProg[t] = 0; glog('chats', nm, code, 'revive'); }
         renderPower();
         return;
       }
@@ -322,7 +323,7 @@ async function main() {
       subDone.add(who);
       let t = code ? teamOf(code) : -1;
       if (t < 0) { for (let u = 0; u < N; u++) if (teamAlive[u] && (t < 0 || chatTotal[u] > chatTotal[t])) t = u; }
-      if (t >= 0) reward(t, name.toUpperCase().slice(0, 12), 'SUBSCRIBE');
+      if (t >= 0) { const was = teamAlive[t]; glog('yt-sub', name, TEAMS[t], reward(t, name.toUpperCase().slice(0, 12), 'SUBSCRIBE') ? (was ? 'flag' : 'revive') : 'failed'); }
     },
     // "share" / "subscribed" in chat: YouTube does not show us these, so we trust the viewer
     // (share: once every 10 minutes per viewer · subscribe: once per viewer)
@@ -335,17 +336,19 @@ async function main() {
       if (!kind && pend && pend.at > w - 300 && code) kind = pend.kind;
       else if (!kind) return null;
       const VERB = kind === 'sub' ? 'SUBSCRIBING' : 'SHARING';
+      const L = (res) => glog(kind, name, code, res);
       const t = code ? teamOf(code) : -1;
-      if (kind === 'sub' && subDone.has(author)) return ['YOU ARE ALREADY IN THE FAMILY, ', { name }, '! THANK YOU! NOW SHARE THE LIVE AND TYPE "SHARED" FOR ONE MORE FLAG!'];
-      if (kind === 'share' && shareAt.has(author) && shareAt.get(author) > w - SHARE_GAP) return ['THANK YOU FOR SHARING AGAIN, ', { name }, '! ONE SHARE GIFT EVERY 10 MINUTES', ...(code ? [' — KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'] : ['!'])];
+      if (kind === 'sub' && subDone.has(author)) return L('already'), ['YOU ARE ALREADY IN THE FAMILY, ', { name }, '! THANK YOU! NOW SHARE THE LIVE AND TYPE "SHARED" FOR ONE MORE FLAG!'];
+      if (kind === 'share' && shareAt.has(author) && shareAt.get(author) > w - SHARE_GAP) return L('wait-10-min'), ['THANK YOU FOR SHARING AGAIN, ', { name }, '! ONE SHARE GIFT EVERY 10 MINUTES', ...(code ? [' — KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'] : ['!'])];
       if (t < 0) {
-        giftWait.set(author, { kind, at: w });
+        giftWait.set(author, { kind, at: w }); L('no-country-yet');
         return [`THANK YOU FOR ${VERB}, `, { name }, '! NOW TYPE YOUR COUNTRY — IT GETS ONE MORE FLAG, OR COMES BACK IF IT IS OUT!'];
       }
-      if (phase !== 'play') { giftWait.set(author, { kind, at: w }); return [`THANK YOU FOR ${VERB}, `, { name }, '! THE NEXT WAR STARTS IN A MOMENT — TYPE ', { node: flagNode(code) }, CN(code) + ' THEN AND IT GETS YOUR GIFT!']; }
+      if (phase !== 'play') { giftWait.set(author, { kind, at: w }); L('between-wars'); return [`THANK YOU FOR ${VERB}, `, { name }, '! THE NEXT WAR STARTS IN A MOMENT — TYPE ', { node: flagNode(code) }, CN(code) + ' THEN AND IT GETS YOUR GIFT!']; }
       giftWait.delete(author);
       const was = teamAlive[t];
-      if (!reward(t, name.toUpperCase().slice(0, 12), kind === 'sub' ? 'SUBSCRIBE' : 'SHARE', true)) return [`THANK YOU FOR ${VERB}, `, { name }, '! KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'];
+      if (!reward(t, name.toUpperCase().slice(0, 12), kind === 'sub' ? 'SUBSCRIBE' : 'SHARE', true)) return L('failed'), [`THANK YOU FOR ${VERB}, `, { name }, '! KEEP CHATTING FOR ', { node: flagNode(code) }, CN(code) + '!'];
+      L(was ? 'flag' : 'revive');
       if (kind === 'sub') { subDone.add(author); subCount++; } else { shareAt.set(author, w); shareCount++; }
       return [`THANK YOU FOR ${VERB}, `, { name }, '! ', { node: flagNode(code) }, CN(code) + (was ? ' GETS ONE MORE FLAG ON THE MAP!' : ' IS BACK IN THE WAR!') + ' MORE FRIENDS = MORE POWER!'];
     },
@@ -358,7 +361,7 @@ async function main() {
         let t = outs[0] ?? -1;
         if (t < 0) for (let u = 0; u < N; u++) if (teamAlive[u] && (t < 0 || chatTotal[u] > chatTotal[t])) t = u;
         banner('LIKE GOAL!', `${st.likes} LIKES — THANK YOU!`);
-        if (t >= 0) reward(t, 'YOUR LIKES', 'LIKES');
+        if (t >= 0) { const was = teamAlive[t]; if (reward(t, 'YOUR LIKES', 'LIKES')) glog('likes', st.likes + ' likes', TEAMS[t], was ? 'flag' : 'revive'); }
       }
     },
     onSuper: (code, name) => {

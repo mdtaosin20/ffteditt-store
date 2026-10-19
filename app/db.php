@@ -205,6 +205,17 @@ function migrate(PDO $pdo): void
             last_state TEXT NOT NULL DEFAULT 'out',
             created_at INTEGER NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS gifts (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            stream_id INTEGER NOT NULL,
+            ts        INTEGER NOT NULL,
+            kind      TEXT NOT NULL DEFAULT '',
+            author    TEXT NOT NULL DEFAULT '',
+            country   TEXT NOT NULL DEFAULT '',
+            result    TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_gifts ON gifts(stream_id, ts);
     ");
 }
 

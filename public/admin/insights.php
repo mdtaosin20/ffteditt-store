@@ -66,6 +66,18 @@ page_start('Audience Insights', 'insights', $admin);
     <div class="ins-k"><span>New subscribers seen</span><b><?= (int) $r['subs'] ?></b></div>
   </div>
   <?= spark($r['spark']) ?>
+  <?php if ($r['ask_share'] || $r['ask_sub'] || $r['gift_list']): ?>
+  <h3 style="margin-top:14px">Share &amp; subscribe gifts — did they really work?</h3>
+  <div class="ins-grid">
+    <div class="ins-k"><span>"Share" messages</span><b><?= (int) $r['ask_share'] ?></b></div>
+    <div class="ins-k"><span>"Subscribed" messages</span><b><?= (int) $r['ask_sub'] ?></b></div>
+    <div class="ins-k"><span>Countries brought back</span><b><?= (int) $r['gifts']['revive'] ?></b></div>
+    <div class="ins-k"><span>Extra flags given</span><b><?= (int) $r['gifts']['flag'] ?></b></div>
+  </div>
+  <?php if ($r['gifts']['other']): ?><p class="muted small">No gift (and why): <?= e(implode(' · ', array_map(fn ($k, $n) => str_replace('-', ' ', $k) . " {$n}", array_keys($r['gifts']['other']), $r['gifts']['other']))) ?></p><?php endif; ?>
+  <?php foreach ($r['gift_list'] as $g): ?><div class="req"><span class="muted"><?= e(date('H:i', (int) $g['ts'])) ?></span> <b><?= e($g['author']) ?></b> · <?= e($g['kind']) ?> · <?= e($names[$g['country']] ?? strtoupper($g['country'])) ?> → <b><?= e(str_replace('-', ' ', $g['result'])) ?></b></div><?php endforeach; ?>
+  <?php if ($r['ask_share'] + $r['ask_sub'] > 0 && !$r['gift_list']): ?><div class="tip warn">Viewers wrote share/subscribed but the game logged no gifts yet — the stream is still running the old game. Deploy (Update from Remote → Deploy HEAD Commit); the game updates itself within a minute.</div><?php endif; ?>
+  <?php endif; ?>
   <?php if ($r['countries']): ?><h3 style="margin-top:14px">Countries they type</h3><div class="chips">
     <?php foreach ($r['countries'] as $c => $n): ?><span class="chip"><?= e($names[$c] ?? strtoupper($c)) ?> · <?= (int) $n ?></span><?php endforeach; ?></div><?php endif; ?>
   <?php if ($r['scripts']): ?><h3 style="margin-top:14px">How they write (where they are from)</h3><div class="chips">

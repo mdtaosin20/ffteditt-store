@@ -391,5 +391,11 @@ export function liveChat(o) {
     setTimeout(fire, 1200);
   } else poll();
 
-  return { active: true, say, counts, voiceOn };
+  // tell the panel what a reward really did (Admin → Audience Insights shows it)
+  const log = (kind, author, country, result) => {
+    if (!stream || !sig) return;
+    fetch('/api/gift.php', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stream: Number(stream), sig, kind, author, country: country || '', result }) }).catch(() => {});
+  };
+  return { active: true, say, counts, voiceOn, log };
 }

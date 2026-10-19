@@ -96,6 +96,16 @@ function insights(int $hours = 24): array
         $trend = ($last && $prev) ? (array_sum($last) / count($last)) - (array_sum($prev) / count($prev)) : null;
         $likes = 0; foreach ($videos as $v) $likes += max(0, $v['likes1'] - $v['likes0']);
 
+        // what the game really did with "share" / "subscribed" / chat revives
+        $gq = db()->prepare('SELECT ts, kind, author, country, result FROM gifts WHERE stream_id = ? AND ts >= ? ORDER BY id');
+        $gq->execute([$s['id'], $since]);
+        $giftRows = $gq->fetchAll();
+        $gifts = ['revive' => 0, 'flag' => 0, 'other' => []];
+        foreach ($giftRows as $g) {
+            if ($g['result'] === 'revive' || $g['result'] === 'flag') $gifts[$g['result']]++;
+            else $gifts['other'][$g['result']] = ($gifts['other'][$g['result']] ?? 0) + 1;
+        }
+        $askShare = 0; $askSub = 0;
         $msgs = 0; $subs = 0; $supers = 0; $seenReq = []; $authors = []; $countries = []; $scripts = []; $words = []; $requests = [];
         foreach ($chat as $c) {
             if ($c['kind'] === 'sub') { $subs++; continue; }
@@ -103,6 +113,8 @@ function insights(int $hours = 24): array
             $msgs++;
             $a = mb_strtolower($c['author']); $authors[$a] = ($authors[$a] ?? 0) + 1;
             $t = (string) $c['text'];
+            if (preg_match('/\bshar(e|ed|ing)\b|শেয়ার|শেয়ার|शेयर/iu', $t)) $askShare++;
+            if (preg_match('/\bsubscribed\b|\bsub(bed|\s*done)\b|subscribe\s*(done|korsi|korlam|korechi|dilam)|সাবস্ক্রাইব|সাবস্ক্রাইব/iu', $t)) $askSub++;
             if ($cc = insight_country_of($t)) $countries[$cc] = ($countries[$cc] ?? 0) + 1;
             $sc = insight_script($t); $scripts[$sc] = ($scripts[$sc] ?? 0) + 1;
             foreach (preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($t)) ?: [] as $wd) {
@@ -124,6 +136,7 @@ function insights(int $hours = 24): array
             'countries' => array_slice($countries, 0, 10, true), 'scripts' => $scripts, 'words' => array_slice($words, 0, 15, true),
             'requests' => array_slice(array_reverse($requests), 0, 15), 'spark' => array_slice($viewers, -180),
             'channel' => $s['yt_channel'] ?: $s['channel_url'],
+            'ask_share' => $askShare, 'ask_sub' => $askSub, 'gifts' => $gifts, 'gift_list' => array_slice(array_reverse($giftRows), 0, 20),
         ];
         $out['streams'][] = $row;
         if ($row['live'] && $row['channel'] !== '') $channels[$row['channel']][] = $row['name'];
@@ -174,6 +187,11 @@ function insights_report(array $in): string
             $L[] = "  - video {$vid}: " . date('H:i', $v['first']) . '–' . date('H:i', $v['last']) . ", peak {$v['peak']}, avg " . ($v['n'] ? round($v['sum'] / $v['n'], 1) : 0) . ', +' . max(0, $v['likes1'] - $v['likes0']) . ' likes';
         }
         $L[] = "Chat: {$r['msgs']} messages from {$r['chatters']} people ({$r['repeat']} wrote 3+ times) · new subscribers seen {$r['subs']} · Super Chats {$r['supers']} · new likes {$r['likes']}";
+        if ($r['ask_share'] || $r['ask_sub'] || $r['gift_list']) {
+            $o = implode(', ', array_map(fn ($k, $n) => "{$k} {$n}", array_keys($r['gifts']['other']), $r['gifts']['other']));
+            $L[] = "Share/subscribe in chat: {$r['ask_share']} share messages, {$r['ask_sub']} subscribed messages → game gave {$r['gifts']['revive']} revives + {$r['gifts']['flag']} extra flags" . ($o ? " (no gift: {$o})" : '');
+            foreach (array_slice($r['gift_list'], 0, 10) as $g) $L[] = '  - ' . date('H:i', (int) $g['ts']) . " {$g['author']} · {$g['kind']} · " . strtoupper($g['country']) . " → {$g['result']}";
+        }
         if ($r['countries']) $L[] = 'Countries typed: ' . implode(', ', array_map(fn ($c, $n) => strtoupper($c) . " {$n}", array_keys($r['countries']), $r['countries']));
         if ($r['scripts']) $L[] = 'Writing: ' . implode(', ', array_map(fn ($c, $n) => "{$c} {$n}", array_keys($r['scripts']), $r['scripts']));
         if ($r['words']) $L[] = 'Common words: ' . implode(', ', array_map(fn ($c, $n) => "{$c} ({$n})", array_keys($r['words']), $r['words']));
