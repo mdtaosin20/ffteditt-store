@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Country Reactor — World Energy League</title>
+<meta name="description" content="A live strategy arena where four countries build energy reactors, launch drones and defend their cores.">
+<style>
+:root{color-scheme:dark;--bg:#07101d;--panel:#101d2d;--line:#263a52;--text:#f4f7fb;--muted:#9db0c7}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#142c46,#07101d 60%);color:var(--text);font:16px system-ui,Segoe UI,sans-serif;min-height:100vh}
+header{display:flex;gap:14px;align-items:center;justify-content:space-between;padding:14px clamp(12px,3vw,30px);border-bottom:1px solid var(--line);background:#07101ddd;position:sticky;top:0;z-index:3}
+.brand{font-weight:900;letter-spacing:.04em}.brand span{color:#5de1d0}.status{font-size:12px;color:#77f0bd;border:1px solid #246b55;padding:5px 9px;border-radius:20px}
+main{width:min(1200px,100%);margin:auto;padding:18px 12px 30px}.intro{display:flex;justify-content:space-between;gap:12px;align-items:end;flex-wrap:wrap}.intro h1{font-size:clamp(24px,4vw,38px);margin:0}.intro p{color:var(--muted);margin:7px 0 14px}.timer{font-size:24px;font-weight:900;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 16px}
+.scoreboard{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}.score{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--panel);min-width:0}.score strong{display:flex;gap:7px;align-items:center;font-size:14px}.score b{font-size:23px;display:block;margin-top:5px}.bar{height:5px;background:#26374b;border-radius:5px;overflow:hidden;margin-top:6px}.bar i{height:100%;display:block;width:0;transition:width .25s}
+.arena-wrap{border:1px solid var(--line);background:#0a1727;border-radius:16px;padding:8px;box-shadow:0 18px 55px #0005}.arena{width:100%;display:block;aspect-ratio:16/9;min-height:220px;border-radius:10px;background:#091625}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}.panel h2{font-size:16px;margin:0 0 10px}.teams{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.team-btn,button{font:inherit;cursor:pointer}.team-btn{border:1px solid var(--line);background:#0b1726;color:white;border-radius:9px;padding:10px 4px;font-weight:800}.team-btn:focus-visible,button:focus-visible{outline:3px solid #fff;outline-offset:2px}.team-btn small{display:block;font-weight:500;font-size:11px;color:var(--muted);margin-top:4px}.action{border:0;border-radius:9px;padding:10px 12px;background:#4ce0ca;color:#07141c;font-weight:900}.row{display:flex;gap:8px;flex-wrap:wrap}.hint{font-size:13px;line-height:1.5;color:var(--muted);margin:10px 0 0}.log{max-height:126px;overflow:auto;font-size:13px;color:#d5e2f2}.log div{padding:4px 0;border-bottom:1px solid #ffffff0d}.rules{margin-top:12px;color:var(--muted);font-size:13px;text-align:center}
+@media(max-width:650px){.scoreboard{grid-template-columns:repeat(2,minmax(0,1fr))}.controls{grid-template-columns:1fr}.arena{aspect-ratio:4/3}.intro{align-items:start}.timer{font-size:20px}.teams{gap:4px}.team-btn{font-size:13px}}
+</style>
+</head>
+<body>
+<header><div class="brand">⚡ COUNTRY <span>REACTOR</span></div><div class="status">● ARENA READY</div></header>
+<main>
+<section class="intro"><div><h1>World Energy League</h1><p>Build power. Send drones. Protect your reactor core.</p></div><div class="timer" id="timer">02:00</div></section>
+<section class="scoreboard" id="scores" aria-label="Country energy scoreboard"></section>
+<div class="arena-wrap"><canvas class="arena" id="arena" width="960" height="540" aria-label="Animated strategy arena"></canvas></div>
+<section class="controls">
+<div class="panel"><h2>⚡ Support a country</h2><div class="teams" id="teamButtons"></div><p class="hint">Choose a country to send an energy surge. Each surge boosts its reactor and deploys a defender drone. During YouTube Live, viewers can type <b>1, 2, 3 or 4</b> when a chat connector is enabled.</p></div>
+<div class="panel"><h2>📡 Arena activity</h2><div class="row"><button class="action" id="surge">⚡ Give selected country a surge</button><button class="action" id="restart" style="background:#263c55;color:white">↻ New match</button></div><div class="log" id="log" aria-live="polite" style="margin-top:10px"></div></div>
+</section>
+<p class="rules">NEW GAME #6 · Autonomous strategy simulation · Match winner is the first reactor to reach 100 energy, or the strongest core when time runs out.</p>
+</main>
+<script>
+(()=>{
+const teams=[
+{name:'Brazil',flag:'🇧🇷',color:'#38d987',energy:36,x:115,y:110,angle:0},
+{name:'Germany',flag:'🇩🇪',color:'#ffd34e',energy:36,x:845,y:110,angle:Math.PI},
+{name:'Spain',flag:'🇪🇸',color:'#ff735f',energy:36,x:115,y:430,angle:0},
+{name:'France',flag:'🇫🇷',color:'#64a7ff',energy:36,x:845,y:430,angle:Math.PI}
+];
+const canvas=document.getElementById('arena'),ctx=canvas.getContext('2d'),scores=document.getElementById('scores'),buttons=document.getElementById('teamButtons'),log=document.getElementById('log'),timerEl=document.getElementById('timer');
+let selected=0,remaining=120,last=performance.now(),running=true,ended=false,units=[],sparks=[],tick=0;
+const rand=(a,b)=>a+Math.random()*(b-a);
+function addLog(t){const d=document.createElement('div');d.textContent=t;log.prepend(d);while(log.children.length>7)log.lastChild.remove()}
+function renderUI(){scores.innerHTML='';buttons.innerHTML='';teams.forEach((t,i)=>{const s=document.createElement('div');s.className='score';s.innerHTML='<strong><span>'+t.flag+'</span>'+t.name+'</strong><b>'+Math.floor(t.energy)+' <small style="font-size:12px;color:#9db0c7">ENERGY</small></b><div class="bar"><i style="background:'+t.color+';width:'+Math.min(100,t.energy)+'%"></i></div>';scores.append(s);const b=document.createElement('button');b.className='team-btn';b.style.borderColor=i===selected?t.color:'var(--line)';b.innerHTML=t.flag+' '+(i+1)+'<small>'+t.name+'</small>';b.addEventListener('click',()=>{selected=i;renderUI()});buttons.append(b)})}
+function surge(i,fromChat=false){if(ended)return;const t=teams[i];t.energy=Math.min(100,t.energy+8);for(let n=0;n<3;n++)units.push({team:i,x:t.x+rand(-12,12),y:t.y+rand(-12,12),tx:teams[(i+1+Math.floor(Math.random()*3))%4].x,ty:teams[(i+1+Math.floor(Math.random()*3))%4].y,speed:rand(35,70),phase:rand(0,6.28)});for(let n=0;n<18;n++)sparks.push({x:t.x,y:t.y,vx:rand(-100,100),vy:rand(-100,100),life:rand(.3,.8),color:t.color});addLog((fromChat?'Chat boost':'Energy surge')+' → '+t.flag+' '+t.name);renderUI();if(t.energy>=100)finish(i)}
+function finish(w){ended=true;running=false;addLog('🏆 '+teams[w].name+' wins the Energy League!');document.querySelector('.status').textContent='🏆 MATCH COMPLETE'}
+function reset(){teams.forEach(t=>t.energy=36);units=[];sparks=[];remaining=120;ended=false;running=true;document.querySelector('.status').textContent='● ARENA READY';log.innerHTML='';addLog('New reactor match started.');last=performance.now();renderUI()}
+document.getElementById('surge').addEventListener('click',()=>surge(selected));document.getElementById('restart').addEventListener('click',reset);
+function drawBase(t){ctx.save();ctx.translate(t.x,t.y);ctx.shadowColor=t.color;ctx.shadowBlur=18;ctx.strokeStyle=t.color;ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,37,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;ctx.fillStyle='#10253a';ctx.beginPath();ctx.arc(0,0,29,0,Math.PI*2);ctx.fill();ctx.strokeStyle=t.color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-17,0);ctx.lineTo(17,0);ctx.moveTo(0,-17);ctx.lineTo(0,17);ctx.stroke();ctx.fillStyle='#fff';ctx.font='23px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t.flag,0,1);ctx.restore()}
+function frame(now){const dt=Math.min(.04,(now-last)/1000);last=now;tick+=dt;if(running){remaining-=dt;if(remaining<=0){remaining=0;finish(teams.reduce((a,t,i)=>t.energy>teams[a].energy?i:a,0))}teams.forEach((t,i)=>{t.energy=Math.min(100,t.energy+dt*(.45+(i===selected?.1:0)));if(Math.random()<dt*.4){const enemy=teams[(i+1+Math.floor(Math.random()*3))%4];units.push({team:i,x:t.x+rand(-20,20),y:t.y+rand(-20,20),tx:enemy.x,ty:enemy.y,speed:rand(25,58),phase:rand(0,6.28)})}});if(tick>.8){tick=0;renderUI()}}
+ctx.clearRect(0,0,960,540);ctx.fillStyle='#091625';ctx.fillRect(0,0,960,540);
+ctx.strokeStyle='#ffffff0b';ctx.lineWidth=1;for(let x=0;x<960;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,540);ctx.stroke()}for(let y=0;y<540;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(960,y);ctx.stroke()}
+ctx.strokeStyle='#3d5b73';ctx.setLineDash([7,8]);ctx.strokeRect(45,40,870,460);ctx.setLineDash([]);
+teams.forEach(drawBase);
+units=units.filter(u=>u.life!==0);units.forEach(u=>{const dx=u.tx-u.x,dy=u.ty-u.y,d=Math.hypot(dx,dy)||1;u.x+=dx/d*u.speed*dt;u.y+=dy/d*u.speed*dt;u.phase+=dt*5;if(d<45){const target=teams.find(t=>Math.hypot(t.x-u.x,t.y-u.y)<55);if(target&&teams[u.team]!==target){target.energy=Math.max(0,target.energy-.18);teams[u.team].energy=Math.min(100,teams[u.team].energy+.07)}u.x=teams[u.team].x+rand(-8,8);u.y=teams[u.team].y+rand(-8,8);u.tx=teams[(u.team+1+Math.floor(Math.random()*3))%4].x;u.ty=teams[(u.team+1+Math.floor(Math.random()*3))%4].y}ctx.save();ctx.translate(u.x,u.y);ctx.rotate(u.phase);ctx.fillStyle=teams[u.team].color;ctx.shadowColor=teams[u.team].color;ctx.shadowBlur=8;ctx.fillRect(-5,-5,10,10);ctx.restore()});
+sparks=sparks.filter(s=>s.life>0);sparks.forEach(s=>{s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;ctx.globalAlpha=Math.max(0,s.life);ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(s.x,s.y,3,0,Math.PI*2);ctx.fill()});ctx.globalAlpha=1;
+timerEl.textContent=String(Math.floor(remaining/60)).padStart(2,'0')+':'+String(Math.floor(remaining%60)).padStart(2,'0');requestAnimationFrame(frame)}
+renderUI();addLog('Reactor cores online. Select a country to support.');requestAnimationFrame(frame);
+})();
+</script>
+</body></html>
