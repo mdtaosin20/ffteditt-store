@@ -77,6 +77,11 @@ function games_list(): array
                     'desc' => 'Flag balls shoot at the goal and the keeper moves to stop them. A full World Cup: groups, quarterfinals, semifinals and the final!',
                     'autoplay' => (bool) $kp['autoplay'], 'pace' => (string) $kp['pace'],
                     'detail' => count($kp['teams']) . ' countries · first to ' . (int) $kp['goals'] . ' goals'],
+        'reactor' => ['id' => 6, 'key' => 'reactor', 'name' => 'Country Reactor', 'url' => '/reactor/', 'settings' => 'reactor.php',
+                    'title' => 'Country Reactor · World Energy League', 'category' => 'countries',
+                    'tags' => ['countries', 'strategy', 'chat'], 'thumb' => '/assets/site/war.jpg',
+                    'desc' => 'A new strategy arena: four countries power up reactor cores, deploy drones and defend their energy systems.',
+                    'autoplay' => true, 'pace' => 'normal', 'detail' => '4 countries · energy reactor strategy'],
     ];
 }
 
@@ -97,6 +102,7 @@ function game_of_url(string $url): string
     if (preg_match('#/war/?(\?|$)#', $path)) return 'war';
     if (preg_match('#/tug/?(\?|$)#', $path)) return 'tug';
     if (preg_match('#/keeper/?(\?|$)#', $path)) return 'keeper';
+    if (preg_match('#/reactor/?(\\?|$)#', $path)) return 'reactor';
     return preg_match('#/flags/?(\?|$)#', $path) ? 'flags' : 'ball';
 }
 
