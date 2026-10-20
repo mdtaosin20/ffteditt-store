@@ -57,7 +57,15 @@ function ai_usage(?string $day = null): array
 {
     $day ??= date('Y-m-d');
     $u = json_decode((string) (setting_get('ai_use_' . $day) ?? ''), true);
-    return array_merge(['calls' => 0, 'in' => 0, 'out' => 0, 'usd' => 0.0, 'fail' => 0, 'last_error' => ''], is_array($u) ? $u : []);
+    return array_merge(['calls' => 0, 'in' => 0, 'out' => 0, 'usd' => 0.0, 'fail' => 0, 'last_error' => '', 'asked' => 0, 'skip' => []], is_array($u) ? $u : []);
+}
+
+function ai_note(string $why): void
+{
+    $u = ai_usage();
+    if ($why === 'asked') $u['asked']++;
+    else $u['skip'][$why] = (int) ($u['skip'][$why] ?? 0) + 1;
+    setting_set('ai_use_' . date('Y-m-d'), json_encode($u));
 }
 
 function ai_add_usage(int $in, int $out, bool $ok, string $err = ''): void
@@ -82,17 +90,18 @@ function ai_bad(string $t): bool
  */
 function ai_reply(int $streamId, string $game, string $name, string $text, string $info): ?string
 {
-    if (!ai_ready()) return null;
+    ai_note('asked');
+    if (!ai_ready()) { ai_note(ai_key() === '' ? 'no key' : 'turned off'); return null; }
     $c = ai_cfg();
-    if (ai_usage()['usd'] >= (float) $c['daily']) return null;
+    if (ai_usage()['usd'] >= (float) $c['daily']) { ai_note('daily limit reached'); return null; }
     // at most one call every 4 seconds per stream, 12 a minute in total
     $now = microtime(true);
     $last = (float) (setting_get('ai_last_' . $streamId) ?? 0);
-    if ($now - $last < 4) return null;
+    if ($now - $last < 4) { ai_note('too fast'); return null; }
     $min = json_decode((string) (setting_get('ai_min') ?? ''), true) ?: ['m' => 0, 'n' => 0];
     $m = (int) floor($now / 60);
     if ($min['m'] !== $m) $min = ['m' => $m, 'n' => 0];
-    if ($min['n'] >= 12) return null;
+    if ($min['n'] >= 12) { ai_note('12 a minute'); return null; }
     $min['n']++;
     setting_set('ai_min', json_encode($min));
     setting_set('ai_last_' . $streamId, (string) $now);
@@ -131,7 +140,7 @@ function ai_reply(int $streamId, string $game, string $name, string $text, strin
     ai_add_usage($tin, $tout, true);
     $out = trim(preg_replace('/\s+/', ' ', strip_tags($out)) ?? '');
     $out = trim($out, " \"'");
-    if (ai_bad($out)) return null;
+    if (ai_bad($out)) { ai_note('unsafe answer dropped'); return null; }
     if (mb_strlen($out) > 170) $out = rtrim(mb_substr($out, 0, 167)) . '…';
     return $out;
 }

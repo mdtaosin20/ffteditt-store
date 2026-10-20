@@ -5,7 +5,7 @@
 // subscriber gives a free shield, a Super Chat gives both. Likes and viewers unlock goals for everyone.
 // The last flag left is the round champion, then a new round starts (about an hour a round).
 import { Sfx, holdScreen, PACE, reporter, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=18';
+import { liveChat, countryMatcher } from '/game/chat.js?v=19';
 import { Music, SongPlayer } from '/game/music.js?v=2';
 import { autoUpdate } from '/game/update.js?v=1';
 
@@ -254,6 +254,9 @@ async function main() {
   const isSalam = (s) => /salam|salaam|assalam|asalam|সালাম|আসসালামু/i.test(s);
   const chat = liveChat({
     game: 'flags', rows: 3, alwaysOn: true,
+    aiInfo: (code) => `Game: FLAG ARENA — ${teams.length} country flags bounce in a round arena; the black hole in the middle opens every ${cfg.gap} seconds and a flag that falls in is OUT; the last flag left wins the round, then a new round starts. `
+      + `Now: ${alive.size} of ${teams.length} left. ` + (code ? `The viewer's country ${NAME(code)}: ${statusLine(code)} ` : '')
+      + `Rules: type your country in chat to boost it; ${cfg.shield} chats = a SHIELD (safe from the next hole); ${cfg.revive} chats bring an OUT country back${NOLIMIT ? ' (no limit)' : ''}; subscribe = free shield; Super Chat = shield and revive; countries not in this round join the next round.`,
     match: countryMatcher(C),
     badge: (code) => flagNode(code, 32),
     duck: duckAll,

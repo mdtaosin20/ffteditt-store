@@ -131,6 +131,7 @@ page_start('YouTube Manager', 'youtube', $admin);
     <div class="form-actions"><button class="btn btn-blue" type="submit">Save</button></div>
   </form>
   <p class="small" style="margin-top:10px">Today: <b><?= (int) $use['calls'] ?></b> AI answers · about <b>$<?= number_format((float) $use['usd'], 3) ?></b> of $<?= e(number_format((float) $ai['daily'], 2)) ?>
+    · asked <?= (int) $use['asked'] ?> times<?= $use['skip'] ? ' (not answered: ' . e(implode(', ', array_map(fn ($k, $n) => "{$k} {$n}", array_keys($use['skip']), $use['skip']))) . ')' : '' ?>
     <?= $use['fail'] ? ' · <span class="warn-text">' . (int) $use['fail'] . ' failed — last: ' . e($use['last_error']) . '</span>' : '' ?>
     · key: <?= ai_key() !== '' ? '<span class="ok-text">saved</span>' : '<span class="muted">not set</span>' ?></p>
 </section>

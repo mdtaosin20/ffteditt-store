@@ -3,7 +3,7 @@
 // another country it takes that square and bounces back. A country whose land gets too small is out
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=18';
+import { liveChat, countryMatcher } from '/game/chat.js?v=19';
 import { autoUpdate } from '/game/update.js?v=1';
 
 const $ = (id) => document.getElementById(id);
@@ -251,7 +251,7 @@ async function main() {
       const lbl = on ? (need ? `${chatProg[t]}/${need}` : '') : (need ? `OUT ${chatProg[t]}/${need}` : 'OUT');
       const x = on ? extraNow(t) : 0;
       return `<div class="cp-row${on ? '' : ' out'}"><span class="n">${powPage * 4 + n + 1}.</span>${flagHTML(t, 34)}<span class="nm">${NAME(t)}</span>` +
-        `<span class="c">💬${chatTotal[t]}</span><span class="bar"><i style="width:${w.toFixed(0)}%"></i></span><span class="lbl">${x ? `<em>+${x}⚽</em> ` : ''}${lbl}</span></div>`;
+        `<span class="c">💬${chatTotal[t]}</span><span class="bar"><i style="width:${w.toFixed(0)}%"></i></span><span class="lbl">${x ? `<em>+${x}🚩</em> ` : ''}${lbl}</span></div>`;
     }).join('');
   };
   setInterval(() => { powPage++; renderPower(); }, 5000);
@@ -313,8 +313,8 @@ async function main() {
     if (/\b(add|more|extra|another|give|need|want)\b[^.!?]{0,20}\b(balls?|flags?|power|army|soldiers?)\b|\bone more\b|\bballs?\b|\bboost\b/.test(t))
       return [{ name }, ', MORE FLAGS FOR ', ...f, yours + '? SHARE THE LIVE AND TYPE SHARE, OR SUBSCRIBE AND TYPE SUBSCRIBED — +1 FLAG RIGHT AWAY! ' + (code && teamOf(code) >= 0 && teamAlive[teamOf(code)] ? perk(teamOf(code)) : '')];
     // "why is X not boosting / not counting / not back"
-    if (/\bwhy\b[^?]{0,40}\b(not|no|isn'?t|doesn'?t|don'?t|never|nobody|no ?one)\b|not (working|counting|boosting)|\bbug\b|\bbroken\b/.test(t))
-      return [{ name }, ', I COUNT EVERY MESSAGE WITH A COUNTRY NAME! ', ...f, code ? statusOf(code) : 'WRITE THE COUNTRY NAME IN YOUR MESSAGE AND WATCH ITS FLAG!'];
+    if (/doesn'?t change|don'?t change|not chang|no change|not (go|going) up|stuck|\bwhy\b[^?]{0,40}\b(not|no|isn'?t|doesn'?t|don'?t|never|nobody|no ?one)\b|not (working|counting|boosting)|\bbug\b|\bbroken\b/.test(t))
+      return [{ name }, ', I COUNT EVERY MESSAGE WITH A COUNTRY NAME! ', ...f, (code ? statusOf(code) : 'WRITE THE COUNTRY NAME IN YOUR MESSAGE!') + ' TIP: WRITE IT A LITTLE DIFFERENT EACH TIME — YOUTUBE HIDES THE SAME MESSAGE SENT AGAIN AND AGAIN!'];
     // unfair / cheating
     if (/unfair|not fair|cheat|hack|rigged|fake game/.test(t))
       return [{ name }, ', EVERY COUNTRY CAN WIN! THE MORE ITS FANS CHAT, SHARE AND SUBSCRIBE, THE MORE FLAGS IT GETS — CHEER FOR ', ...f, yours + '!'];
@@ -487,6 +487,7 @@ async function main() {
       ['YOUR COUNTRY IS OUT? SHARE THIS LIVE, THEN TYPE SHARE AND YOUR COUNTRY IN CHAT — IT COMES BACK! ONCE EVERY 10 MINUTES FOR EACH OF YOU!'],
       ...(LIKE_STEP ? [[`EVERY ${LIKE_STEP} LIKES I GIVE A COUNTRY ONE MORE FLAG OR BRING ONE BACK — PRESS LIKE NOW!`]] : []),
       ['YOUR COUNTRY IS NOT ON THE MAP? JUST TYPE ITS NAME — IF THERE IS A FREE PLACE, IT JOINS THE WAR RIGHT AWAY!'],
+      ['TIP: WRITE YOUR COUNTRY A LITTLE DIFFERENT EACH TIME, LIKE GO JAPAN OR JAPAN 2 — YOUTUBE HIDES THE SAME MESSAGE SENT AGAIN AND AGAIN!'],
       ['WHICH COUNTRY WILL TAKE THE WHOLE WORLD? COMMENT YOUR PICK!'],
       ['YOUR COMMENTS CHANGE THE WAR — CHEER FOR YOUR COUNTRY NOW!'],
     ],

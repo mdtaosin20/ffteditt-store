@@ -201,6 +201,12 @@ function insights_report(array $in): string
         }
         $L[] = '';
     }
+    $u = ai_usage(); $ac = ai_cfg();
+    $L[] = '== AI answers today: ' . ($ac['on'] ? 'ON' : 'OFF') . ', key ' . (ai_key() !== '' ? 'saved' : 'NOT set') . ", provider {$ac['provider']} " . ai_model($ac)
+        . " · asked {$u['asked']}, answered {$u['calls']}, failed {$u['fail']}" . ($u['last_error'] !== '' ? " (last error: {$u['last_error']})" : '')
+        . ($u['skip'] ? ' · not answered: ' . implode(', ', array_map(fn ($k, $n) => "{$k} {$n}", array_keys($u['skip']), $u['skip'])) : '')
+        . ' · cost about $' . number_format((float) $u['usd'], 3);
+    $L[] = '';
     $L[] = '== What the panel thinks';
     foreach ($in['tips'] as [$k, $t]) $L[] = '- [' . strtoupper($k) . '] ' . $t;
     return implode("\n", $L);

@@ -33,7 +33,7 @@ const ALIAS = {
   pt: ['portugal', 'por'], nl: ['netherlands', 'holland'], kr: ['south korea', 'korea'], kp: ['north korea'],
   ru: ['russia', 'rus'], cn: ['china', 'chn'], jp: ['japan', 'jpn'], id: ['indonesia', 'indo'], my: ['malaysia'],
   ps: ['palestine', 'free palestine', 'ফিলিস্তিন'], ir: ['iran'], iq: ['iraq'], af: ['afghanistan', 'afg'], np: ['nepal', 'nepali', 'নেপাল'],
-  lk: ['sri lanka', 'srilanka'], eg: ['egypt', 'masr'], ma: ['morocco', 'maroc'], dz: ['algeria'], ng: ['nigeria', 'naija'],
+  lk: ['sri lanka', 'srilanka'], eg: ['egypt', 'masr'], ma: ['morocco', 'maroc', 'marocco', 'maghrib', 'maroko'], dz: ['algeria'], ng: ['nigeria', 'naija'],
   ph: ['philippines', 'pinas', 'pilipinas'], vn: ['vietnam', 'viet nam'], th: ['thailand'], mx: ['mexico', 'méxico'],
   it: ['italy', 'italia'], cz: ['czechia', 'czech'], ci: ["cote d'ivoire", 'ivory coast'], cd: ['dr congo', 'drc'],
   cf: ['central african republic'], va: ['vatican'], tl: ['east timor', 'timor leste'], mm: ['myanmar', 'burma'],
