@@ -133,7 +133,7 @@ function chat_feed(int $sid, int $after): array
     $cfg = chat_cfg();
     $out = ['cfg' => [
         'enabled' => $cfg['enabled'], 'robot' => $cfg['robot'], 'voice' => $cfg['robot'] && $cfg['voice'], 'name' => $cfg['robot_name'], 'look' => $cfg['look'],
-        'box' => $cfg['box'], 'subs' => $cfg['subs'], 'idle' => $cfg['idle'],
+        'box' => $cfg['box'], 'subs' => $cfg['subs'], 'idle' => $cfg['idle'], 'ai' => ai_ready(),
     ], 'events' => [], 'last' => $after];
     if (!$cfg['enabled']) return $out;
     if ($after <= 0) {

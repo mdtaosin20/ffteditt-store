@@ -344,7 +344,7 @@ export function liveChat(o) {
   ];
 
   /* ---------- answers to any comment (the game's own answers come first) ---------- */
-  const generic = (name, text) => {
+  const generic = (name, text, noDefault) => {
     const t = text.toLowerCase();
     if (/subscribed|\bsub(scribe)? ?done|subscribe kor|সাবস্ক্রাইব/.test(t)) return ['THANK YOU ', { name }, ' FOR SUBSCRIBING! YOU ARE PART OF THE FAMILY NOW!'];
     if (/\blike(d)? ?(done|dilam|diyechi)?\b|👍|লাইক/.test(t)) return ['THANKS FOR THE LIKE, ', { name }, '! YOU ARE THE BEST!'];
@@ -354,8 +354,30 @@ export function liveChat(o) {
     if (/nice|good|great|wow|awesome|amazing|love|best|cool|super|valo|bhalo|ভালো|সুন্দর|অসাধারণ|🔥|❤|😍|💯/.test(t)) return ['THANK YOU ', { name }, '! SO HAPPY YOU ENJOY IT — PLEASE PRESS LIKE!'];
     if (/where.*from|kothay|কোথা/.test(t)) return ['I LIVE INSIDE THIS STREAM, ', { name }, '! WHERE ARE YOU WATCHING FROM?'];
     if (/bye|good ?night|gn\b|আল্লাহ হাফেজ|allah hafez/.test(t)) return ['BYE ', { name }, '! THANKS FOR WATCHING — COME BACK SOON!'];
-    if (t.includes('?')) return ['GOOD QUESTION, ', { name }, '! KEEP WATCHING AND YOU WILL SEE!'];
+    if (t.includes('?') && !(noDefault && cfg.ai)) return ['GOOD QUESTION, ', { name }, '! KEEP WATCHING AND YOU WILL SEE!'];
+    if (noDefault) return null;
     return [pick(['THANKS FOR YOUR COMMENT, ', 'I SEE YOU, ', 'GREAT TO HAVE YOU HERE, ', 'NICE ONE, ']), { name }, '! ' + pick(o.hints || ['DROP A LIKE IF YOU ARE ENJOYING THE GAME!'])];
+  };
+
+  /* ---------- AI answers (optional, set in the panel): only for messages the rules did not understand ---------- */
+  let aiBusy = false;
+  const aiWorth = (text) => {
+    if (!cfg.ai || !stream || !sig || aiBusy) return false;
+    const t = String(text || '').trim();
+    const letters = (t.match(/\p{L}/gu) || []).length;
+    return letters >= 6 && t.split(/\s+/).length >= 2 && !/(.)\1{5,}/.test(t);   // real words, not spam or "hiiiiii"
+  };
+  const askAI = async (name, key, text, fallback, pre = '') => {
+    aiBusy = true;
+    try {
+      const info = pre + (o.aiInfo ? o.aiInfo(key) : (o.hints || []).join(' '));
+      const r = await fetch('/api/robot_ai.php', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stream: Number(stream), sig, game: o.game || '', name: cleanName(name), text, info }) });
+      const j = r.ok ? await r.json() : null;
+      if (j && j.text) say([{ name }, ', ' + String(j.text).toUpperCase()], 2);
+      else { const l = fallback(); if (l) say(l, 1); }
+    } catch (e) { const l = fallback(); if (l) say(l, 1); }
+    finally { aiBusy = false; }
   };
 
   /* ---------- one chat event ---------- */
@@ -391,13 +413,18 @@ export function liveChat(o) {
     if (ev.k === 'super') { line = ['WOW! THANK YOU ', { name }, ` FOR THE SUPER CHAT${ev.amt ? ' ' + ev.amt : ''}! YOU ARE A LEGEND!`]; prio = 3; }
     else if (ev.k === 'member') { line = ['WELCOME TO THE CLUB, ', { name }, '! THANKS FOR BECOMING A MEMBER!']; prio = 3; }
     else if (first && o.understand && (line = o.understand(name, key, text))) { prio = 2; o.onWelcome?.(name, key); } // a new viewer asked something: answer it
+    else if (first && aiWorth(text) && /\?|\b(how|why|what|who|when|where|can|is|are|do)\b/i.test(text)) { o.onWelcome?.(name, key); lastSaid.set(author, performance.now()); askAI(name, key, text, () => o.welcome(name, key, text), 'NEW VIEWER (say welcome). '); return; }
     else if (first) { // greet every new chatter: alone if LUNA is free, together with others if she is busy
       wq.push({ name, key, text }); o.onWelcome?.(name, key);
       if (!wTimer) wTimer = setTimeout(flushWelcome, queue.length || performance.now() < speakUntil ? 6000 : 300);
       lastSaid.set(author, performance.now());
       return;
     }
-    else if (!recent) line = o.reply(name, key, text) || generic(name, text);
+    else if (!recent) {
+      line = o.reply(name, key, text) || generic(name, text, true);
+      if (!line && aiWorth(text)) { lastSaid.set(author, performance.now()); askAI(name, key, text, () => generic(name, text)); return; }
+      if (!line) line = generic(name, text);
+    }
     if (line) { lastSaid.set(author, performance.now()); say(line, prio); }
   };
 

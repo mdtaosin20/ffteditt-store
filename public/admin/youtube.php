@@ -37,6 +37,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         log_activity('Live chat & robot settings saved', 'ok');
         flash('Saved. The game pages pick it up within a few seconds.');
     }
+    if (($_POST['do'] ?? '') === 'ai_cfg') {
+        $prov = isset(AI_PROVIDERS[$_POST['provider'] ?? '']) ? $_POST['provider'] : 'openai';
+        $key = trim((string) ($_POST['ai_key'] ?? ''));
+        if ($key !== '' && !preg_match('/^[A-Za-z0-9_\-]{20,300}$/', $key)) {
+            flash('That API key looks wrong. Copy it again (it starts with sk-).', 'error');
+            redirect('youtube.php#ai');
+        }
+        if ($key !== '') setting_set('ai_key', $key);
+        if (isset($_POST['forget_key'])) setting_set('ai_key', '');
+        ai_save([
+            'on'        => isset($_POST['on']),
+            'provider'  => $prov,
+            'model'     => mb_substr(preg_replace('/[^A-Za-z0-9._\-]/', '', (string) ($_POST['model'] ?? '')) ?? '', 0, 60),
+            'daily'     => max(0.0, min(50.0, (float) ($_POST['daily'] ?? 1))),
+            // a new AI company starts with its own default prices
+            'price_in'  => $prov === ai_cfg()['provider'] ? max(0.0, (float) ($_POST['price_in'] ?? 0)) : 0.0,
+            'price_out' => $prov === ai_cfg()['provider'] ? max(0.0, (float) ($_POST['price_out'] ?? 0)) : 0.0,
+        ]);
+        log_activity('AI replies settings saved', 'ok');
+        flash(ai_key() === '' ? 'Saved. Paste your API key to turn AI replies on.' : 'Saved. LUNA uses AI answers within a few seconds.');
+        redirect('youtube.php#ai');
+    }
     redirect('youtube.php');
 }
 
@@ -85,6 +107,32 @@ page_start('YouTube Manager', 'youtube', $admin);
     <?php endforeach; ?>
     </tbody>
   </table></div>
+</section>
+
+<?php $ai = ai_cfg(); $use = ai_usage(); [$pin, $pout] = ai_prices($ai); ?>
+<section class="panel" id="ai">
+  <div class="ph"><h2>🤖 AI replies for <?= e($chat['robot_name']) ?> (optional)</h2></div>
+  <p class="muted">With an API key, <?= e($chat['robot_name']) ?> answers questions and comments her normal rules do not understand.
+    Country names, share, subscribe and welcomes stay free and instant. At most 12 AI answers a minute, and never more than your daily limit.</p>
+  <form method="post" class="form">
+    <?= csrf_field() ?><input type="hidden" name="do" value="ai_cfg">
+    <div class="row2">
+      <label class="check"><input type="checkbox" name="on" <?= $ai['on'] ? 'checked' : '' ?>> Use AI answers</label>
+      <label class="field"><span>AI company</span><select name="provider">
+        <?php foreach (AI_PROVIDERS as $pk => $pv): ?><option value="<?= e($pk) ?>" <?= $ai['provider'] === $pk ? 'selected' : '' ?>><?= e($pv['label']) ?></option><?php endforeach; ?>
+      </select></label>
+      <label class="field"><span>API key</span><input name="ai_key" type="password" autocomplete="off" placeholder="<?= ai_key() !== '' ? 'Saved — leave empty to keep it' : 'Paste your key (sk-…)' ?>"></label>
+      <label class="field"><span>Model (empty = <?= e(AI_PROVIDERS[$ai['provider']]['model']) ?>)</span><input name="model" value="<?= e($ai['model']) ?>" placeholder="<?= e(AI_PROVIDERS[$ai['provider']]['model']) ?>"></label>
+      <label class="field"><span>Daily limit (US$)</span><input name="daily" type="number" step="0.1" min="0" max="50" value="<?= e((string) $ai['daily']) ?>"></label>
+      <label class="field"><span>Price per 1M tokens in / out (US$) — check the company's pricing page</span>
+        <span style="display:flex;gap:8px"><input name="price_in" type="number" step="0.01" min="0" value="<?= e((string) $pin) ?>"><input name="price_out" type="number" step="0.01" min="0" value="<?= e((string) $pout) ?>"></span></label>
+    </div>
+    <?php if (ai_key() !== ''): ?><label class="check"><input type="checkbox" name="forget_key"> Delete the saved key</label><?php endif; ?>
+    <div class="form-actions"><button class="btn btn-blue" type="submit">Save</button></div>
+  </form>
+  <p class="small" style="margin-top:10px">Today: <b><?= (int) $use['calls'] ?></b> AI answers · about <b>$<?= number_format((float) $use['usd'], 3) ?></b> of $<?= e(number_format((float) $ai['daily'], 2)) ?>
+    <?= $use['fail'] ? ' · <span class="warn-text">' . (int) $use['fail'] . ' failed — last: ' . e($use['last_error']) . '</span>' : '' ?>
+    · key: <?= ai_key() !== '' ? '<span class="ok-text">saved</span>' : '<span class="muted">not set</span>' ?></p>
 </section>
 
 <section class="panel">

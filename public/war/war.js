@@ -3,7 +3,7 @@
 // another country it takes that square and bounces back. A country whose land gets too small is out
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=17';
+import { liveChat, countryMatcher } from '/game/chat.js?v=18';
 import { autoUpdate } from '/game/update.js?v=1';
 
 const $ = (id) => document.getElementById(id);
@@ -507,6 +507,15 @@ async function main() {
       return [hi, { name }, ' FROM ', { node: flagNode(code) }, CN(code) + (freeSlot() < 0 ? `! THE MAP IS FULL RIGHT NOW — WHEN A COUNTRY IS OUT, TYPE ${CN(code)} AGAIN AND IT JOINS!` : `! IT WAS ALREADY IN THIS WAR — SHARE THIS LIVE AND TYPE SHARE ${CN(code)} TO BRING IT BACK!`)];
     },
     understand: (name, code, text) => understand(name, code, text),
+    aiInfo: (code) => {
+      const lead = leaderT(), outs = outOrder.filter((u) => !teamAlive[u]).slice(-4).map((u) => NAME(u));
+      return `Game: TERRITORY WAR — ${N} country flags fight on one map; the last country left conquers the world. `
+        + `Now: ${alive} of ${N} countries left` + (lead >= 0 ? `, leader ${NAME(lead)} with ${pct(lead).toFixed(0)}% of the map` : '') + (outs.length ? `, out: ${outs.join(', ')}` : '') + '. '
+        + (code ? `The viewer's country: ${statusOf(code)} ` : '')
+        + `Rules: type your country in chat to boost it; every ${BALL_CHATS || 15} chats = +1 flag (extra ball) for that country; `
+        + `a country that is out comes back with ${REV_CHATS} chats, or when someone shares the live and types "share" + country (once every 10 minutes per viewer), or subscribes and types "subscribed" + country; `
+        + `a country not on the map joins a free place when typed; every ${LIKE_STEP || 20} likes give a flag; Super Chat = +2 flags.`;
+    },
     reply: (name, code, text) => {
       const bw = blockedLine(name, code); if (bw) return bw;
       const u = understand(name, code, text); if (u) return u;
