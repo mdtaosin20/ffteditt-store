@@ -102,7 +102,7 @@ function game_of_url(string $url): string
     if (preg_match('#/war/?(\?|$)#', $path)) return 'war';
     if (preg_match('#/tug/?(\?|$)#', $path)) return 'tug';
     if (preg_match('#/keeper/?(\?|$)#', $path)) return 'keeper';
-    if (preg_match('#/reactor/?(\\?|$)#', $path)) return 'reactor';
+    if (preg_match('#/reactor/?(\?|$)#', $path)) return 'reactor';
     return preg_match('#/flags/?(\?|$)#', $path) ? 'flags' : 'ball';
 }
 
