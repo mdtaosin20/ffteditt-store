@@ -40,7 +40,7 @@ def log(msg):
 
 def redact(s):
     import re
-    return re.sub(r"(rtmps?://[^\s/]+/[^\s/]+/)\S+", r"\1****", s)
+    return re.sub(r"(rtmps?://[^\\s/]+/[^\\s/]+/)\\S+", r"\\1****", s)
 
 
 def run(cmd, timeout=10):
@@ -138,7 +138,7 @@ def start_stream(cfg):
     gop = str(fps * 2)
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "warning", "-nostats", "-progress", "pipe:1",
            "-f", "avfoundation", "-framerate", str(fps), "-capture_cursor", "0",
-           "-i", "1:none", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+           "-i", "0:none", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
            "-vf", "scale=%d:%d" % (w, h), "-c:v", "libx264", "-preset", "veryfast",
            "-tune", "zerolatency", "-pix_fmt", "yuv420p", "-b:v", "%dk" % kbps,
            "-maxrate", "%dk" % kbps, "-bufsize", "%dk" % (kbps * 2),
