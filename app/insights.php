@@ -201,6 +201,16 @@ function insights_report(array $in): string
         }
         $L[] = '';
     }
+    $vr = ytv_results(time() - 14 * 86400);
+    if ($vr) {
+        $L[] = '== Title / thumbnail versions (last 14 days; avg viewers, peak, new likes, minutes measured)';
+        foreach ($vr as $sid => $list) {
+            $nm = (string) (db()->query('SELECT COALESCE(NULLIF(channel_name, \'\'), name) FROM streams WHERE id = ' . (int) $sid)->fetchColumn());
+            $L[] = "-- {$nm}";
+            foreach (array_slice($list, -12) as $v) $L[] = "  {$v['letter']}" . ($v['best'] ? ' (BEST)' : '') . ' ' . date('m-d H:i', $v['ts']) . " · avg {$v['avg']}, peak {$v['peak']}, +{$v['likes']} likes, {$v['mins']} min · \"{$v['title']}\" · first line: {$v['hook']}";
+        }
+        $L[] = '';
+    }
     $u = ai_usage(); $ac = ai_cfg();
     $L[] = '== AI answers today: ' . ($ac['on'] ? 'ON' : 'OFF') . ', key ' . (ai_key() !== '' ? 'saved' : 'NOT set') . ", provider {$ac['provider']} " . ai_model($ac)
         . " · asked {$u['asked']}, answered {$u['calls']}, failed {$u['fail']}" . ($u['last_error'] !== '' ? " (last error: {$u['last_error']})" : '')

@@ -131,6 +131,8 @@ function migrate(PDO $pdo): void
     $add('streams', 'chat_seen', 'INTEGER NOT NULL DEFAULT 0');
     $add('streams', 'chat_count', 'INTEGER NOT NULL DEFAULT 0');
     $add('streams', 'run_id', 'INTEGER NOT NULL DEFAULT 0');   // new number on every Start = games begin fresh
+    $add('streams', 'yt_vary', 'INTEGER NOT NULL DEFAULT 1');   // small changes to title/description/thumbnail on every start
+    $add('streams', 'yt_badges', "TEXT NOT NULL DEFAULT ''");
     if ($pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='robot_tts'")->fetchColumn()) {
         $add('robot_tts', 'voice', "TEXT NOT NULL DEFAULT 'ryan'");
     }
@@ -205,6 +207,20 @@ function migrate(PDO $pdo): void
             last_state TEXT NOT NULL DEFAULT 'out',
             created_at INTEGER NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS yt_variants (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            stream_id INTEGER NOT NULL,
+            video     TEXT NOT NULL,
+            ts        INTEGER NOT NULL,
+            n         INTEGER NOT NULL DEFAULT 0,
+            base      TEXT NOT NULL DEFAULT '',
+            title     TEXT NOT NULL DEFAULT '',
+            hook      TEXT NOT NULL DEFAULT '',
+            tags      TEXT NOT NULL DEFAULT '',
+            thumb     TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_ytvar ON yt_variants(stream_id, video);
 
         CREATE TABLE IF NOT EXISTS gifts (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,

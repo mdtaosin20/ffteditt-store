@@ -89,6 +89,21 @@ page_start('Audience Insights', 'insights', $admin);
 </section>
 <?php endforeach; ?>
 
+<?php $vr = ytv_results(time() - 14 * 86400); if ($vr): ?>
+<section class="card">
+  <h2>Which title &amp; thumbnail works best</h2>
+  <p class="muted small">Each start uses a slightly different version (Title &amp; thumbnail page → "Change them a little on every start"). ⭐ = most viewers on average among lives of 30+ minutes.</p>
+  <?php foreach ($vr as $sid => $list): $nm = (string) db()->query('SELECT COALESCE(NULLIF(channel_name, \'\'), name) FROM streams WHERE id = ' . (int) $sid)->fetchColumn(); ?>
+    <h3 style="margin-top:12px"><?= e($nm) ?> <a class="small" href="yt_live.php?id=<?= (int) $sid ?>">edit</a></h3>
+    <div class="tbl-wrap"><table class="tbl tbl-sm"><thead><tr><th></th><th>When</th><th>Title</th><th>Avg</th><th>Peak</th><th>Likes</th><th>Min</th></tr></thead><tbody>
+    <?php foreach (array_reverse(array_slice($list, -10)) as $v): ?>
+      <tr><td><b><?= e($v['letter']) ?></b><?= $v['best'] ? ' ⭐' : '' ?></td><td class="small muted"><?= e(date('d M H:i', $v['ts'])) ?></td><td class="small"><?= e($v['title']) ?></td>
+        <td><?= e((string) $v['avg']) ?></td><td><?= (int) $v['peak'] ?></td><td><?= (int) $v['likes'] ?></td><td><?= (int) $v['mins'] ?></td></tr>
+    <?php endforeach; ?></tbody></table></div>
+  <?php endforeach; ?>
+</section>
+<?php endif; ?>
+
 <section class="card">
   <h2>Report for Claude</h2>
   <p class="muted">Press <b>Copy</b> and paste it in your chat with Claude — it shows everything above as text, so Claude can tell you what to change.</p>

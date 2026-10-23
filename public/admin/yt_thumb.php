@@ -10,6 +10,14 @@ if ($s && isset($_GET['def'])) {
     $s['yt_thumb'] = 'default';
 }
 $f = $s ? yt_thumb_file($s) : null;
+if ($f && isset($_GET['var'])) { // preview of the thumbnail version number var
+    $tmp = tempnam(sys_get_temp_dir(), 'ytv');
+    if (ytv_thumb($f[0], max(0, (int) $_GET['var']), ytv_badges($s), $tmp)) {
+        header('Content-Type: image/jpeg'); header('Cache-Control: no-store'); header('X-Content-Type-Options: nosniff');
+        readfile($tmp); @unlink($tmp); exit;
+    }
+    @unlink($tmp);
+}
 if (!$f) {
     http_response_code(404);
     exit;

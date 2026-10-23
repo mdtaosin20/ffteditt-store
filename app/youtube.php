@@ -406,13 +406,20 @@ function yt_apply(array $s): array
             $f = flags_config();
             if (!empty($f['music']) && ($f['music_src'] ?? '') === 'songs') $t['desc'] = rtrim($t['desc']) . "\n\n" . music_credit_text();
         }
+        // a little different on every live (to learn which title / thumbnail works best)
+        $thumb = yt_thumb_file($s);
+        $vary = null;
+        if (!empty($s['yt_vary'])) {
+            try { $vary = ytv_for_video($s, $t, $video, $thumb); } catch (Throwable $e) { $vary = null; }
+            if ($vary) { $t['title'] = $vary['title']; $t['desc'] = $vary['desc']; $thumb = $vary['thumb']; }
+        }
         preg_match_all('/#([\p{L}\p{N}_]+)/u', $t['desc'], $m);
         $snippet = [
             'title'       => $t['title'],
             'description' => $t['desc'],
             'categoryId'  => (string) ($sn['categoryId'] ?? '20'),
         ];
-        $tags = array_slice(array_values(array_unique($m[1])), 0, 15);
+        $tags = $vary ? array_slice($vary['tags'], 0, 15) : array_slice(array_values(array_unique($m[1])), 0, 15);
         if ($tags) $snippet['tags'] = $tags;
         if (!empty($sn['defaultLanguage'])) $snippet['defaultLanguage'] = $sn['defaultLanguage'];
 
@@ -420,8 +427,7 @@ function yt_apply(array $s): array
             json_encode(['id' => $video, 'snippet' => $snippet], JSON_UNESCAPED_UNICODE));
         if ($r[0] !== 200) throw new RuntimeException(yt_err($r));
 
-        $note = 'Title and description set';
-        $thumb = yt_thumb_file($s);
+        $note = 'Title and description set' . ($vary ? " (version {$vary['letter']})" : '');
         if ($thumb) {
             $r = yt_http('POST', 'https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=' . rawurlencode($video),
                 ['Authorization: Bearer ' . $tok, 'Content-Type: ' . $thumb[1]], (string) file_get_contents($thumb[0]), 30);

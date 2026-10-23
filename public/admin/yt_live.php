@@ -20,6 +20,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $desc  = trim(str_replace(["\r\n", '<', '>'], ["\n", '', ''], (string) ($_POST['desc'] ?? '')));
     $thumb = (string) ($_POST['thumb'] ?? 'default');
     $auto  = isset($_POST['auto']) ? 1 : 0;
+    $vary  = isset($_POST['vary']) ? 1 : 0;
+    $badges = implode("\n", array_slice(array_filter(array_map(fn ($l) => mb_substr(trim(preg_replace('/[^\p{L}\p{N} *?!\/&+#.,:-]/u', '', $l) ?? ''), 0, 24), preg_split('/\R/', (string) ($_POST['badges'] ?? '')) ?: [])), 0, 12));
 
     if ($title === '') $errors[] = 'Write a title.';
     if (mb_strlen($title) > 100) $errors[] = 'The title is too long. YouTube allows 100 letters (now ' . mb_strlen($title) . ').';
@@ -81,8 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $saveTitle = $title === $def['title'] ? '' : $title;
         $saveDesc  = $desc === $def['desc'] ? '' : $desc;
         $changed = $saveTitle !== $s['yt_title'] || $saveDesc !== $s['yt_desc'] || $newThumb !== $s['yt_thumb'] || $up && ($up['error'] ?? 4) === UPLOAD_ERR_OK;
-        db()->prepare('UPDATE streams SET yt_title = ?, yt_desc = ?, yt_thumb = ?, yt_auto = ?, yt_rev = yt_rev + ?, yt_fails = 0 WHERE id = ?')
-            ->execute([$saveTitle, $saveDesc, $newThumb, $auto, $changed ? 1 : 0, $id]);
+        db()->prepare('UPDATE streams SET yt_title = ?, yt_desc = ?, yt_thumb = ?, yt_auto = ?, yt_vary = ?, yt_badges = ?, yt_rev = yt_rev + ?, yt_fails = 0 WHERE id = ?')
+            ->execute([$saveTitle, $saveDesc, $newThumb, $auto, $vary, $badges === implode("\n", YTV_BADGES) ? '' : $badges, $changed ? 1 : 0, $id]);
         $st->execute([$id]);
         $s = $st->fetch();
 
@@ -140,6 +142,14 @@ page_start('Title & thumbnail', 'youtube', $admin);
         <small class="muted">JPG, PNG or WEBP, best 1280 × 720. Big pictures are made smaller by the panel. Custom thumbnails need a phone-verified channel (youtube.com/verify).</small>
       </div>
       <label class="check"><input type="checkbox" name="auto" <?= $s['yt_auto'] ? 'checked' : '' ?>> Put these on the live video automatically every time the stream starts</label>
+      <label class="check"><input type="checkbox" name="vary" <?= $s['yt_vary'] ? 'checked' : '' ?>> Change them a little on every start (title words, the first line of the description, tags and a badge on the thumbnail) — Audience Insights shows which version gets the most viewers</label>
+      <label class="field"><span>Thumbnail badges — one per line, used in turn (start with * for a white dot)</span>
+        <textarea name="badges" rows="4" placeholder="<?= e(implode("\n", YTV_BADGES)) ?>"><?= e($s['yt_badges'] !== '' ? $s['yt_badges'] : implode("\n", YTV_BADGES)) ?></textarea></label>
+      <?php if ($s['yt_vary'] && $s['yt_thumb'] !== 'none'): ?>
+      <div class="field"><span>The next thumbnail versions</span>
+        <div class="ytv-prev"><?php $nn = (int) db()->query('SELECT COUNT(*) FROM yt_variants WHERE stream_id = ' . $id)->fetchColumn();
+          for ($k = 0; $k < 4; $k++): ?><figure><img loading="lazy" alt="Version <?= e(ytv_letter($nn + $k)) ?>" src="yt_thumb.php?id=<?= $id ?>&amp;var=<?= $nn + $k ?>&amp;r=<?= (int) $s['yt_rev'] ?>"><figcaption><?= e(ytv_letter($nn + $k)) ?></figcaption></figure><?php endfor; ?></div></div>
+      <?php endif; ?>
       <div class="form-actions">
         <button class="btn btn-blue" type="submit" name="do" value="save">Save</button>
         <?php if ($connected): ?><button class="btn btn-green" type="submit" name="do" value="apply">Save &amp; update live now</button><?php endif; ?>
@@ -158,6 +168,17 @@ page_start('Title & thumbnail', 'youtube', $admin);
     </aside>
   </div>
 </form>
+<?php $vlist = ytv_results(0)[$id] ?? []; if ($vlist): ?>
+<section class="card" style="max-width:none;margin-top:14px">
+  <h2>Versions used on your lives</h2>
+  <div class="tbl-wrap"><table class="tbl tbl-sm"><thead><tr><th></th><th>When</th><th>Title</th><th>Avg viewers</th><th>Peak</th><th>New likes</th><th>Minutes</th></tr></thead><tbody>
+  <?php foreach (array_reverse(array_slice($vlist, -15)) as $v): ?>
+    <tr><td><b><?= e($v['letter']) ?></b><?= $v['best'] ? ' ⭐' : '' ?></td><td class="small muted"><?= e(date('d M H:i', $v['ts'])) ?></td><td class="small"><?= e($v['title']) ?></td>
+      <td><?= e((string) $v['avg']) ?></td><td><?= (int) $v['peak'] ?></td><td><?= (int) $v['likes'] ?></td><td><?= (int) $v['mins'] ?></td></tr>
+  <?php endforeach; ?></tbody></table></div>
+  <p class="muted small">⭐ = most viewers on average (lives of 30+ minutes). Run each live 2–3 hours for a fair test.</p>
+</section>
+<?php endif; ?>
 <?php if ($connected): ?>
       <form method="post" action="yt_oauth.php" onsubmit="return confirm('Disconnect this channel from YouTube?')" style="margin-top:14px">
         <?= csrf_field() ?><input type="hidden" name="id" value="<?= $id ?>"><input type="hidden" name="do" value="disconnect">

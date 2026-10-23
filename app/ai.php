@@ -116,19 +116,33 @@ function ai_reply(int $streamId, string $game, string $name, string $text, strin
         . "Do not start with the viewer's name (it is added for you).\n\nGAME FACTS:\n" . mb_substr($info, 0, 1200);
     $user = 'Viewer "' . mb_substr($name, 0, 30) . '" wrote: ' . mb_substr($text, 0, 200);
 
+    $out = ai_call($system, $user, 80, 8);
+    if ($out === null) return null;
+    $out = trim(preg_replace('/\s+/', ' ', strip_tags($out)) ?? '');
+    $out = trim($out, " \"'");
+    if (ai_bad($out)) { ai_note('unsafe answer dropped'); return null; }
+    if (mb_strlen($out) > 170) $out = rtrim(mb_substr($out, 0, 167)) . '…';
+    return $out;
+}
+
+/** One request to the chosen AI company. Returns the text, or null (error is counted in today's use). */
+function ai_call(string $system, string $user, int $maxTokens = 80, int $timeout = 8): ?string
+{
+    $c = ai_cfg();
     $model = ai_model($c);
     $key = ai_key();
+    if ($key === '') return null;
     if ($c['provider'] === 'anthropic') {
         $r = yt_http('POST', 'https://api.anthropic.com/v1/messages',
             ['x-api-key: ' . $key, 'anthropic-version: 2023-06-01', 'content-type: application/json'],
-            json_encode(['model' => $model, 'max_tokens' => 80, 'system' => $system, 'messages' => [['role' => 'user', 'content' => $user]]]), 8);
+            json_encode(['model' => $model, 'max_tokens' => $maxTokens, 'system' => $system, 'messages' => [['role' => 'user', 'content' => $user]]]), $timeout);
         $out = ''; foreach (($r[1]['content'] ?? []) as $b) if (($b['type'] ?? '') === 'text') $out .= $b['text'];
         $tin = (int) ($r[1]['usage']['input_tokens'] ?? 0); $tout = (int) ($r[1]['usage']['output_tokens'] ?? 0);
     } else {
         $r = yt_http('POST', 'https://api.openai.com/v1/chat/completions',
             ['Authorization: Bearer ' . $key, 'Content-Type: application/json'],
-            json_encode(['model' => $model, 'max_tokens' => 80, 'temperature' => 0.8,
-                'messages' => [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]]]), 8);
+            json_encode(['model' => $model, 'max_completion_tokens' => $maxTokens,
+                'messages' => [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]]]), $timeout);
         $out = (string) ($r[1]['choices'][0]['message']['content'] ?? '');
         $tin = (int) ($r[1]['usage']['prompt_tokens'] ?? 0); $tout = (int) ($r[1]['usage']['completion_tokens'] ?? 0);
     }
@@ -138,9 +152,5 @@ function ai_reply(int $streamId, string $game, string $name, string $text, strin
         return null;
     }
     ai_add_usage($tin, $tout, true);
-    $out = trim(preg_replace('/\s+/', ' ', strip_tags($out)) ?? '');
-    $out = trim($out, " \"'");
-    if (ai_bad($out)) { ai_note('unsafe answer dropped'); return null; }
-    if (mb_strlen($out) > 170) $out = rtrim(mb_substr($out, 0, 167)) . '…';
     return $out;
 }
