@@ -474,6 +474,20 @@ function yt_tick(int $serverId): void
             // tried again in a minute
         }
     }
+    // The live video was found / opened, but YouTube may leave it waiting ("Upcoming") even though our
+    // video arrives (it happens when the next live starts right after the last one on the same key): start it.
+    $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_refresh != '' AND yt_video != ''
+                         AND yt_video_start = COALESCE(started_at, 0) AND started_at < ?");
+    $st->execute([$serverId, $now - 60]);
+    foreach ($st->fetchAll() as $s) {
+        $k = json_decode((string) (setting_get('yt_kick_' . $s['id']) ?? ''), true) ?: [];
+        if (($k['start'] ?? 0) !== (int) $s['started_at']) $k = ['start' => (int) $s['started_at'], 'done' => false, 'tries' => 0, 'at' => 0];
+        if ($k['done'] || $k['tries'] >= 12 || $k['at'] > $now - 60) continue;
+        $k['tries']++; $k['at'] = $now;
+        try { $k['done'] = yt_kick($s, yt_token($s)); } catch (Throwable $e) { /* again in a minute */ }
+        setting_set('yt_kick_' . $s['id'], json_encode($k));
+    }
+
     $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_auto = 1 AND yt_refresh != ''
                          AND (yt_done_rev != yt_rev OR yt_done_start != COALESCE(started_at, 0))
                          AND NOT (yt_fail_start = COALESCE(started_at, 0) AND yt_fails >= 5)
@@ -572,4 +586,34 @@ function yt_subscribers_tick(int $serverId): void
             // try again next time
         }
     }
+}
+
+/**
+ * Makes sure the live video really is live. Returns true when nothing more is needed
+ * (live, ended, or not ours to start). About 2 units, + 50 when it has to press "Go live".
+ */
+function yt_kick(array $s, string $tok): bool
+{
+    $video = (string) $s['yt_video'];
+    $r = yt_get($tok, 'liveBroadcasts', ['part' => 'id,status,contentDetails', 'id' => $video]);
+    if ($r[0] !== 200) return false;
+    $b = $r[1]['items'][0] ?? null;
+    if (!$b) return true;                                     // not a live broadcast we can see
+    $life = (string) ($b['status']['lifeCycleStatus'] ?? '');
+    if (in_array($life, ['live', 'liveStarting', 'complete', 'revoked'], true)) return true;
+    if (!in_array($life, ['ready', 'testing', 'created', 'testStarting'], true)) return false;
+    // only when our video is really arriving on the bound stream key
+    $sid = (string) ($b['contentDetails']['boundStreamId'] ?? '');
+    if ($sid === '') return false;
+    $r = yt_get($tok, 'liveStreams', ['part' => 'id,status', 'id' => $sid]);
+    if ($r[0] !== 200 || (($r[1]['items'][0]['status']['streamStatus'] ?? '') !== 'active')) return false;
+    $go = fn (string $to) => yt_http('POST', YT_API . 'liveBroadcasts/transition?' . http_build_query(['broadcastStatus' => $to, 'id' => $video, 'part' => 'id,status']),
+        ['Authorization: Bearer ' . $tok, 'Content-Length: 0'], '');
+    $r = $go('live');
+    if ($r[0] !== 200 && $life === 'ready') { $go('testing'); return false; }   // some lives must pass "testing" first: live next minute
+    if ($r[0] === 200) {
+        log_activity("YouTube: {$s['name']} — the live video was waiting, pressed Go live", 'ok');
+        return true;
+    }
+    return false;
 }
