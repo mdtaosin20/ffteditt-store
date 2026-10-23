@@ -469,7 +469,10 @@ function yt_tick(int $serverId): void
         if ($now - (int) $s['started_at'] > 600 && (int) $s['yt_find_at'] > $now - 300) continue;
         db()->prepare('UPDATE streams SET yt_find_at = ? WHERE id = ?')->execute([$now, $s['id']]);
         try {
-            yt_find_video($s, yt_token($s), $now - (int) $s['started_at'] > 70);
+            $tok = yt_token($s);
+            $video = yt_find_video($s, $tok, $now - (int) $s['started_at'] > 70);
+            // found or opened it: make sure it really goes live right away (not a minute later)
+            if ($video !== '') { $s['yt_video'] = $video; if (yt_kick($s, $tok)) setting_set('yt_kick_' . $s['id'], json_encode(['start' => (int) $s['started_at'], 'done' => true, 'tries' => 1, 'at' => $now])); }
         } catch (Throwable $e) {
             // tried again in a minute
         }
