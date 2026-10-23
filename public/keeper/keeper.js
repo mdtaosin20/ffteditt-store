@@ -3,7 +3,8 @@
 // itself: 6 groups → quarterfinals → semifinals → final → champion, then a new tournament.
 // Typing a country in the live chat gives it more shots. Made for 24/7 vertical live streams with LUNA as host.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=19';
+import { liveChat, countryMatcher } from '/game/chat.js?v=20';
+import { goLive } from '/game/golive.js?v=1';
 import { autoUpdate } from '/game/update.js?v=1';
 
 const $ = (id) => document.getElementById(id);
@@ -569,6 +570,7 @@ async function main() {
   };
   requestAnimationFrame(frame);
   autoUpdate('keeper', save);
+  goLive({ left: 820, top: 420, size: 230, duck: (on) => sfx.duck(on) });   // the owner joins the live from a phone (Admin → Join Live)
 
   /* ---------------------------------------------------------------- settings from the admin panel */
   setInterval(async () => {

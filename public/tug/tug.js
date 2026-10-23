@@ -2,7 +2,8 @@
 // The knot that crosses a team's line wins the round (or whoever is ahead when the time runs out),
 // then the next pair of countries comes on. Made for 24/7 vertical live streams with LUNA as host.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=19';
+import { liveChat, countryMatcher } from '/game/chat.js?v=20';
+import { goLive } from '/game/golive.js?v=1';
 import { autoUpdate } from '/game/update.js?v=1';
 
 const $ = (id) => document.getElementById(id);
@@ -283,7 +284,8 @@ async function main() {
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
-  autoUpdate('tug', save);   // after a deploy: reload with the game where it was (no Restart needed)
+  autoUpdate('tug', save);
+  goLive({ left: 40, top: 820, size: 230, duck: (on) => sfx.duck(on) });   // the owner joins the live from a phone (Admin → Join Live)   // after a deploy: reload with the game where it was (no Restart needed)
   window.__tug = { cfg, pos: () => pos, phase: () => phase, round: () => roundNo, pulls: () => pulls, pull, chat };
 }
 

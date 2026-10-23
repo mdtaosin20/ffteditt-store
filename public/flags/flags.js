@@ -5,7 +5,8 @@
 // subscriber gives a free shield, a Super Chat gives both. Likes and viewers unlock goals for everyone.
 // The last flag left is the round champion, then a new round starts (about an hour a round).
 import { Sfx, holdScreen, PACE, reporter, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=19';
+import { liveChat, countryMatcher } from '/game/chat.js?v=20';
+import { goLive } from '/game/golive.js?v=1';
 import { Music, SongPlayer } from '/game/music.js?v=2';
 import { autoUpdate } from '/game/update.js?v=1';
 
@@ -585,7 +586,8 @@ async function main() {
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
-  autoUpdate('flags', save);   // after a deploy: reload with the game where it was (no Restart needed)
+  autoUpdate('flags', save);
+  goLive({ left: 40, top: 940, size: 230, duck: duckAll });   // the owner joins the live from a phone (Admin → Join Live)   // after a deploy: reload with the game where it was (no Restart needed)
   window.__arena = { cfg, S, alive: () => alive, out: () => out, balls: () => balls, shield, phase: () => phase, simT: () => simT, toNext: () => toNext, onFan, revive, chat };
 }
 

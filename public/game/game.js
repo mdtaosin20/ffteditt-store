@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
 import { Sfx, Commentator, holdScreen, PACE, reporter, freshRun } from './audio.js?v=13';
-import { liveChat } from './chat.js?v=19';
+import { liveChat } from './chat.js?v=20';
+import { goLive } from './golive.js?v=1';
 
 /* ------------------------------------------------------------------ config */
 const DEFAULTS = {
@@ -1057,6 +1058,7 @@ async function main() {
     },
     demoTexts: ['M', 'R', 'Messi 🐐', 'Ronaldo siuuu', 'hello', 'who will win?', 'CR7', 'assalamu alaikum', 'Leo forever', 'মেসি', 'nice game', 'r'],
   });
+  goLive({ left: 40, top: 820, size: 230, duck: (on) => sfx.duck(on) });   // the owner joins the live from a phone (Admin → Join Live)
 
   // game flow
   let phase = 'start', phaseT = 0, roundWinner = -1, gameT = 0;

@@ -3,7 +3,8 @@
 // another country it takes that square and bounces back. A country whose land gets too small is out
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=19';
+import { liveChat, countryMatcher } from '/game/chat.js?v=20';
+import { goLive } from '/game/golive.js?v=1';
 import { autoUpdate } from '/game/update.js?v=1';
 
 const $ = (id) => document.getElementById(id);
@@ -867,7 +868,8 @@ async function main() {
   };
   updateUI();
   requestAnimationFrame(frame);
-  autoUpdate('war', save);   // after a deploy: reload with the game where it was (no Restart needed)
+  autoUpdate('war', save);
+  goLive({ left: 46, top: 820, size: 230, duck: (on) => sfx.duck(on) });   // the owner joins the live from a phone (Admin → Join Live)   // after a deploy: reload with the game where it was (no Restart needed)
   window.__war = { reviveCall, askByName, understand, match: countryMatcher(C), renderLikes, free: () => [...freeUsed], teams: () => TEAMS.slice(), shares: () => shareCount, subs: () => subCount, cfg, cnt, teamAlive, balls: () => balls, alive: () => alive, simT: () => simT, phase: () => phase, warNo: () => warNo, chat, fans };
 }
 

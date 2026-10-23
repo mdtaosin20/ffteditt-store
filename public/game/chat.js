@@ -318,7 +318,8 @@ export function liveChat(o) {
       else if (!audio && now > speakUntil - 1500) robot.classList.remove('talk');
     }
     if (queue.length) prefetch();
-    if (!speaking && queue.length && now > pauseUntil && !(o.busy && o.busy())) {
+    if (window.fftHostLive && audio) { stopAudio(); robot.classList.remove('talk'); }   // the owner is talking live: LUNA goes quiet
+    if (!speaking && queue.length && now > pauseUntil && !(o.busy && o.busy()) && !window.fftHostLive) {
       const line = queue[0];
       // wait (up to 14 s) for the robot's voice, then show it with or without sound
       if (!(line.voice === 'wait' && now - (line.vt || line.t) < 14000)) {
@@ -328,7 +329,7 @@ export function liveChat(o) {
     }
     // ask for likes, subscribes and comments now and then (more often when the chat is quiet)
     const gap = o.alwaysOn ? (now - lastMsg > 30000 ? 14000 : 30000) : now - lastMsg > 60000 ? 50000 : 80000;
-    if (cfg.idle && cfg.robot && !speaking && !queue.length && now - lastPromo > gap) {
+    if (cfg.idle && cfg.robot && !speaking && !queue.length && now - lastPromo > gap && !window.fftHostLive) {
       lastPromo = now;
       const live = o.idleLine && Math.random() < 0.6 ? o.idleLine() : null;   // the game's own news (e.g. chat standings)
       say(live || pick(o.idleLines.concat(PROMO)), 0);

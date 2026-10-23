@@ -37,4 +37,5 @@ require APP_DIR . '/youtube.php';
 require APP_DIR . '/chat.php';
 require APP_DIR . '/robot.php';
 require APP_DIR . '/ai.php';
+require APP_DIR . '/golive.php';
 require APP_DIR . '/insights.php';
