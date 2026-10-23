@@ -470,7 +470,7 @@ function yt_tick(int $serverId): void
         db()->prepare('UPDATE streams SET yt_find_at = ? WHERE id = ?')->execute([$now, $s['id']]);
         try {
             $tok = yt_token($s);
-            $video = yt_find_video($s, $tok, $now - (int) $s['started_at'] > 70);
+            $video = yt_find_video($s, $tok, $now - (int) $s['started_at'] > 50);
             // found or opened it: make sure it really goes live right away (not a minute later)
             if ($video !== '') { $s['yt_video'] = $video; if (yt_kick($s, $tok)) setting_set('yt_kick_' . $s['id'], json_encode(['start' => (int) $s['started_at'], 'done' => true, 'tries' => 1, 'at' => $now])); }
         } catch (Throwable $e) {
@@ -481,11 +481,11 @@ function yt_tick(int $serverId): void
     // video arrives (it happens when the next live starts right after the last one on the same key): start it.
     $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_refresh != '' AND yt_video != ''
                          AND yt_video_start = COALESCE(started_at, 0) AND started_at < ?");
-    $st->execute([$serverId, $now - 60]);
+    $st->execute([$serverId, $now - 40]);
     foreach ($st->fetchAll() as $s) {
         $k = json_decode((string) (setting_get('yt_kick_' . $s['id']) ?? ''), true) ?: [];
         if (($k['start'] ?? 0) !== (int) $s['started_at']) $k = ['start' => (int) $s['started_at'], 'done' => false, 'tries' => 0, 'at' => 0];
-        if ($k['done'] || $k['tries'] >= 12 || $k['at'] > $now - 60) continue;
+        if ($k['done'] || $k['tries'] >= 16 || $k['at'] > $now - 30) continue;   // every 30 s for the first ~8 minutes
         $k['tries']++; $k['at'] = $now;
         try { $k['done'] = yt_kick($s, yt_token($s)); } catch (Throwable $e) { /* again in a minute */ }
         setting_set('yt_kick_' . $s['id'], json_encode($k));
