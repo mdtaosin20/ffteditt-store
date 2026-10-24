@@ -124,6 +124,9 @@ async function main() {
   let teams = [], alive = new Set(), out = [], balls = [], shield = new Map(), revived = new Set(), revLeft = cfg.revives;
   let power = new Map();                 // country -> chats this round (CHAT POWER)
   let prog = new Map();                  // country -> chats towards the next shield / revive
+  let heat = new Map();                  // country -> { h, t }: how much it chats right now (fades in about half a minute)
+  const support = { order: [], page: 0, at: 0, flip: false };
+  const SUPPORT_SECS = 4, SUPPORT_MAX = 15;
   let got = new Set();                   // countries that already got a shield / revive this round (their bar turns red)
   let fans = new Map();                  // country -> Map(name -> chats)
   let phase = 'play', phaseT = 0, simT = 0, toNext = 10, openLeft = 0, falling = [], doubleNext = false, holdUntil = 0, speedUntil = 0;
@@ -159,7 +162,7 @@ async function main() {
     S.carry = Object.assign(S.carry || {}, Object.fromEntries(shield));
     teams = chooseTeams(); alive = new Set(teams); out = []; balls = []; shield = new Map(); revived = new Set(); revLeft = cfg.revives;
     for (const c of teams) if (S.carry[c] !== undefined) { shield.set(c, S.carry[c]); delete S.carry[c]; }
-    power = new Map(); prog = new Map(); got = new Set(); fans = new Map(); tags.clear();
+    power = new Map(); prog = new Map(); got = new Set(); heat = new Map(); support.order = []; support.page = 0; fans = new Map(); tags.clear();
     phase = 'play'; phaseT = 0; simT = 0; toNext = 8; openLeft = 0; falling = []; doubleNext = false; holdUntil = 0; speedUntil = 0; final10 = false; finalSaid = false;
     likeGoal = 0; viewGoal = cfg.viewers; nextEvent = 240 + Math.random() * 120;
     for (const c of shuffle(teams.slice())) { const [x, y] = freeSpot(); balls.push(ball(c, x, y)); }
@@ -267,6 +270,7 @@ async function main() {
     if (!teams.includes(code)) { want(); return; }
     if (phase !== 'play') { if (!alive.has(code)) want(); return; }
     power.set(code, (power.get(code) || 0) + 1);
+    { const now = performance.now() / 1000, h = heat.get(code); heat.set(code, { h: (h ? h.h * Math.exp(-(now - h.t) / 30) : 0) + 1, t: now }); }
     addFan(code, name);
     prog.set(code, (prog.get(code) || 0) + 1);
     const b = balls.find((x) => x.code === code);
@@ -588,9 +592,25 @@ async function main() {
   const updateUI = () => {
     $('round').textContent = `ROUND ${S.round} · LIVE 24/7`;
     $('n-all').textContent = COUNT; $('n-left').textContent = alive.size;
-    const top = [...power.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
-    $('power-rows').innerHTML = top.length
-      ? top.map(([code, n], i) => {
+    // CHAT SUPPORT: every country that chatted this round, the ones chatting NOW first (quiet ones sink),
+    // 3 at a time; the panel turns to the next 3 every few seconds and starts again at the top
+    const nowS = performance.now() / 1000;
+    if (!support.order.length || nowS - support.at >= SUPPORT_SECS) {
+      support.page++;
+      if (support.page * 3 >= support.order.length) {
+        const hot = (c) => { const x = heat.get(c); return x ? x.h * Math.exp(-(nowS - x.t) / 30) : 0; };
+        support.order = [...power.keys()].sort((a, b) => (hot(b) - hot(a)) || (power.get(b) - power.get(a))).slice(0, SUPPORT_MAX);
+        support.page = 0;
+      }
+      support.at = nowS; support.flip = support.order.length > 3;
+    }
+    const pages = Math.ceil(support.order.length / 3);
+    $('power-pg').textContent = pages > 1 ? `${support.page * 3 + 1}–${Math.min(support.order.length, support.page * 3 + 3)} / ${support.order.length}` : '';
+    const top = support.order.slice(support.page * 3, support.page * 3 + 3).map((c) => [c, power.get(c) || 0]);
+    const rowsEl = $('power-rows');
+    if (support.flip) { support.flip = false; rowsEl.classList.remove('flip'); void rowsEl.offsetWidth; rowsEl.classList.add('flip'); }
+    rowsEl.innerHTML = top.length
+      ? top.map(([code, n], j) => { const i = support.page * 3 + j;
         // the total never goes down; the bar under it is the chats towards the next shield (or revive when out)
         const isOut = !alive.has(code), need = isOut ? cfg.revive : cfg.shield, have = Math.min(need, prog.get(code) || 0);
         const kind = isOut ? 'out' : got.has(code) ? 'used' : 's';

@@ -47,8 +47,12 @@ body { position: fixed; inset: 0; overflow: clip; }
 .panel { position: absolute; top: 216px; width: 334px; height: 178px; padding: 8px 16px; border-radius: 18px; background: rgba(8, 12, 30, .9); }
 .panel h3 { font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: 2px; }
 .power { left: 22px; border: 3px solid var(--gold); box-shadow: 0 0 24px rgba(255, 201, 58, .25); }
-.power h3 { color: var(--gold); font-size: 24px; line-height: 1.15; margin: 0 0 2px; }
-.prow { margin-top: 7px; }
+.power h3 { color: var(--gold); font-size: 22px; letter-spacing: 1px; line-height: 1.15; margin: 0 0 2px; }
+.prow { margin-top: 6px; }
+.power { overflow: hidden; }
+.power-pg { position: absolute; right: 12px; top: 14px; font-size: 13px; font-weight: 700; color: var(--gold); opacity: .85; font-variant-numeric: tabular-nums; }
+#power-rows.flip { animation: pflip .45s ease-out; }
+@keyframes pflip { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 #power-rows .prow:first-child { margin-top: 2px; }
 .prow .top { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 700; white-space: nowrap; line-height: 1; }
 .prow .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
