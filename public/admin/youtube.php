@@ -83,6 +83,11 @@ page_start('YouTube Manager', 'youtube', $admin);
 </section>
 
 <section class="panel">
+  <div class="ph"><h2>📊 YouTube daily limit</h2></div>
+  <?= yt_units_box() ?>
+</section>
+
+<section class="panel">
   <div class="ph"><h2><?= icon('youtube') ?>Live title, description &amp; thumbnail</h2>
     <?= $ready ? '<span class="tag tag-green">Google keys saved</span>' : '<span class="tag tag-orange">Setup needed</span>' ?></div>
   <p class="muted small">Connect a channel once. After that, every time the stream goes live, the panel puts your title, description and thumbnail on the live video by itself (about 1 minute after it starts).</p>

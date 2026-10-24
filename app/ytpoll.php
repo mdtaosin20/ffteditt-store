@@ -98,7 +98,7 @@ function ytp_error(array $r): string
     if ($reason === 'preconditionCheckFailed' || stripos((string) ($r[1]['error']['message'] ?? ''), 'active poll') !== false) {
         return 'A poll is already running in this live. End it first (button "End poll"), or end it in YouTube Studio.';
     }
-    if ($reason === 'quotaExceeded') return 'YouTube\'s daily limit is used up. It works again after about 1–2 PM Bangladesh time.';
+    if ($reason === 'quotaExceeded' || $reason === 'dailyLimitExceeded') return 'YouTube\'s daily limit is used up. It works again after about 1–2 PM Bangladesh time.';
     if ($reason === 'liveChatEnded' || $reason === 'liveChatNotFound' || $reason === 'liveChatDisabled') return 'The live chat of this live is closed or turned off.';
     if (in_array($reason, ['forbidden', 'insufficientPermissions'], true)) return 'YouTube did not allow it. Press "Connect YouTube" again for this channel in YouTube Manager.';
     return yt_err($r);

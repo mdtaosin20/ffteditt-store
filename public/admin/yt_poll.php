@@ -120,6 +120,7 @@ $hid = static fn () => csrf_field() . '<input type="hidden" name="s" value="' . 
       <?php endforeach; ?>
     </select></label>
   <?php if ($cur && !$cur[1]): ?><p class="muted small" style="margin-top:8px">⚠️ This live is <?= e($cur[2]) ?>.</p><?php endif; ?>
+  <div style="margin-top:12px"><?= yt_units_box() ?></div>
   <?php if (!$lives): ?><p class="muted small" style="margin-top:8px">Start a live first. You can still write and save polls and messages below.</p><?php endif; ?>
 </section>
 

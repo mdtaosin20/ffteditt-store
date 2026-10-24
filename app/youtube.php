@@ -75,7 +75,80 @@ function yt_http(string $method, string $url, array $headers = [], ?string $body
         return [0, null, $err];
     }
     $j = json_decode((string) $raw, true);
+    yt_units_count($method, $url, $code, is_array($j) ? $j : null);
     return [$code, is_array($j) ? $j : null, (string) $raw];
+}
+
+/* ---------------------------------------------------------------- daily limit meter
+ * YouTube gives 10,000 "units" a day for the whole panel (all channels), new each day at midnight
+ * in California (1–2 PM in Bangladesh). Every call is counted here so the panel can show what used them. */
+function yt_units_day(): string
+{
+    return (new DateTimeImmutable('now', new DateTimeZone('America/Los_Angeles')))->format('Y-m-d');
+}
+
+function yt_units_count(string $method, string $url, int $code, ?array $j): void
+{
+    if (!preg_match('#googleapis\.com/(upload/)?youtube/v3/([^?]+)|^https?://127\.0\.0\.1[^/]*/(upload/)?youtube/v3/([^?]+)#', $url, $m)) return;
+    $path = $m[2] !== '' ? $m[2] : ($m[4] ?? '');
+    $cost = 1;
+    if ($method === 'PUT' || ($method === 'POST' && preg_match('#^(liveBroadcasts|thumbnails/set|videos)#', $path))) $cost = 50;
+    if ($method === 'POST' && str_starts_with($path, 'liveChat/')) $cost = 20;
+    if ($path === 'search') $cost = 100;
+    $names = ['liveBroadcasts' => 'Find live video', 'liveStreams' => 'Find live video', 'liveBroadcasts/transition' => 'Press "Go live"',
+        'liveBroadcasts/bind' => 'Open new live video', 'videos' => $method === 'PUT' ? 'Set title & description' : 'Read video / likes & viewers',
+        'thumbnails/set' => 'Set thumbnail', 'subscriptions' => 'Check new subscribers', 'channels' => 'Channel name',
+        'liveChat/messages' => 'Poll / chat message', 'liveChat/messages/transition' => 'End poll'];
+    $name = $method === 'POST' && $path === 'liveBroadcasts' ? 'Open new live video' : ($names[$path] ?? $path);
+    $reason = (string) ($j['error']['errors'][0]['reason'] ?? '');
+    try {
+        $day = yt_units_day();
+        $u = json_decode((string) (setting_get('yt_units_' . $day) ?? ''), true) ?: ['total' => 0, 'by' => [], 'out_at' => 0];
+        if ($reason === 'quotaExceeded' || $reason === 'dailyLimitExceeded') {
+            if (empty($u['out_at'])) $u['out_at'] = time();
+        } else {
+            $u['total'] += $cost;
+            $u['by'][$name] = (int) ($u['by'][$name] ?? 0) + $cost;
+        }
+        setting_set('yt_units_' . $day, json_encode($u));
+    } catch (Throwable $e) {
+        // never break a YouTube call because of the meter
+    }
+}
+
+/** Today's use: ['total', 'by' => [name => units] (biggest first), 'out_at' (0 = not used up)]. */
+function yt_units_today(): array
+{
+    $u = json_decode((string) (setting_get('yt_units_' . yt_units_day()) ?? ''), true) ?: [];
+    $u = array_merge(['total' => 0, 'by' => [], 'out_at' => 0], $u);
+    arsort($u['by']);
+    return $u;
+}
+
+/** True when YouTube said today's limit is used up (then the panel stops asking until the new day). */
+function yt_units_out(): bool
+{
+    return !empty(yt_units_today()['out_at']);
+}
+
+/** A small box: how much of today's YouTube limit is used, and by what. */
+function yt_units_box(): string
+{
+    $u = yt_units_today();
+    $pc = min(100, (int) round($u['total'] / 100));
+    $col = $u['out_at'] || $pc >= 90 ? '#ef4444' : ($pc >= 70 ? '#f59e0b' : '#22c55e');
+    $h = '<div class="ytu" style="margin:6px 0 4px"><div style="display:flex;justify-content:space-between;gap:10px;font-weight:700"><span>YouTube daily limit used today</span><span>'
+        . number_format($u['total']) . ' / 10,000</span></div>'
+        . '<div style="height:10px;border-radius:6px;background:rgba(255,255,255,.1);overflow:hidden;margin:6px 0"><i style="display:block;height:100%;width:' . $pc . '%;background:' . $col . '"></i></div>';
+    if ($u['out_at']) $h .= '<p class="small" style="color:#f87171;margin:4px 0">Used up at ' . e(date('h:i A', (int) $u['out_at'])) . ' (Bangladesh time). It starts again at 1–2 PM Bangladesh time.</p>';
+    if ($u['by']) {
+        $h .= '<div class="small muted" style="display:grid;gap:2px">';
+        foreach (array_slice($u['by'], 0, 8, true) as $n => $v) $h .= '<div style="display:flex;justify-content:space-between"><span>' . e($n) . '</span><span>' . number_format((int) $v) . '</span></div>';
+        $h .= '</div>';
+    } else {
+        $h .= '<p class="small muted" style="margin:4px 0">Counting starts now — check again later to see what uses the limit.</p>';
+    }
+    return $h . '</div>';
 }
 
 function yt_err(array $r): string
@@ -436,6 +509,7 @@ function yt_apply(array $s): array
 
         db()->prepare('UPDATE streams SET yt_done_rev = yt_rev, yt_done_start = COALESCE(started_at, 0) WHERE id = ?')
             ->execute([$s['id']]);
+        setting_set('yt_done_video_' . $s['id'], $video);
         $msg = $note . ' (' . date('d M, h:i A') . ').';
         $mark->execute([$msg, 1, time(), $s['id']]);
         db()->prepare('UPDATE streams SET yt_fails = 0 WHERE id = ?')->execute([$s['id']]);
@@ -467,6 +541,7 @@ function yt_tick(int $serverId): void
     foreach ($st->fetchAll() as $s) {
         // first 10 minutes: look every minute; after that every 5 minutes (saves the daily YouTube limit)
         if ($now - (int) $s['started_at'] > 600 && (int) $s['yt_find_at'] > $now - 300) continue;
+        if (yt_units_out()) continue;
         db()->prepare('UPDATE streams SET yt_find_at = ? WHERE id = ?')->execute([$now, $s['id']]);
         try {
             $tok = yt_token($s);
@@ -485,7 +560,7 @@ function yt_tick(int $serverId): void
     foreach ($st->fetchAll() as $s) {
         $k = json_decode((string) (setting_get('yt_kick_' . $s['id']) ?? ''), true) ?: [];
         if (($k['start'] ?? 0) !== (int) $s['started_at']) $k = ['start' => (int) $s['started_at'], 'done' => false, 'tries' => 0, 'at' => 0];
-        if ($k['done'] || $k['tries'] >= 16 || $k['at'] > $now - 30) continue;   // every 30 s for the first ~8 minutes
+        if ($k['done'] || $k['tries'] >= 16 || $k['at'] > $now - 30 || yt_units_out()) continue;   // every 30 s for the first ~8 minutes
         $k['tries']++; $k['at'] = $now;
         try { $k['done'] = yt_kick($s, yt_token($s)); } catch (Throwable $e) { /* again in a minute */ }
         setting_set('yt_kick_' . $s['id'], json_encode($k));
@@ -497,6 +572,14 @@ function yt_tick(int $serverId): void
                          AND COALESCE(started_at, 0) > 0 AND started_at < ? AND yt_try_at < ?");
     $st->execute([$serverId, $now - 60, $now - 180]);
     foreach ($st->fetchAll() as $s) {
+        // the stream only reconnected (e.g. after a short drop) and is still on the same live video, which already has
+        // this title and thumbnail: nothing to send again (saves ~100 units for every reconnect)
+        if ($s['yt_video'] !== '' && (int) $s['yt_video_start'] === (int) $s['started_at'] && (int) $s['yt_done_rev'] === (int) $s['yt_rev']
+            && (string) (setting_get('yt_done_video_' . $s['id']) ?? '') === $s['yt_video']) {
+            db()->prepare('UPDATE streams SET yt_done_start = COALESCE(started_at, 0) WHERE id = ?')->execute([$s['id']]);
+            continue;
+        }
+        if (yt_units_out()) continue;
         // claim it first so two check-ins never do the same job
         $c = db()->prepare('UPDATE streams SET yt_try_at = ? WHERE id = ? AND yt_try_at = ?');
         $c->execute([$now, $s['id'], $s['yt_try_at']]);
@@ -520,7 +603,7 @@ function yt_stats_tick(int $serverId): void
     $now = time();
     // One shared check for ALL live videos (1 unit for up to 50 videos), not one per video.
     $last = (int) (setting_get('yt_stats_all_at') ?? 0);
-    if ($last > $now - 60) return;
+    if ($last > $now - 120 || yt_units_out()) return;   // every 2 minutes (720 units a day)
     $st = db()->query("SELECT * FROM streams WHERE status = 'live' AND yt_refresh != '' AND yt_video != ''
                        AND yt_video_start = COALESCE(started_at, 0) ORDER BY id");
     $list = $st->fetchAll();
@@ -563,7 +646,7 @@ function yt_subscribers_tick(int $serverId): void
     }
     foreach ($byChannel as $key => $list) {
         $last = (int) (setting_get('yt_sub_at_' . $key) ?? 0);
-        if ($last > $now - 120) continue;
+        if ($last > $now - 180 || yt_units_out()) continue;   // every 3 minutes per channel (480 units a day)
         setting_set('yt_sub_at_' . $key, (string) $now);
         try {
             $r = yt_get(yt_token($list[0]), 'subscriptions', ['part' => 'subscriberSnippet', 'myRecentSubscribers' => 'true', 'maxResults' => 20]);
@@ -610,6 +693,13 @@ function yt_kick(array $s, string $tok): bool
     if ($sid === '') return false;
     $r = yt_get($tok, 'liveStreams', ['part' => 'id,status', 'id' => $sid]);
     if ($r[0] !== 200 || (($r[1]['items'][0]['status']['streamStatus'] ?? '') !== 'active')) return false;
+    // "Go live" costs 50 units: at most 4 presses per live session (a stuck live would otherwise use the whole day's limit)
+    $gk = 'yt_go_' . (int) $s['id'];
+    $g = json_decode((string) (setting_get($gk) ?? ''), true) ?: [];
+    if (($g['start'] ?? 0) !== (int) $s['started_at']) $g = ['start' => (int) $s['started_at'], 'n' => 0];
+    if ($g['n'] >= 4) return true;
+    $g['n'] += $life === 'ready' ? 2 : 1;
+    setting_set($gk, json_encode($g));
     $go = fn (string $to) => yt_http('POST', YT_API . 'liveBroadcasts/transition?' . http_build_query(['broadcastStatus' => $to, 'id' => $video, 'part' => 'id,status']),
         ['Authorization: Bearer ' . $tok, 'Content-Length: 0'], '');
     $r = $go('live');
