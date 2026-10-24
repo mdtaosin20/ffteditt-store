@@ -20,7 +20,7 @@ body { position: fixed; inset: 0; overflow: clip; }
               radial-gradient(45% 28% at 88% 42%, rgba(255, 40, 60, .28), transparent 70%),
               radial-gradient(50% 25% at 50% 40%, rgba(34, 211, 238, .12), transparent 70%), #060814;
 }
-.flag { background-image: url("/flags/flags.png"); background-repeat: no-repeat; display: inline-block; flex: 0 0 auto; border-radius: 3px; vertical-align: middle; }
+.flag { background-image: url("/flags/flags.png?v=2"); background-repeat: no-repeat; display: inline-block; flex: 0 0 auto; border-radius: 3px; vertical-align: middle; }
 
 /* ---------- header ---------- */
 .top .brand { position: absolute; left: 30px; top: 108px; }

@@ -30,7 +30,7 @@ const ALIAS = {
   gb: ['uk', 'united kingdom', 'england', 'britain', 'great britain', 'scotland', 'wales'], ae: ['uae', 'emirates', 'dubai'],
   sa: ['saudi', 'ksa', 'saudi arabia', 'arabia', 'সৌদি'], tr: ['turkey', 'turkiye', 'türkiye', 'turkish'], br: ['brazil', 'brasil', 'bra'],
   ar: ['argentina', 'arg'], de: ['germany', 'deutschland', 'ger'], fr: ['france', 'fra'], es: ['spain', 'espana', 'españa'],
-  pt: ['portugal', 'por'], nl: ['netherlands', 'holland'], kr: ['south korea', 'korea'], kp: ['north korea'],
+  pt: ['portugal', 'por'], nl: ['netherlands', 'holland'], kr: ['south korea', 'korea'], kp: ['north korea'], xk: ['kosovo', 'kosova'],
   ru: ['russia', 'rus'], cn: ['china', 'chn'], jp: ['japan', 'jpn'], id: ['indonesia', 'indo'], my: ['malaysia'],
   ps: ['palestine', 'free palestine', 'ফিলিস্তিন'], ir: ['iran'], iq: ['iraq'], af: ['afghanistan', 'afg'], np: ['nepal', 'nepali', 'নেপাল'],
   lk: ['sri lanka', 'srilanka'], eg: ['egypt', 'masr'], ma: ['morocco', 'maroc', 'marocco', 'maghrib', 'maroko'], dz: ['algeria'], ng: ['nigeria', 'naija'],

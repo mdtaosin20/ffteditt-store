@@ -5,7 +5,7 @@
 // subscriber gives a free shield, a Super Chat gives both. Likes and viewers unlock goals for everyone.
 // The last flag left is the round champion, then a new round starts (about an hour a round).
 import { Sfx, holdScreen, PACE, reporter, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=20';
+import { liveChat, countryMatcher } from '/game/chat.js?v=21';
 import { goLive } from '/game/golive.js?v=1';
 import { Music, SongPlayer } from '/game/music.js?v=2';
 import { autoUpdate } from '/game/update.js?v=1';
@@ -82,13 +82,13 @@ class ArenaSfx extends Sfx {
 
 async function main() {
   fitStage(); addEventListener('resize', fitStage);
-  const [remote, atlasInfo] = await Promise.all([fetchConfig(), fetch('/flags/flags.json').then((r) => r.json())]);
+  const [remote, atlasInfo] = await Promise.all([fetchConfig(), fetch('/flags/flags.json?v=2').then((r) => r.json())]);
   const cfg = { ...DEF, ...(remote || {}) };
   let popular = Array.isArray(cfg.popular) ? cfg.popular : [];   // [[code, people]] from the panel (last 7 days)
   if (cfg.autoplay === false) { holdScreen('/api/flags.php', cfg.rev); return; }
   const pace = PACE[cfg.pace] || 1;
   const demo = QS.has('chatdemo');
-  const atlas = new Image(); atlas.src = '/flags/flags.png';
+  const atlas = new Image(); atlas.src = '/flags/flags.png?v=2';
   await atlas.decode().catch(() => {});
 
   const C = atlasInfo.countries, FW = atlasInfo.w, FH = atlasInfo.h, COLS_A = atlasInfo.cols, ROWS_A = Math.ceil(C.length / COLS_A);
