@@ -28,6 +28,7 @@ const PLAIN = { sa: ['#006c35', 'KSA'], af: ['#007a36', 'AFG'], iq: ['#ce1126', 
 const W = 1080, H = 990;                 // canvas size (stage y 540 … 1530 — everything sits 90px lower so YouTube's name bar on phones does not cover the title) — the arena fills the width
 const CX = 540, CY = 492, RW = 474;      // arena centre and inner wall radius
 const HOLE = 54;                         // black centre of the hole when fully open (about a flag)
+const TOUCH = 14;                        // how far (px) a flag must reach into the black hole to be caught
 const RING = 132;                        // the pink ring around it (flags roll over it)
 // Like the arena games on YouTube: the hole is closed ~4.4 s, then its iris turns open (0.4 s),
 // stays open 0.8 s and closes (0.4 s) — about every 6 seconds. A flag over the open hole falls in.
@@ -317,8 +318,9 @@ async function main() {
   let tookOne = false, shakeT = 0;
   const catchFlags = () => { // the hole is open: flags over it fall in (a shield bounces its flag out instead)
     if (tookOne) return;
-    // a flag that just TOUCHES the open black hole is caught (its edge meets the hole's edge)
-    const near = balls.filter((b) => !b.gone && holeNow() > 4 && Math.hypot(b.x - CX, b.y - CY) <= holeNow() + R)
+    // a flag is caught when it is clearly ON the open black hole (its edge reaches TOUCH px into the black),
+    // so on a phone everyone can see it touched — a flag only passing close by is not taken
+    const near = balls.filter((b) => !b.gone && holeNow() > 4 && Math.hypot(b.x - CX, b.y - CY) <= holeNow() + R - TOUCH)
       .sort((p, q) => Math.hypot(p.x - CX, p.y - CY) - Math.hypot(q.x - CX, q.y - CY));
     // The shield breaks ONLY when its flag is really the one going down: it stays on through every
     // other opening, and when the hole would take its flag, the shield breaks instead and the flag is thrown out.
@@ -530,8 +532,9 @@ async function main() {
       c.beginPath(); c.arc(CX, CY, RING - 4, a0, a1); c.arc(CX, CY, inner, a1 + irisO * 0.6, a0 + irisO * 0.6, true); c.closePath(); c.fill();
     }
     if (irisO > 0.02) {
-      const hg = c.createRadialGradient(CX, CY, 2, CX, CY, inner + 6); hg.addColorStop(0, '#000'); hg.addColorStop(0.8, '#05000a'); hg.addColorStop(1, 'rgba(0,0,0,0)');
-      c.fillStyle = hg; c.beginPath(); c.arc(CX, CY, inner + 6, 0, 7); c.fill();
+      // solid black right up to the edge that counts (no soft fade), with a thin pink rim so the edge is easy to see
+      c.fillStyle = '#000'; c.beginPath(); c.arc(CX, CY, inner, 0, 7); c.fill();
+      c.lineWidth = 3; c.strokeStyle = `rgba(255,79,216,${Math.min(1, irisO) * 0.9})`; c.beginPath(); c.arc(CX, CY, inner, 0, 7); c.stroke();
     }
     c.lineWidth = 6; c.strokeStyle = lock ? '#22d3ee' : open ? '#ff4fd8' : '#f5c33b';
     c.shadowColor = c.strokeStyle; c.shadowBlur = open ? 26 : 10; c.beginPath(); c.arc(CX, CY, RING, 0, 7); c.stroke(); c.shadowBlur = 0;
