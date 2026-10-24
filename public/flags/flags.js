@@ -247,7 +247,7 @@ async function main() {
       if ((!NOLIMIT && revLeft <= 0) || alive.size <= 2) return 'NO REVIVES LEFT THIS ROUND — CHEER FOR IT NEXT ROUND!';
       return `IT IS OUT! ${Math.max(0, cfg.revive - (prog.get(code) || 0))} MORE CHATS AND IT COMES BACK!`;
     }
-    if (shield.has(code)) return 'IT HAS A SHIELD — SAFE FOR THE NEXT DRAW!';
+    if (shield.has(code)) return 'IT HAS A SHIELD — IF THE HOLE TAKES IT, THE SHIELD BREAKS AND IT STAYS IN!';
     return `${Math.max(0, cfg.shield - (prog.get(code) || 0))} MORE CHATS FOR A SHIELD!`;
   };
 
@@ -257,7 +257,7 @@ async function main() {
     game: 'flags', rows: 3, alwaysOn: true,
     aiInfo: (code) => `Game: FLAG ARENA — ${teams.length} country flags bounce in a round arena; the black hole in the middle opens every ${cfg.gap} seconds and a flag that falls in is OUT; the last flag left wins the round, then a new round starts. `
       + `Now: ${alive.size} of ${teams.length} left. ` + (code ? `The viewer's country ${NAME(code)}: ${statusLine(code)} ` : '')
-      + `Rules: type your country in chat to boost it; ${cfg.shield} chats = a SHIELD (safe from the next hole); ${cfg.revive} chats bring an OUT country back${NOLIMIT ? ' (no limit)' : ''}; subscribe = free shield; Super Chat = shield and revive; countries not in this round join the next round.`,
+      + `Rules: type your country in chat to boost it; ${cfg.shield} chats = a SHIELD (it stays on until the hole would take the flag; then the shield breaks and the flag stays in); ${cfg.revive} chats bring an OUT country back${NOLIMIT ? ' (no limit)' : ''}; subscribe = free shield; Super Chat = shield and revive; countries not in this round join the next round.`,
     match: countryMatcher(C),
     badge: (code) => flagNode(code, 32),
     duck: duckAll,
@@ -315,20 +315,22 @@ async function main() {
     if (tookOne) return;
     const near = balls.filter((b) => !b.gone && Math.hypot(b.x - CX, b.y - CY) <= holeNow())
       .sort((p, q) => Math.hypot(p.x - CX, p.y - CY) - Math.hypot(q.x - CX, q.y - CY));
-    for (const b of near) {
-      if (shield.has(b.code)) {
-        shield.delete(b.code);
-        popAt('shd', b.code, 'SHIELD SAVED', NAME(b.code), b.x, b.y - 70);
-        host(['THE SHIELD SAVED ', { node: flagNode(b.code) }, NAME(b.code) + '! TYPE IT AGAIN FOR A NEW SHIELD!'], 2);
-        const a = Math.random() * Math.PI * 2; b.x = CX + Math.cos(a) * (HOLE + R + 6); b.y = CY + Math.sin(a) * (HOLE + R + 6);
-        b.vx = Math.cos(a) * SPEED * 1.6; b.vy = Math.sin(a) * SPEED * 1.6;
-        continue;
-      }
-      if (alive.size - falling.length <= 1) return;   // never take the last flag
-      b.gone = true; falling.push({ b, t: 0, x0: b.x, y0: b.y });
-      sfx.draw(); tookOne = true;
+    // The shield breaks ONLY when its flag is really the one going down: it stays on through every
+    // other opening, and when the hole would take its flag, the shield breaks instead and the flag is thrown out.
+    const b = near[0];
+    if (!b) return;
+    if (shield.has(b.code)) {
+      shield.delete(b.code);
+      popAt('shd', b.code, 'SHIELD BROKE — SAVED!', NAME(b.code), b.x, b.y - 70);
+      host(['THE SHIELD SAVED ', { node: flagNode(b.code) }, NAME(b.code) + '! IT BROKE, BUT THE FLAG LIVES — TYPE IT AGAIN FOR A NEW SHIELD!'], 2);
+      const a = Math.random() * Math.PI * 2; b.x = CX + Math.cos(a) * (HOLE + R + 6); b.y = CY + Math.sin(a) * (HOLE + R + 6);
+      b.vx = Math.cos(a) * SPEED * 1.6; b.vy = Math.sin(a) * SPEED * 1.6;
+      sfx.shield(); shakeT = 0.15; tookOne = true;   // this opening is used up: the shield took the hit
       return;
     }
+    if (alive.size - falling.length <= 1) return;   // never take the last flag
+    b.gone = true; falling.push({ b, t: 0, x0: b.x, y0: b.y });
+    sfx.draw(); tookOne = true;
   };
 
   const eliminate = (b) => {
