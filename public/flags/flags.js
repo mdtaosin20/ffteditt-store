@@ -262,8 +262,10 @@ async function main() {
   }, 60000);
   const onFan = (code, name, author) => {
     tally(code, author);
-    if (phase !== 'play') return;
-    if (!teams.includes(code)) { S.want[code] = (S.want[code] || 0) + 1; return; }
+    // a country that is not in this round joins the next one (also when it is asked for between rounds)
+    const want = () => { S.want[code] = (S.want[code] || 0) + 1; };
+    if (!teams.includes(code)) { want(); return; }
+    if (phase !== 'play') { if (!alive.has(code)) want(); return; }
     power.set(code, (power.get(code) || 0) + 1);
     addFan(code, name);
     prog.set(code, (prog.get(code) || 0) + 1);
