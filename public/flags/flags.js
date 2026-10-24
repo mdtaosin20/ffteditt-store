@@ -31,7 +31,7 @@ const HOLE = 40;                         // black centre of the hole when fully 
 const RING = 132;                        // the pink ring around it (flags roll over it)
 // Like the arena games on YouTube: the hole is closed ~4.4 s, then its iris turns open (0.4 s),
 // stays open 0.8 s and closes (0.4 s) — about every 6 seconds. A flag over the open hole falls in.
-const OPEN = 1.2, OPEN_IN = 0.35;      // the iris opens (0.35 s), stays open, closes (0.35 s)
+const OPEN = 3.0, OPEN_IN = 0.35;      // the iris opens (0.35 s), stays open up to 3 s, closes (0.35 s) — or closes at once when it takes a flag
 const openness = (left) => { const t = OPEN - left; return t < OPEN_IN ? t / OPEN_IN : left < OPEN_IN ? left / OPEN_IN : 1; };
 const BAR_LEN = 172, BAR_W = 11, BARS = 6, BAR_TILT = 0.32;   // six bars fixed to the wall, turning with it
 const FIXED = 1 / 120;
@@ -329,11 +329,13 @@ async function main() {
       const a = Math.random() * Math.PI * 2; b.x = CX + Math.cos(a) * (HOLE + R + 6); b.y = CY + Math.sin(a) * (HOLE + R + 6);
       b.vx = Math.cos(a) * SPEED * 1.6; b.vy = Math.sin(a) * SPEED * 1.6;
       sfx.shield(); shakeT = 0.15; tookOne = true;   // this opening is used up: the shield took the hit
+      openLeft = Math.min(openLeft, OPEN_IN);        // …and the hole closes at once
       return;
     }
     if (alive.size - falling.length <= 1) return;   // never take the last flag
     b.gone = true; falling.push({ b, t: 0, x0: b.x, y0: b.y });
     sfx.draw(); tookOne = true;
+    openLeft = Math.min(openLeft, DRAW_SECS + OPEN_IN);   // the hole closes right after swallowing it
   };
 
   const eliminate = (b) => {
@@ -595,7 +597,7 @@ async function main() {
   requestAnimationFrame(frame);
   autoUpdate('flags', save);
   goLive({ left: 40, top: 940, size: 230, duck: duckAll });   // the owner joins the live from a phone (Admin → Join Live)   // after a deploy: reload with the game where it was (no Restart needed)
-  window.__arena = { cfg, S, alive: () => alive, out: () => out, balls: () => balls, shield, phase: () => phase, simT: () => simT, toNext: () => toNext, onFan, revive, chat };
+  window.__arena = { open: () => openLeft, cfg, S, alive: () => alive, out: () => out, balls: () => balls, shield, phase: () => phase, simT: () => simT, toNext: () => toNext, onFan, revive, chat };
 }
 
 main();
