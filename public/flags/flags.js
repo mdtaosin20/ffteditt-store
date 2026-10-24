@@ -25,7 +25,7 @@ const CORE = ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'eg', 
 const PLAIN = { sa: ['#006c35', 'KSA'], af: ['#007a36', 'AFG'], iq: ['#ce1126', 'IRQ'] };
 
 /* ---------------------------------------------------------------- arena geometry (canvas units) */
-const W = 1080, H = 990;                 // canvas size (stage y 450 … 1440) — the arena fills the width
+const W = 1080, H = 990;                 // canvas size (stage y 540 … 1530 — everything sits 90px lower so YouTube's name bar on phones does not cover the title) — the arena fills the width
 const CX = 540, CY = 492, RW = 474;      // arena centre and inner wall radius
 const HOLE = 54;                         // black centre of the hole when fully open (about a flag)
 const RING = 132;                        // the pink ring around it (flags roll over it)
@@ -606,7 +606,7 @@ async function main() {
   };
   requestAnimationFrame(frame);
   autoUpdate('flags', save);
-  goLive({ left: 40, top: 940, size: 230, duck: duckAll });   // the owner joins the live from a phone (Admin → Join Live)   // after a deploy: reload with the game where it was (no Restart needed)
+  goLive({ left: 40, top: 1030, size: 230, duck: duckAll });   // the owner joins the live from a phone (Admin → Join Live)   // after a deploy: reload with the game where it was (no Restart needed)
   window.__arena = { open: () => openLeft, cfg, S, alive: () => alive, out: () => out, balls: () => balls, shield, phase: () => phase, simT: () => simT, toNext: () => toNext, onFan, revive, chat };
 }
 
