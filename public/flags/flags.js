@@ -27,7 +27,7 @@ const PLAIN = { sa: ['#006c35', 'KSA'], af: ['#007a36', 'AFG'], iq: ['#ce1126', 
 /* ---------------------------------------------------------------- arena geometry (canvas units) */
 const W = 1080, H = 990;                 // canvas size (stage y 450 … 1440) — the arena fills the width
 const CX = 540, CY = 492, RW = 474;      // arena centre and inner wall radius
-const HOLE = 40;                         // black centre of the hole when fully open (about a flag)
+const HOLE = 54;                         // black centre of the hole when fully open (about a flag)
 const RING = 132;                        // the pink ring around it (flags roll over it)
 // Like the arena games on YouTube: the hole is closed ~4.4 s, then its iris turns open (0.4 s),
 // stays open 0.8 s and closes (0.4 s) — about every 6 seconds. A flag over the open hole falls in.
@@ -106,7 +106,7 @@ async function main() {
   if (!S || S.reset !== cfg.reset || S.count !== COUNT) S = { reset: cfg.reset, count: COUNT, round: 0, want: {} };
   const save = () => {
     try {
-      S.live = phase === 'play' ? { teams, alive: [...alive], out, shield: [...shield.entries()], revived: [...revived], revLeft, toNext, power: [...power.entries()],
+      S.live = phase === 'play' ? { teams, alive: [...alive], out, shield: [...shield.entries()], revived: [...revived], revLeft, toNext, power: [...power.entries()], prog: [...prog.entries()], got: [...got],
         fans: [...fans.entries()].map(([k, m]) => [k, [...m.entries()].slice(0, 20)]), hold: Math.max(0, holdUntil - simT), likeGoal, viewGoal, t: simT } : null;
       localStorage.setItem(KEY, JSON.stringify(S));
     } catch (e) { /* ignore */ }
@@ -117,6 +117,7 @@ async function main() {
   let teams = [], alive = new Set(), out = [], balls = [], shield = new Map(), revived = new Set(), revLeft = cfg.revives;
   let power = new Map();                 // country -> chats this round (CHAT POWER)
   let prog = new Map();                  // country -> chats towards the next shield / revive
+  let got = new Set();                   // countries that already got a shield / revive this round (their bar turns red)
   let fans = new Map();                  // country -> Map(name -> chats)
   let phase = 'play', phaseT = 0, simT = 0, toNext = 10, openLeft = 0, falling = [], doubleNext = false, holdUntil = 0, speedUntil = 0;
   let likeGoal = 0, viewGoal = 0, lastStats = null, nextEvent = 0, barA = 0, final10 = false, finalSaid = false;
@@ -147,7 +148,7 @@ async function main() {
     S.carry = Object.assign(S.carry || {}, Object.fromEntries(shield));
     teams = chooseTeams(); alive = new Set(teams); out = []; balls = []; shield = new Map(); revived = new Set(); revLeft = cfg.revives;
     for (const c of teams) if (S.carry[c] !== undefined) { shield.set(c, S.carry[c]); delete S.carry[c]; }
-    power = new Map(); prog = new Map(); fans = new Map(); tags.clear();
+    power = new Map(); prog = new Map(); got = new Set(); fans = new Map(); tags.clear();
     phase = 'play'; phaseT = 0; simT = 0; toNext = 8; openLeft = 0; falling = []; doubleNext = false; holdUntil = 0; speedUntil = 0; final10 = false; finalSaid = false;
     likeGoal = 0; viewGoal = cfg.viewers; nextEvent = 240 + Math.random() * 120;
     for (const c of shuffle(teams.slice())) { const [x, y] = freeSpot(); balls.push(ball(c, x, y)); }
@@ -159,7 +160,7 @@ async function main() {
 
   const resume = (L) => {
     teams = L.teams; alive = new Set(L.alive); out = L.out; shield = new Map(L.shield); revived = new Set(L.revived); revLeft = L.revLeft;
-    toNext = L.toNext; power = new Map(L.power); fans = new Map(L.fans.map(([k, a]) => [k, new Map(a)])); holdUntil = L.hold; likeGoal = L.likeGoal; viewGoal = L.viewGoal;
+    toNext = L.toNext; power = new Map(L.power); prog = new Map(L.prog || []); got = new Set(L.got || []); fans = new Map(L.fans.map(([k, a]) => [k, new Map(a)])); holdUntil = L.hold; likeGoal = L.likeGoal; viewGoal = L.viewGoal;
     simT = 0; nextEvent = 120 + Math.random() * 120; final10 = alive.size <= 10; finalSaid = alive.size <= 2;
     balls = []; for (const c of alive) { const [x, y] = freeSpot(); balls.push(ball(c, x, y)); }
   };
@@ -241,8 +242,8 @@ async function main() {
     const b = balls.find((x) => x.code === code);
     if (b) b.hot = 3;
     tags.set(code, { name, until: simT + 6, kind: 'fan' });
-    if (alive.has(code) && !shield.has(code) && prog.get(code) >= cfg.shield) { prog.set(code, 0); giveShield(code, name, 'SHIELD ON'); }
-    else if (!alive.has(code) && prog.get(code) >= cfg.revive) { if (revive(code, name)) prog.set(code, 0); }
+    if (alive.has(code) && !shield.has(code) && prog.get(code) >= cfg.shield) { prog.set(code, 0); got.add(code); giveShield(code, name, 'SHIELD ON'); }
+    else if (!alive.has(code) && prog.get(code) >= cfg.revive) { if (revive(code, name)) { prog.set(code, 0); got.add(code); } }
   };
   const statusLine = (code) => {
     if (!teams.includes(code)) return `IT JOINS THE NEXT ROUND — KEEP COMMENTING ${NAME(code)}!`;
@@ -292,7 +293,7 @@ async function main() {
       if (code) return [{ node: flagNode(code) }, NAME(code) + ', ', { name }, '! ' + statusLine(code)];
       if (/who.*(win|lead)|winner|কে জিতবে/i.test(text)) {
         const top = [...power.entries()].filter(([k]) => alive.has(k)).sort((a, b) => b[1] - a[1])[0];
-        return top ? [{ node: flagNode(top[0]) }, NAME(top[0]) + ' HAS THE MOST CHAT POWER, ', { name }, '! TYPE YOURS TO BEAT IT!'] : null;
+        return top ? [{ node: flagNode(top[0]) }, NAME(top[0]) + ' HAS THE MOST CHATS, ', { name }, '! TYPE YOURS TO BEAT IT!'] : null;
       }
       if (isGreeting(text)) return [isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'HELLO AGAIN ', { name }, '! WHICH COUNTRY ARE YOU SAVING?'];
       return null;
@@ -557,7 +558,15 @@ async function main() {
     $('n-all').textContent = COUNT; $('n-left').textContent = alive.size;
     const top = [...power.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
     $('power-rows').innerHTML = top.length
-      ? top.map(([code, n], i) => `<div class="prow">${i + 1}. ${flagHTML(code, 40)}<span class="nm">${NAME(code)}</span><b>${n}</b></div>`).join('')
+      ? top.map(([code, n], i) => {
+        // the total never goes down; the bar under it is the chats towards the next shield (or revive when out)
+        const isOut = !alive.has(code), need = isOut ? cfg.revive : cfg.shield, have = Math.min(need, prog.get(code) || 0);
+        const kind = isOut ? 'out' : got.has(code) ? 'used' : 's';
+        const lbl = isOut ? `♻ ${have}/${need} OUT` : shield.has(code) && !got.has(code) ? '🛡 SHIELD ON'
+          : `🛡 ${have}/${need}` + (got.has(code) ? ` · ${need - have} MORE` : '');
+        return `<div class="prow ${kind}"><div class="top">${i + 1}. ${flagHTML(code, 30)}<span class="nm">${NAME(code)}</span><b>${n} 💬</b></div>`
+          + `<div class="bot"><span class="bar"><i style="width:${shield.has(code) && !got.has(code) && !isOut ? 100 : have / need * 100}%"></i></span><span class="lbl">${lbl}</span></div></div>`;
+      }).join('')
       : `<div class="prow empty">Type your country in chat — the top 3 show here!</div>`;
     $('rev-left').textContent = NOLIMIT ? '♾️ REVIVE: NO LIMIT' : `REVIVES LEFT ${revLeft}/${cfg.revives}`;
     $('grave').innerHTML = out.slice(-18).reverse().map((code) => `<span class="gf">${flagHTML(code, 52)}</span>`).join('');
