@@ -143,7 +143,10 @@ async function main() {
 
   const newRound = () => {
     S.round++;
+    // a shield is never lost unused: shields still on at the end of a round go with their country to its next round
+    S.carry = Object.assign(S.carry || {}, Object.fromEntries(shield));
     teams = chooseTeams(); alive = new Set(teams); out = []; balls = []; shield = new Map(); revived = new Set(); revLeft = cfg.revives;
+    for (const c of teams) if (S.carry[c] !== undefined) { shield.set(c, S.carry[c]); delete S.carry[c]; }
     power = new Map(); prog = new Map(); fans = new Map(); tags.clear();
     phase = 'play'; phaseT = 0; simT = 0; toNext = 8; openLeft = 0; falling = []; doubleNext = false; holdUntil = 0; speedUntil = 0; final10 = false; finalSaid = false;
     likeGoal = 0; viewGoal = cfg.viewers; nextEvent = 240 + Math.random() * 120;
@@ -536,7 +539,9 @@ async function main() {
     // names over shielded / cheered flags
     c.font = '700 20px Rajdhani, Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
     for (const b of balls) {
-      const t = tags.get(b.code); if (!t || t.until < simT || !t.name || b.gone) continue;
+      let t = tags.get(b.code);
+      if (!t || t.until < simT || !t.name) t = shield.has(b.code) ? { kind: 'shield', name: shield.get(b.code) || 'SHIELD' } : null;   // the shield label stays until the shield is used
+      if (!t || b.gone) continue;
       const label = (t.kind === 'shield' ? '🛡️ ' : t.kind === 'rev' ? '♻️ ' : '★ ') + t.name, tw = c.measureText(label).width + 18, y = b.y - R - 18;
       c.fillStyle = t.kind === 'shield' ? '#7dd3fc' : t.kind === 'rev' ? '#f9a8d4' : '#ffc93a'; c.beginPath(); c.roundRect(b.x - tw / 2, y - 14, tw, 28, 14); c.fill();
       c.fillStyle = '#10131f'; c.fillText(label, b.x, y + 1);
