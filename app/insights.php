@@ -219,5 +219,7 @@ function insights_report(array $in): string
     $L[] = '';
     $L[] = '== What the panel thinks';
     foreach ($in['tips'] as [$k, $t]) $L[] = '- [' . strtoupper($k) . '] ' . $t;
+    $ft = fans_top('flags', 7, 40);
+    if ($ft) $L[] = 'Flag Arena countries, last 7 days (people/chats): ' . implode(', ', array_map(fn ($r) => strtoupper($r[0]) . " {$r[2]}/{$r[1]}", $ft));
     return implode("\n", $L);
 }

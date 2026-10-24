@@ -89,6 +89,19 @@ page_start('Audience Insights', 'insights', $admin);
 </section>
 <?php endforeach; ?>
 
+<?php $ft = fans_top('flags', 7, 60); ?>
+<section class="card">
+  <h2>🌍 Which countries chat in Flag Arena (last 7 days)</h2>
+  <p class="muted small">Every new round uses: the 24 biggest countries + countries asked for in chat + the countries below (most people first) + the next biggest. Countries nobody types are left out.</p>
+  <?php if (!$ft): ?><p class="muted">No country typed yet.</p><?php else: ?>
+  <div class="tbl-wrap"><table class="tbl tbl-sm"><thead><tr><th>#</th><th>Country</th><th>People</th><th>Chats</th></tr></thead><tbody>
+    <?php foreach ($ft as $i => [$cc, $chats, $ppl]): ?>
+      <tr><td><?= $i + 1 ?></td><td><?= fans_emoji($cc) ?> <?= e(fans_name($cc)) ?></td><td><?= (int) $ppl ?></td><td><?= (int) $chats ?></td></tr>
+    <?php endforeach; ?>
+  </tbody></table></div>
+  <?php endif; ?>
+</section>
+
 <?php $vr = ytv_results(time() - 14 * 86400); if ($vr): ?>
 <section class="card">
   <h2>Which title &amp; thumbnail works best</h2>

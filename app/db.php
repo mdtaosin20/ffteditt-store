@@ -232,6 +232,15 @@ function migrate(PDO $pdo): void
             result    TEXT NOT NULL DEFAULT ''
         );
         CREATE INDEX IF NOT EXISTS idx_gifts ON gifts(stream_id, ts);
+
+        CREATE TABLE IF NOT EXISTS country_chat (
+            game  TEXT NOT NULL,
+            day   TEXT NOT NULL,
+            code  TEXT NOT NULL,
+            chats INTEGER NOT NULL DEFAULT 0,
+            fans  INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (game, day, code)
+        );
     ");
 }
 

@@ -18,7 +18,12 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 const DEF = { gap: 5, music: true, music_style: 'upbeat', music_vol: 35, title: 'FLAG ARENA', count: 64, minutes: 55, shield: 20, revive: 40, revives: 5, likes: 50, viewers: 100, events: true, rev: '', reset: '' };
-// countries that are always in a round (most viewers come from these)
+// the world's biggest countries, biggest first: the first BIG_ALWAYS are in every round, the rest fill up the free places
+const BIG = ['cn', 'in', 'us', 'id', 'pk', 'ng', 'br', 'bd', 'ru', 'mx', 'jp', 'et', 'ph', 'eg', 'vn', 'cd', 'ir', 'tr', 'de', 'th',
+  'gb', 'fr', 'it', 'za', 'tz', 'ke', 'kr', 'co', 'mm', 'es', 'ar', 'dz', 'sd', 'ug', 'iq', 'ca', 'pl', 'ma', 'af', 'ua',
+  'sa', 'uz', 'pe', 'my', 'ao', 'gh', 'mz', 'ye', 'np', 've', 'au', 'cm', 'ci', 'ne', 'lk', 'kz', 'cl', 'nl', 'ro', 'sy'];
+const BIG_ALWAYS = 24;
+// countries that were always in a round before (kept as a last fill)
 const CORE = ['bd', 'in', 'pk', 'us', 'br', 'ar', 'sa', 'tr', 'id', 'ng', 'eg', 'ma', 'my', 'np', 'ph', 'mx', 'gb', 'fr', 'de', 'ru',
   'cn', 'jp', 'ca', 'es', 'it', 'dz', 'iq', 'af', 'lk', 'vn', 'th', 'kr'];
 // flags with holy writing are shown as a plain colour ball (like in Territory War)
@@ -79,6 +84,7 @@ async function main() {
   fitStage(); addEventListener('resize', fitStage);
   const [remote, atlasInfo] = await Promise.all([fetchConfig(), fetch('/flags/flags.json').then((r) => r.json())]);
   const cfg = { ...DEF, ...(remote || {}) };
+  let popular = Array.isArray(cfg.popular) ? cfg.popular : [];   // [[code, people]] from the panel (last 7 days)
   if (cfg.autoplay === false) { holdScreen('/api/flags.php', cfg.rev); return; }
   const pace = PACE[cfg.pace] || 1;
   const demo = QS.has('chatdemo');
@@ -134,11 +140,15 @@ async function main() {
     const a = Math.random() * Math.PI * 2; return [CX + Math.cos(a) * (RW - R - 4), CY + Math.sin(a) * (RW - R - 4)];
   };
 
+  // Who is in the next round: the biggest countries, the countries asked for in chat this round, the countries whose
+  // people chatted here in the last 7 days (most people first), then the next biggest. Countries nobody types are left out.
   const chooseTeams = () => {
-    const want = Object.entries(S.want || {}).sort((a, b) => b[1] - a[1]).map(([k]) => k).filter((k) => byCode.has(k));
+    const want = Object.entries(S.want || {}).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+    const pop = popular.map((x) => x[0]);
     const list = [];
-    for (const c of [...CORE, ...want]) if (byCode.has(c) && !list.includes(c) && list.length < COUNT) list.push(c);
-    for (const c of shuffle(C.map((x) => x.code))) { if (list.length >= COUNT) break; if (!list.includes(c)) list.push(c); }
+    const add = (codes) => { for (const c of codes) { if (list.length >= COUNT) break; if (byCode.has(c) && !list.includes(c)) list.push(c); } };
+    add(BIG.slice(0, BIG_ALWAYS)); add(want); add(pop); add(BIG); add(CORE);
+    add(shuffle(C.map((x) => x.code)));   // only if still not full
     S.want = {};
     return list;
   };
@@ -234,7 +244,24 @@ async function main() {
     save(); updateUI();
     return true;
   };
-  const onFan = (code, name) => {
+  // tell the panel which countries the chat names (once a minute): chats and different people per country
+  const fanTally = new Map(), fanSeen = new Set();
+  let fanDay = new Date().toDateString();
+  const tally = (code, author) => {
+    if (new Date().toDateString() !== fanDay) { fanDay = new Date().toDateString(); fanSeen.clear(); }
+    const t = fanTally.get(code) || [0, 0]; t[0]++;
+    const k = code + '|' + (author || '');
+    if (author && !fanSeen.has(k)) { fanSeen.add(k); t[1]++; }
+    fanTally.set(code, t);
+  };
+  if (QS.get('stream') && QS.get('sig')) setInterval(() => {
+    if (!fanTally.size) return;
+    const c = Object.fromEntries(fanTally); fanTally.clear();
+    fetch('/api/fans.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ stream: Number(QS.get('stream')), sig: QS.get('sig'), game: 'flags', c }) }).catch(() => {});
+  }, 60000);
+  const onFan = (code, name, author) => {
+    tally(code, author);
     if (phase !== 'play') return;
     if (!teams.includes(code)) { S.want[code] = (S.want[code] || 0) + 1; return; }
     power.set(code, (power.get(code) || 0) + 1);
@@ -588,6 +615,7 @@ async function main() {
   setInterval(async () => {
     const n = await fetchConfig();
     if (!n) return;
+    if (Array.isArray(n.popular)) popular = n.popular;
     if (n.reset !== cfg.reset) { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } location.reload(); return; }
     if (n.rev !== cfg.rev) { save(); location.reload(); }
   }, 20000);
