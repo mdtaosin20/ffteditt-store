@@ -39,4 +39,5 @@ require APP_DIR . '/robot.php';
 require APP_DIR . '/ai.php';
 require APP_DIR . '/golive.php';
 require APP_DIR . '/ytvary.php';
+require APP_DIR . '/ytpoll.php';
 require APP_DIR . '/insights.php';

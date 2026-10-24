@@ -82,6 +82,7 @@ function nav_items(): array
         'schedule'  => ['Schedule Manager',    'schedule.php',  'calendar'],
         'youtube'   => ['YouTube Manager',     'youtube.php',   'youtube'],
         'golive'    => ['Join Live (camera)',  'golive.php',    'mic'],
+        'poll'      => ['Live Poll & Message', 'yt_poll.php',   'pie'],
         'insights'  => ['Audience Insights',   'insights.php',  'chart'],
         'activity'  => ['Logs & Alerts',       'activity.php',  'bell'],
         'site'      => ['Website',             'site.php',      'grid'],
