@@ -309,14 +309,15 @@ async function main() {
   }
 
   /* ---------------------------------------------------------------- the draw (black hole) */
-  // A flag falls when at least half of it is over the open black hole (its centre inside the hole).
+  // A flag is caught as soon as it touches the open black hole: a shield breaks, no shield = out.
   const holeNow = () => HOLE * (openLeft > OPEN ? 1 : openness(openLeft));
 
   // Only ONE flag falls each time the hole opens (the one nearest the middle), like the big arena channels.
   let tookOne = false, shakeT = 0;
   const catchFlags = () => { // the hole is open: flags over it fall in (a shield bounces its flag out instead)
     if (tookOne) return;
-    const near = balls.filter((b) => !b.gone && Math.hypot(b.x - CX, b.y - CY) <= holeNow())
+    // a flag that just TOUCHES the open black hole is caught (its edge meets the hole's edge)
+    const near = balls.filter((b) => !b.gone && holeNow() > 4 && Math.hypot(b.x - CX, b.y - CY) <= holeNow() + R)
       .sort((p, q) => Math.hypot(p.x - CX, p.y - CY) - Math.hypot(q.x - CX, q.y - CY));
     // The shield breaks ONLY when its flag is really the one going down: it stays on through every
     // other opening, and when the hole would take its flag, the shield breaks instead and the flag is thrown out.
@@ -326,7 +327,7 @@ async function main() {
       shield.delete(b.code);
       popAt('shd', b.code, 'SHIELD BROKE — SAVED!', NAME(b.code), b.x, b.y - 70);
       host(['THE SHIELD SAVED ', { node: flagNode(b.code) }, NAME(b.code) + '! IT BROKE, BUT THE FLAG LIVES — TYPE IT AGAIN FOR A NEW SHIELD!'], 2);
-      const a = Math.random() * Math.PI * 2; b.x = CX + Math.cos(a) * (HOLE + R + 6); b.y = CY + Math.sin(a) * (HOLE + R + 6);
+      const a = Math.random() * Math.PI * 2; b.x = CX + Math.cos(a) * (HOLE + R + 24); b.y = CY + Math.sin(a) * (HOLE + R + 24);
       b.vx = Math.cos(a) * SPEED * 1.6; b.vy = Math.sin(a) * SPEED * 1.6;
       sfx.shield(); shakeT = 0.15; tookOne = true;   // this opening is used up: the shield took the hit
       openLeft = Math.min(openLeft, OPEN_IN);        // …and the hole closes at once
