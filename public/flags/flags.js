@@ -17,7 +17,7 @@ const FAST = clamp(Number(QS.get('fast')) || 1, 1, 200);   // testing only
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-const DEF = { gap: 5, music: true, music_style: 'upbeat', music_vol: 35, title: 'FLAG ARENA', count: 64, minutes: 55, shield: 20, revive: 40, revives: 5, likes: 50, viewers: 100, events: true, rev: '', reset: '' };
+const DEF = { gap: 5, music: true, music_style: 'upbeat', music_vol: 35, title: 'FLAG ARENA', count: 64, minutes: 55, shield: 10, revive: 20, revives: 5, likes: 50, viewers: 100, events: true, rev: '', reset: '' };
 // the world's biggest countries, biggest first: the first BIG_ALWAYS are in every round, the rest fill up the free places
 const BIG = ['cn', 'in', 'us', 'id', 'pk', 'ng', 'br', 'bd', 'ru', 'mx', 'jp', 'et', 'ph', 'eg', 'vn', 'cd', 'ir', 'tr', 'de', 'th',
   'gb', 'fr', 'it', 'za', 'tz', 'ke', 'kr', 'co', 'mm', 'es', 'ar', 'dz', 'sd', 'ug', 'iq', 'ca', 'pl', 'ma', 'af', 'ua',
@@ -310,7 +310,7 @@ async function main() {
       if (!alive.has(code)) revive(code, name, true); else giveShield(code, name, 'SUPER CHAT SHIELD');
     },
     onStats: (st) => { lastStats = st; },
-    emptyHint: 'Type your country — 20 chats give it a SHIELD!',
+    emptyHint: `Type your country — ${cfg.shield} chats give it a SHIELD!`,
     hints: ['TYPE YOUR COUNTRY — ENOUGH CHATS GIVE IT A SHIELD!', 'LIKE IF YOU SEE YOUR COUNTRY FLAG!', 'SUBSCRIBE AND YOUR COUNTRY GETS A FREE SHIELD!'],
     idleLines: [
       [`TYPE YOUR COUNTRY IN CHAT! ${cfg.shield} CHATS GIVE IT A SHIELD AGAINST THE BLACK HOLE!`],

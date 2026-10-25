@@ -184,7 +184,7 @@ $hid = static fn () => csrf_field() . '<input type="hidden" name="s" value="' . 
     <?php if (!$saved['msgs']): ?><p class="muted small">No saved messages.</p><?php endif; ?>
     <?php foreach ($saved['msgs'] as $i => $m): ?>
       <div class="yp-item">
-        <div class="t"><pre><?= e($m) ?></pre></div>
+        <div class="t"><pre><?= e(ytp_fill($m)) ?></pre></div>
         <div class="act">
           <form method="post"><?= $hid() ?><input type="hidden" name="do" value="send_saved"><input type="hidden" name="i" value="<?= $i ?>">
             <button class="btn btn-blue btn-sm" type="submit" <?= $ok ? '' : 'disabled' ?>>➤ Send</button></form>

@@ -9,8 +9,8 @@ function flags_defaults(): array
         'count'    => 64,      // countries in one round
         'gap'      => 5,       // seconds between the black hole's openings (longer = longer rounds)
         'minutes'  => 55,      // (old setting, not used)
-        'shield'   => 20,      // chats for a country -> it gets a shield
-        'revive'   => 40,      // chats for a country that is out -> it comes back
+        'shield'   => 10,      // chats for a country -> it gets a shield
+        'revive'   => 20,      // chats for a country that is out -> it comes back
         'revives'  => 0,       // revives allowed in one round
         'likes'    => 50,      // every this many new likes: the hole closes for 30 s
         'viewers'  => 100,     // people watching reach this: top 3 chat countries get shields

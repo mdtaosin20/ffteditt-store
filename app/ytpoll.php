@@ -12,7 +12,7 @@ const YTP_POLLS = [
     ['q' => 'Which country wins this round? 🏆', 'o' => ['My country! 💪', 'Asia 🌏', 'Africa / Europe 🌍', 'Americas 🌎']],
 ];
 const YTP_MSGS = [
-    "🌍 FLAG ARENA\n➊ Type your country 🌍\n➋ 20 chats = 🛡 Shield\n➌ Out? 40 chats = ♻ Revive\n➍ Subscribe 🔔 = Shield\n➎ Super Chat ⭐ = Both\n➏ Like 👍 = Hole stops 30s\n🔁 Share & bring your team!",
+    "🌍 FLAG ARENA\n➊ Type your country 🌍\n➋ 10 chats = 🛡 Shield\n➌ Out? 20 chats = ♻ Revive\n➍ Subscribe 🔔 = Shield\n➎ Super Chat ⭐ = Both\n➏ Like 👍 = Hole stops 30s\n🔁 Share & bring your team!",
 ];
 const YTP_Q_MAX = 100, YTP_O_MAX = 35, YTP_MSG_MAX = 200;
 
@@ -145,9 +145,18 @@ function ytp_end_poll(array $s): array
     return $last;
 }
 
+/** "20 chats = 🛡 Shield" / "Out? 40 chats = ♻ Revive" in a saved message: use the numbers Flag Arena uses now. */
+function ytp_fill(string $text): string
+{
+    $f = flags_config();
+    $text = preg_replace('/\b\d+(\s*chats?\s*=\s*🛡)/u', (int) $f['shield'] . '$1', $text) ?? $text;
+    return preg_replace('/\b\d+(\s*chats?\s*=\s*♻)/u', (int) $f['revive'] . '$1', $text) ?? $text;
+}
+
 /** Send a message in the live chat as the channel (pin it from the phone afterwards). */
 function ytp_say(array $s, string $text): void
 {
+    $text = ytp_fill($text);
     $tok = yt_token($s);
     $chat = ytp_chat_id($s, $tok);
     $r = ytp_post($tok, 'liveChat/messages', ['part' => 'snippet'], ['snippet' => [
