@@ -7,6 +7,7 @@ import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
 
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
+const CLOSE = new URLSearchParams(location.search).has('closeup');
 const R = 0.38, CUP = { x: 0, z: -1.5, r: 0.32 }, PZ = -19, PX = (i) => -4.0 + i * 1.6, WALL = 6.2;
 const SLOW = 0.4;                       // speed of the moment the cup is touched
 const KITS = {   // known shirts; other countries get colours from their flag
@@ -25,7 +26,7 @@ const POPULAR = ['tr', 'br', 'fr', 'ar', 'pl', 'ma', 'us', 'gb', 'de', 'es', 'pt
 const rng = (s) => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 
 /* ---------------------------------------------------------------- the play: balls fly up when kicked, fall, bounce and roll */
-const G = 9.8, CUP_H = 1.05;   // gravity; the cup is this high (a ball flying over it does not touch it)
+const G = 9.8, CUP_H = 1.35;   // gravity; the cup is this high (a ball flying over it does not touch it)
 function simulate(seed, n, fly) {
   const rnd = rng(seed), balls = [], kicks = [];
   for (let i = 0; i < n; i++) for (let k = 0; k < 2; k++) {
@@ -201,15 +202,56 @@ async function main() {
   const ballMat = new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.45 });
   const ballGeo = new THREE.SphereGeometry(R, 40, 28);
 
-  // the cup (our own design)
-  const gold = new THREE.MeshStandardMaterial({ color: '#f5c542', metalness: 1, roughness: 0.22 });
-  const prof = [[0, 0], [0.55, 0], [0.55, 0.12], [0.42, 0.18], [0.42, 0.34], [0.2, 0.42], [0.12, 0.6], [0.11, 0.95], [0.2, 1.05], [0.42, 1.22], [0.56, 1.5], [0.62, 1.85], [0.6, 1.95], [0.55, 1.95]];
+  // the trophy (our own design): a black-and-gold base with laurel-and-ball badges, a fluted golden stem,
+  // golden prongs holding a golden football on top; it stands on a glowing golden stage
+  const gold = new THREE.MeshStandardMaterial({ color: '#f7c948', metalness: 1, roughness: 0.18 });
+  const darkGold = new THREE.MeshStandardMaterial({ color: '#c8921a', metalness: 1, roughness: 0.3 });
   const cup = new THREE.Group();
-  const cb = new THREE.Mesh(new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 64), gold); cb.castShadow = true; cup.add(cb);
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.56, 0.16, 48), new THREE.MeshStandardMaterial({ color: '#1f7a35', roughness: 0.4, metalness: 0.2 })); base.position.y = 0.22; cup.add(base);
-  [-1, 1].forEach((s) => { const h = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.06, 16, 40, Math.PI * 1.15), gold); h.position.set(s * 0.62, 1.45, 0); h.rotation.z = s > 0 ? -Math.PI * 0.58 : Math.PI * 0.58 + Math.PI; h.castShadow = true; cup.add(h); });
-  cup.scale.setScalar(0.55);
-  const cupPivot = new THREE.Group(); cupPivot.position.set(CUP.x, 0, CUP.z); cupPivot.add(cup); scene.add(cupPivot);
+  const add = (geo, mat, y, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; m.rotation.x = rx; m.castShadow = true; cup.add(m); return m; };
+  const badgeTex = tex(1024, 128, (g, w, h) => {
+    g.fillStyle = '#111318'; g.fillRect(0, 0, w, h);
+    for (let k = 0; k < 4; k++) {
+      const cx = (k + 0.5) * w / 4, cy = h / 2;
+      g.strokeStyle = '#f7c948'; g.fillStyle = '#f7c948'; g.lineWidth = 5;
+      g.beginPath(); g.arc(cx, cy, 30, 0, 7); g.stroke();                                   // a ball…
+      g.beginPath(); for (let q = 0; q < 5; q++) { const a = -Math.PI / 2 + q * 2 * Math.PI / 5; g.lineTo(cx + Math.cos(a) * 11, cy + Math.sin(a) * 11); } g.closePath(); g.fill();
+      for (const sd of [-1, 1]) for (let q = 0; q < 5; q++) {                                // …in two laurel branches
+        const a = Math.PI / 2 + sd * (0.5 + q * 0.42), lx = cx + sd * 0 + Math.cos(a) * 46 * -sd, ly = cy + Math.sin(a) * 46 * 0.75;
+        g.beginPath(); g.ellipse(cx - sd * Math.abs(cx - lx) - sd * 0, ly, 10, 5, sd * (0.9 - q * 0.35), 0, 7); g.fill();
+      }
+    }
+    g.fillStyle = '#f7c948'; g.fillRect(0, 0, w, 6); g.fillRect(0, h - 6, w, 6);
+  });
+  badgeTex.wrapS = THREE.RepeatWrapping;
+  add(new THREE.CylinderGeometry(0.62, 0.68, 0.14, 8), darkGold, 0.07);                                        // foot
+  add(new THREE.CylinderGeometry(0.56, 0.6, 0.34, 8), [new THREE.MeshStandardMaterial({ map: badgeTex, metalness: 0.6, roughness: 0.35 }), darkGold, darkGold], 0.31);   // black band with badges
+  add(new THREE.CylinderGeometry(0.5, 0.56, 0.1, 8), gold, 0.53);
+  const stem = [[0.42, 0], [0.3, 0.08], [0.2, 0.3], [0.15, 0.62], [0.17, 0.82], [0.26, 0.95], [0.3, 1.0]].map(([r, y]) => new THREE.Vector2(r, y));
+  add(new THREE.LatheGeometry(stem, 24), gold, 0.58);                                                         // fluted stem (24 sides)
+  add(new THREE.TorusGeometry(0.2, 0.035, 12, 40), darkGold, 1.18, Math.PI / 2);
+  // a crown-shaped holder for the ball: a bowl with six points
+  const bowl = [[0.12, 0], [0.22, 0.04], [0.32, 0.14], [0.38, 0.28], [0.36, 0.3], [0.3, 0.17], [0.2, 0.08], [0.1, 0.05]].map(([r, y]) => new THREE.Vector2(r, y));
+  add(new THREE.LatheGeometry(bowl, 48), gold, 1.58);
+  for (let q = 0; q < 6; q++) {
+    const a = q * Math.PI / 3, pt = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 12), gold);
+    pt.position.set(Math.cos(a) * 0.37, 1.95, Math.sin(a) * 0.37); pt.castShadow = true; cup.add(pt);
+  }
+  const goldBallTex = tex(1024, 512, (g, w, h) => {
+    g.fillStyle = '#f7c948'; g.fillRect(0, 0, w, h);
+    const ph = (1 + Math.sqrt(5)) / 2, v = [[-1, ph, 0], [1, ph, 0], [-1, -ph, 0], [1, -ph, 0], [0, -1, ph], [0, 1, ph], [0, -1, -ph], [0, 1, -ph], [ph, 0, -1], [ph, 0, 1], [-ph, 0, -1], [-ph, 0, 1]];
+    g.fillStyle = '#b07a12';
+    for (const [x, y, z] of v) { const l = Math.hypot(x, y, z), lat = Math.asin(y / l), lon = Math.atan2(z, x), cx = (lon / (2 * Math.PI) + 0.5) * w, cy = (0.5 - lat / Math.PI) * h, sx = 1 / Math.max(0.2, Math.cos(lat));
+      for (const off of [-w, 0, w]) { g.beginPath(); for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + k * 2 * Math.PI / 5; g.lineTo(cx + off + Math.cos(a) * 44 * sx, cy + Math.sin(a) * 44); } g.closePath(); g.fill(); } }
+  });
+  const topBall = add(new THREE.SphereGeometry(0.4, 48, 32), new THREE.MeshStandardMaterial({ map: goldBallTex, metalness: 1, roughness: 0.2 }), 2.08);
+  topBall.rotation.set(0.4, 0.6, 0);
+  // the glowing stage on the grass (it stays when the trophy falls off it)
+  const stage3 = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.41, 0.06, 64), new THREE.MeshStandardMaterial({ color: '#f7c948', metalness: 1, roughness: 0.15, emissive: '#ffb300', emissiveIntensity: 0.35 }));
+  stage3.position.set(CUP.x, 0.03, CUP.z); stage3.receiveShadow = true; scene.add(stage3);
+  const glow = new THREE.Mesh(new THREE.RingGeometry(0.4, 0.55, 64), new THREE.MeshBasicMaterial({ color: '#ffd23a', transparent: true, opacity: 0.35 }));
+  glow.rotation.x = -Math.PI / 2; glow.position.set(CUP.x, 0.04, CUP.z); scene.add(glow);
+  cup.scale.setScalar(0.5);
+  const cupPivot = new THREE.Group(); cupPivot.position.set(CUP.x, 0.06, CUP.z); cupPivot.add(cup); scene.add(cupPivot);
   const fallAxis = new THREE.Vector3(), cupBase = 0.3;   // the cup tips over its base edge
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.05, 12, 64), new THREE.MeshBasicMaterial({ color: '#fff6b0', transparent: true, opacity: 0 }));
   ring.rotation.x = -Math.PI / 2; ring.position.set(CUP.x, 0.45, CUP.z); scene.add(ring);
@@ -316,10 +358,10 @@ async function main() {
       if (since > 0 && play.fall) {
         // falls over in ~0.5 s (faster and faster), a small bounce, then lies on the grass
         const f = play.fall, k = Math.min(1, since / 0.5), bounce = since > 0.5 && since < 0.75 ? Math.sin((since - 0.5) / 0.25 * Math.PI) * 0.12 : 0;
-        cupPivot.position.set(CUP.x + f.dx * cupBase, 0, CUP.z + f.dz * cupBase); cup.position.set(-f.dx * cupBase, 0, -f.dz * cupBase);
+        cupPivot.position.set(CUP.x + f.dx * cupBase, 0.06, CUP.z + f.dz * cupBase); cup.position.set(-f.dx * cupBase, 0, -f.dz * cupBase);
         fallAxis.set(f.dz, 0, -f.dx); cupPivot.quaternion.setFromAxisAngle(fallAxis, k * k * (Math.PI / 2 - 0.12) - bounce);
         if (since > 0.5 && !clanked) { clanked = true; snd.clank(); }
-      } else { cupPivot.position.set(CUP.x, 0, CUP.z); cup.position.set(0, 0, 0); cupPivot.quaternion.identity(); }
+      } else { cupPivot.position.set(CUP.x, 0.06, CUP.z); cup.position.set(0, 0, 0); cupPivot.quaternion.identity(); }
       ring.material.opacity = since > 0 && since < 0.6 ? 0.9 * (1 - since / 0.6) : 0; ring.scale.setScalar(since > 0 ? 1 + since * 3 : 1);
       const jump = since > 0 && since < 3 ? 0.25 : 0.06;
       for (let k = 0; k < ci; k++) { const [x, y, z, ph] = crowdPos[k]; m4.makeTranslation(x, y + Math.max(0, Math.sin(now / 140 + ph)) * jump, z); crowd.setMatrixAt(k, m4); }
@@ -327,6 +369,7 @@ async function main() {
     }
     const k = play ? Math.min(1, simT / endT) : 0;
     camera.position.set(Math.sin(now / 3300) * 0.25, 3.2 - k * 0.5, 9.5 - k * 2.2); camera.lookAt(0, 2.6 - k * 0.6, -10);
+    if (CLOSE) { camera.position.set(0.2, 0.9, 1.4); camera.lookAt(0, 0.62, -1.5); }   // ?closeup=1: a close look at the trophy
     renderer.render(scene, camera);
   };
   requestAnimationFrame(frame);
