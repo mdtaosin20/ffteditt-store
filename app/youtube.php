@@ -245,6 +245,20 @@ function yt_defaults(string $game): array
                 . "#beatthekeeper #worldcup #marblerace #countryballs #football #soccer #live #countries #flags #chatgame #philippines #malaysia #usa #india #bangladesh",
         ];
     }
+    if ($game === 'race') {
+        return [
+            'title' => '🔴 LIVE Flag Race 🏁 Which Country Wins? Type Your Country to BOOST It ⚡ New Race Every Minute!',
+            'desc'  => "🏁 FLAG RACE — country flags race to the finish line, and YOU are the engine!\n"
+                . "Every comment with your country's name = ⚡ BOOST. The more people type, the faster your flag goes!\n\n"
+                . "👇 TYPE YOUR COUNTRY NOW and push it to the finish!\n"
+                . "🔔 Subscribe = 🚀 TURBO for your country · ⭐ Super Chat = 🚀🚀 MEGA TURBO\n"
+                . "🏆 A new race every minute — which country wins the most races today?\n"
+                . "🎙️ LUNA, our live host, reads every comment and answers you live.\n"
+                . "🌍 Your country is not racing? Type it — it joins the next race!\n\n"
+                . "👍 Like if your country is racing · 📣 Share with friends from your country — more people = more speed!\n\n"
+                . "#flagrace #countryballs #countries #flags #race #live #interactive #chatgame #turkey #poland #usa #brazil #india #algeria #egypt",
+        ];
+    }
     if ($game === 'tug') {
         return [
             'title' => '🔴 LIVE Country Tug of War 🪢 Bangladesh vs India, India vs Pakistan! Comment Your Country to Pull 💪',

@@ -1,0 +1,140 @@
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Rajdhani:wght@700&display=swap");
+
+:root {
+  --gold: #ffc93a;
+  --cyan: #22d3ee;
+  --line: #2a4a9a;
+  --display: "Oswald", "Bebas Neue", Impact, "Arial Narrow", sans-serif;
+  --ui: "Rajdhani", "Oswald", system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; background: #03050c; overflow: hidden; }
+body { position: fixed; inset: 0; overflow: clip; }
+
+/* Fixed 1080x1920 stage, scaled to fit. On phones YouTube's name bar covers y < ~110 and its chat covers y > ~1395,
+   so everything that matters sits between. */
+#stage {
+  position: absolute; left: 50%; top: 50%; width: 1080px; height: 1920px; transform-origin: 50% 50%; overflow: hidden;
+  color: #fff; font-family: var(--ui);
+  background: radial-gradient(45% 28% at 15% 35%, rgba(30, 70, 220, .35), transparent 70%),
+              radial-gradient(45% 28% at 85% 70%, rgba(200, 30, 90, .3), transparent 70%), #070b1c;
+}
+.flag { background-image: url("/flags/flags.png?v=2"); background-repeat: no-repeat; display: inline-block; flex: 0 0 auto; border-radius: 3px; vertical-align: middle; }
+
+/* ---------- header ---------- */
+.top .brand { position: absolute; left: 30px; top: 108px; }
+.top h1 { font-family: var(--display); font-weight: 700; font-size: 66px; line-height: 1; letter-spacing: 2px; }
+.top h1 b { color: var(--gold); font-weight: 700; }
+.top .sub { margin-top: 8px; font-size: 26px; letter-spacing: 3px; color: #9fb2dc; font-weight: 700; }
+.top .tm { display: inline-block; margin-left: 8px; padding: 0 12px; border-radius: 8px; background: #ff2d55; color: #fff; letter-spacing: 2px; font-variant-numeric: tabular-nums; }
+.top .tm.go { background: #16a34a; }
+.num { position: absolute; top: 106px; left: 560px; width: 210px; height: 104px; text-align: center; padding-top: 8px; border-radius: 18px;
+  border: 3px solid var(--line); background: rgba(8, 12, 30, .9); }
+.num.n2 { left: 790px; width: 260px; }
+.num span { display: block; font-size: 22px; letter-spacing: 2px; color: #9fb2dc; }
+.num b { display: block; font-family: var(--display); font-size: 52px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.num b.g { color: var(--gold); }
+
+/* ---------- panels ---------- */
+.panel { position: absolute; top: 224px; height: 166px; padding: 8px 18px; border-radius: 18px; background: rgba(8, 12, 30, .9); }
+.panel h3 { font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: 2px; line-height: 1.2; }
+.wins { left: 22px; width: 480px; border: 3px solid var(--gold); box-shadow: 0 0 24px rgba(255, 201, 58, .25); }
+.wins h3 { color: var(--gold); }
+.how { left: 516px; right: 22px; border: 3px solid #34d399; box-shadow: 0 0 24px rgba(52, 211, 153, .2); }
+.how h3 { color: #34d399; }
+.wrow { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 26px; font-weight: 700; white-space: nowrap; line-height: 1.1; }
+.wrow .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.wrow b { color: var(--gold); font-variant-numeric: tabular-nums; }
+.wrow.empty { color: #9fb2dc; font-size: 22px; white-space: normal; }
+.rule { margin-top: 7px; font-size: 25px; font-weight: 700; white-space: nowrap; }
+.rule .s { color: #7dd3fc; } .rule .r { color: #f9a8d4; } .rule .x { color: var(--gold); }
+
+/* ---------- live chat pieces (from /game/chat.css): LUNA and the chat box side by side ---------- */
+.lc.lc-race .lc-sub { top: 560px; }
+.lc.lc-race .lc-fans { display: none !important; }
+.lc.lc-race .lc-box { top: 400px; right: 22px; width: 360px; height: 96px; padding: 4px 14px; overflow: hidden; }
+.lc.lc-race .lc-box-h { font-size: 16px; padding-bottom: 1px; }
+.lc.lc-race .lc-box .lc-row { font-size: 20px; padding: 2px 0; }
+.lc.lc-race .lc-box .lc-row .flag { transform: scale(.75); }
+.lc.lc-race .lc-robot, .lc.lc-race .lc-robot.girl { top: 400px; bottom: auto; left: 22px; right: auto; width: 672px; height: 96px; min-height: 0; padding: 4px 12px 4px 120px; gap: 0; border-width: 4px; border-radius: 22px; overflow: visible; }
+.lc.lc-race .lc-robot .lc-rb-face { position: absolute; left: 2px; bottom: -4px; width: 112px; }
+.lc.lc-race .lc-robot.girl .lc-rb-face { width: 118px; }
+.lc.lc-race .lc-rb-name { font-size: 17px; letter-spacing: 3px; }
+.lc.lc-race .lc-rb-text { font-size: 26px; line-height: 1.06; max-height: 64px; overflow: hidden; }
+.lc.lc-race .lc-rb-text .flag { transform: scale(.7); margin: 0 2px; }
+
+/* ---------- the track ---------- */
+.track { position: absolute; left: 22px; right: 22px; top: 508px; height: 880px; border-radius: 24px; overflow: hidden;
+  background: linear-gradient(180deg, rgba(14, 22, 56, .92), rgba(10, 14, 36, .92)); border: 4px solid var(--cyan); box-shadow: 0 0 30px rgba(34, 211, 238, .35); }
+.finish { position: absolute; left: 0; right: 0; top: 46px; height: 28px; background: repeating-conic-gradient(#fff 0 25%, #111 0 50%) 0 0 / 28px 28px; box-shadow: 0 0 18px rgba(255, 255, 255, .5); }
+.ft { position: absolute; right: 16px; top: 6px; font-family: var(--display); font-size: 30px; letter-spacing: 4px; color: var(--gold); }
+.start-line { position: absolute; left: 0; right: 0; top: 668px; height: 6px; background: rgba(255, 255, 255, .25); }
+.lane { position: absolute; top: 74px; bottom: 0; border-left: 2px dashed rgba(255, 255, 255, .1); }
+.lane:first-child { border-left: 0; }
+.runner { position: absolute; left: 50%; top: 0; width: 120px; margin-left: -60px; text-align: center; will-change: transform; }
+.runner .ball { position: relative; margin: 0 auto; border-radius: 50%; overflow: hidden; border: 4px solid #fff; background: #fff; box-shadow: 0 6px 14px rgba(0, 0, 0, .5); }
+.runner .ball .flag { position: absolute; left: 50%; top: 0; border-radius: 0; }
+.runner .ball .plain { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-family: var(--display); font-weight: 700; }
+.runner .nm { position: relative; z-index: 2; margin-top: 4px; font-size: 18px; font-weight: 700; letter-spacing: 1px; text-shadow: 0 2px 3px #000, 0 0 6px #000; white-space: nowrap; }
+.runner .pos { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); font-family: var(--display); font-size: 24px; color: #cfe0ff; text-shadow: 0 2px 3px #000; }
+.runner.lead .pos { color: var(--gold); font-size: 30px; top: -38px; }
+.runner.lead .ball { border-color: var(--gold); box-shadow: 0 0 26px rgba(255, 201, 58, .9); }
+.runner.boost .ball { border-color: #ffb020; }
+.runner .fire { position: absolute; left: 50%; width: 40px; margin-left: -20px; height: 0; border-radius: 50%; opacity: 0; transition: opacity .15s;
+  background: radial-gradient(ellipse at 50% 0, #fff 0 14%, #ffd23a 32%, #ff6a00 62%, transparent 72%); filter: blur(1px); }
+.runner.boost .fire { opacity: 1; animation: fire .12s linear infinite alternate; }
+.runner.turbo .fire { background: radial-gradient(ellipse at 50% 0, #fff 0 14%, #7dd3fc 32%, #6366f1 62%, transparent 72%); }
+@keyframes fire { to { transform: scaleY(.8); } }
+
+.pops { position: absolute; left: 0; top: 0; width: 1080px; height: 1400px; pointer-events: none; z-index: 4; }
+.pop { position: absolute; font-family: var(--display); font-weight: 700; font-size: 34px; white-space: nowrap; color: var(--gold);
+  text-shadow: 0 3px 0 #7a4a00, 0 0 10px rgba(0, 0, 0, .8); animation: pop 1.2s ease-out forwards; }
+.pop.t { color: #9fe8ff; text-shadow: 0 3px 0 #1e3a8a, 0 0 10px rgba(0, 0, 0, .8); font-size: 42px; }
+@keyframes pop { 0% { transform: translateY(10px) scale(.6); opacity: 0; } 15% { transform: scale(1.1); opacity: 1; } 100% { transform: translateY(-70px); opacity: 0; } }
+
+/* ---------- the big call-to-action, just above where phones show the YouTube chat ---------- */
+.pill { position: absolute; left: 50%; top: 1262px; transform: translateX(-50%); z-index: 7; white-space: nowrap; padding: 12px 44px 10px; border-radius: 999px;
+  background: linear-gradient(90deg, #ff2d55, #ff7a00); font-family: var(--display); font-weight: 700; font-size: 50px; letter-spacing: 2px; line-height: 1.05; text-align: center;
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, .92), 0 0 50px rgba(255, 60, 90, .9); animation: pill 1.6s ease-in-out infinite; }
+.pill small { display: block; font-size: 26px; letter-spacing: 3px; }
+@keyframes pill { 50% { transform: translateX(-50%) scale(1.05); box-shadow: 0 0 0 6px #fff, 0 0 80px rgba(255, 120, 40, 1); } }
+
+/* ---------- under the phone-chat line: extras only ---------- */
+.below { position: absolute; top: 1420px; left: 40px; right: 40px; text-align: center; }
+.last { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 26px; letter-spacing: 2px; color: #9fb2dc; min-height: 50px; }
+.last > div { display: flex; gap: 8px; }
+.cta { margin-top: 26px; padding: 18px; border-radius: 20px; border: 3px solid var(--line); background: rgba(8, 12, 30, .9); font-family: var(--display); font-size: 44px; font-weight: 700; }
+.cta2 { margin-top: 22px; font-family: var(--display); font-size: 34px; color: #cfe0ff; }
+
+/* ---------- banner + winner ---------- */
+.banner { position: absolute; left: 0; right: 0; top: 820px; display: flex; justify-content: center; pointer-events: none; z-index: 8; }
+.banner[hidden] { display: none; }
+.banner-in { font-family: var(--display); font-weight: 700; font-size: 84px; letter-spacing: 3px; line-height: 1; padding: 18px 50px; text-align: center;
+  border-radius: 24px; background: rgba(6, 10, 26, .93); border: 4px solid #5a8cff; box-shadow: 0 0 40px rgba(90, 140, 255, .5); animation: banner 1.2s ease-out forwards; }
+.banner-in small { display: block; font-size: 34px; letter-spacing: 3px; color: var(--gold); margin-top: 10px; }
+.banner-in.go { color: #4ade80; border-color: #4ade80; font-size: 150px; box-shadow: 0 0 60px rgba(74, 222, 128, .7); }
+.banner-in.gold { border-color: var(--gold); box-shadow: 0 0 50px rgba(255, 201, 58, .6); }
+.banner-in.long { animation: bannerlong 3.2s ease-in-out forwards; }
+@keyframes banner { 0% { transform: scale(.4); opacity: 0; } 25% { transform: scale(1.08); opacity: 1; } 40%, 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(.9); opacity: 0; } }
+@keyframes bannerlong { 0% { transform: scale(.4); opacity: 0; } 12% { transform: scale(1.06); opacity: 1; } 22%, 85% { transform: scale(1); opacity: 1; } 100% { transform: scale(.9); opacity: 0; } }
+
+.win { position: absolute; left: 0; right: 0; top: 560px; display: flex; justify-content: center; pointer-events: none; z-index: 9; }
+.win[hidden] { display: none; }
+.win-in { width: 960px; padding: 24px 36px 28px; text-align: center; border: 6px solid var(--gold); border-radius: 30px;
+  background: rgba(8, 10, 30, .96); box-shadow: 0 0 100px rgba(255, 190, 40, .7); animation: winin .6s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes winin { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+.win .t { font-family: var(--display); font-weight: 700; font-size: 48px; color: var(--gold); letter-spacing: 4px; }
+.win .flag.big { margin: 14px auto 6px; display: block; box-shadow: 0 0 34px rgba(255, 255, 255, .35); border-radius: 8px; }
+.win .c { font-family: var(--display); font-size: 96px; font-weight: 700; line-height: 1.05; }
+.pod { display: flex; justify-content: center; align-items: flex-end; gap: 22px; margin-top: 16px; }
+.pod > div { width: 230px; border-radius: 14px 14px 0 0; padding-top: 8px; font-size: 26px; font-weight: 700; line-height: 1.25; overflow: hidden; }
+.pod .p { font-family: var(--display); font-size: 40px; }
+.pod .g { height: 200px; background: linear-gradient(#d4a017, #8a6508); }
+.pod .s { height: 160px; background: linear-gradient(#9ca3af, #4b5563); }
+.pod .b { height: 130px; background: linear-gradient(#c2410c, #7c2d12); }
+.win .nx { margin-top: 16px; font-size: 32px; font-weight: 700; color: #9fe8ff; letter-spacing: 1px; }
+
+.sound-btn { position: absolute; right: 30px; top: 1810px; display: flex; align-items: center; gap: 14px; padding: 16px 26px; border-radius: 999px;
+  border: 3px solid #fff; background: rgba(0, 0, 0, .75); color: #fff; font-family: var(--ui); font-weight: 700; font-size: 32px; letter-spacing: 2px; cursor: pointer; z-index: 40; }
+.sound-btn svg { width: 42px; height: 42px; }
+.sound-btn[hidden] { display: none; }

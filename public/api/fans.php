@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !is_array($in) || $id <= 0
     exit;
 }
 $game = (string) ($in['game'] ?? '');
-if (!in_array($game, ['flags', 'war', 'tug', 'keeper', 'ball'], true) || !is_array($in['c'] ?? null)) {
+if (!in_array($game, ['flags', 'war', 'tug', 'keeper', 'ball', 'race'], true) || !is_array($in['c'] ?? null)) {
     http_response_code(400);
     echo json_encode(['error' => 'bad data']);
     exit;

@@ -162,6 +162,7 @@ page_start($stream ? 'Edit stream' : 'Add stream', 'streams', $admin);
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/flags/">Flag Arena</button>
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/war/">Territory War</button>
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/tug/">Tug of War</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/race/">Flag Race</button>
       <button type="button" class="btn btn-ghost btn-sm" data-page="https://ffteditt.store/keeper/">Beat The Keeper</button>
     </span>
     <small class="muted">The game page the server opens and sends to YouTube. Tap a game to fill it in.</small>

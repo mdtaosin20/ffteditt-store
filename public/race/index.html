@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flag Race · Type Your Country to Boost It</title>
+<link rel="stylesheet" href="/race/race.css?v=1">
+<link rel="stylesheet" href="/game/chat.css?v=3">
+</head>
+<body>
+<div id="stage">
+  <header class="top">
+    <div class="brand"><h1 id="title">FLAG <b>RACE</b></h1><div class="sub"><span id="race-no">RACE #1</span> <span class="tm" id="tm">⏱ 1:00</span></div></div>
+    <div class="num"><span>RACERS</span><b id="n-racers">10</b></div>
+    <div class="num n2"><span>RACES TODAY</span><b class="g" id="n-today">0</b></div>
+  </header>
+
+  <section class="panel wins">
+    <h3>🏆 WINS TODAY</h3>
+    <div id="wins"></div>
+  </section>
+  <section class="panel how">
+    <h3>⚡ HOW TO WIN</h3>
+    <div class="rule">💬 Type your country → <b class="s">⚡ BOOST</b></div>
+    <div class="rule">🔔 Subscribe → <b class="r">🚀 TURBO</b></div>
+    <div class="rule">⭐ Super Chat → <b class="x">🚀🚀 MEGA TURBO</b></div>
+  </section>
+
+  <div class="track" id="track">
+    <div class="finish"></div><div class="ft">FINISH</div>
+    <div class="start-line"></div>
+    <div id="lanes"></div>
+  </div>
+  <div class="pops" id="pops"></div>
+
+  <div class="pill" id="pill">👇 TYPE YOUR COUNTRY 👇<small id="pill-sub">⚡ EVERY CHAT = BOOST</small></div>
+
+  <div class="below">
+    <div class="last"><span>LAST WINNERS:</span><div id="last"></div></div>
+    <div class="cta">✍️ TYPE YOUR COUNTRY = ⚡ BOOST</div>
+    <div class="cta2">🔔 SUBSCRIBE = 🚀 TURBO · 👍 LIKE · ↗️ SHARE</div>
+  </div>
+
+  <div class="banner" id="banner" hidden><div class="banner-in" id="banner-text"></div></div>
+
+  <div class="win" id="win" hidden>
+    <div class="win-in">
+      <div class="t" id="win-t">🏆 RACE #1 WINNER</div>
+      <span class="flag big" id="win-flag"></span>
+      <div class="c" id="win-name">TÜRKIYE</div>
+      <div class="pod" id="pod"></div>
+      <div class="nx" id="win-next">NEXT RACE IN 5 … TYPE YOUR COUNTRY TO JOIN!</div>
+    </div>
+  </div>
+
+  <button class="sound-btn" id="sound-btn" type="button" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    TAP FOR SOUND
+  </button>
+</div>
+<script type="module" src="/race/race.js?v=1"></script>
+</body>
+</html>

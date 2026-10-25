@@ -46,6 +46,7 @@ function games_list(): array
     $war   = war_config();
     $tug   = tug_config();
     $kp    = keeper_config();
+    $race  = race_config();
     return [
         'ball'  => ['id' => 1, 'key' => 'ball',  'name' => 'Ball Drop',      'url' => '/ball/',  'settings' => 'game.php',
                     'title' => ucwords(strtolower($ball['players'][0]['name'])) . ' vs ' . ucwords(strtolower($ball['players'][1]['name'])), 'category' => 'football',
@@ -82,6 +83,12 @@ function games_list(): array
                     'tags' => ['countries', 'strategy', 'chat'], 'thumb' => '/assets/site/war.jpg',
                     'desc' => 'A new strategy arena: four countries power up reactor cores, deploy drones and defend their energy systems.',
                     'autoplay' => true, 'pace' => 'normal', 'detail' => '4 countries · energy reactor strategy'],
+        'race'  => ['id' => 7, 'key' => 'race', 'name' => 'Flag Race', 'url' => '/race/', 'settings' => 'race.php',
+                    'title' => 'Flag Race', 'category' => 'countries',
+                    'tags' => ['countries', 'race', 'chat'], 'thumb' => '/assets/site/race.jpg',
+                    'desc' => 'Country flags race to the finish line — every chat is a boost. A new race every minute!',
+                    'autoplay' => (bool) $race['autoplay'], 'pace' => (string) $race['pace'],
+                    'detail' => (int) $race['racers'] . ' racers · ~' . (int) $race['secs'] . ' s races'],
     ];
 }
 
@@ -103,6 +110,7 @@ function game_of_url(string $url): string
     if (preg_match('#/tug/?(\?|$)#', $path)) return 'tug';
     if (preg_match('#/keeper/?(\?|$)#', $path)) return 'keeper';
     if (preg_match('#/reactor/?(\?|$)#', $path)) return 'reactor';
+    if (preg_match('#/race/?(\?|$)#', $path)) return 'race';
     return preg_match('#/flags/?(\?|$)#', $path) ? 'flags' : 'ball';
 }
 

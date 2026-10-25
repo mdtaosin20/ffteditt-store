@@ -106,7 +106,7 @@ header('Cache-Control: no-cache');
         <?php foreach ($games as $g):
             $live = array_key_exists($g['key'], $liveGame);
             $liveUrl = $liveGame[$g['key']] ?? '';
-            $playCls = ['flags' => 'b-green', 'war' => 'b-red', 'tug' => 'b-red', 'keeper' => 'b-blue'][$g['key']] ?? 'b-blue'; ?>
+            $playCls = ['flags' => 'b-green', 'war' => 'b-red', 'tug' => 'b-red', 'keeper' => 'b-blue', 'race' => 'b-green'][$g['key']] ?? 'b-blue'; ?>
         <article class="card" data-game="<?= e($g['key']) ?>" data-tags="<?= e(implode(' ', $g['tags'])) ?>" data-search="<?= e(strtolower($g['title'] . ' ' . $g['name'] . ' ' . implode(' ', $g['tags']))) ?>">
           <a class="th" href="<?= e($g['url']) ?>"><img src="<?= e($g['thumb']) ?>" alt="<?= e($g['title']) ?>" loading="lazy" width="480" height="311">
             <?php if ($live): ?><span class="badge"><i></i>LIVE</span><?php endif; ?></a>

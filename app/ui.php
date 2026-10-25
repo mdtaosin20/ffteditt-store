@@ -60,6 +60,9 @@ function game_badge(string $key): string
     if ($key === 'keeper') {
         return '<span class="gicon gi-keeper" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="3" fill="#7f8cf2"/><rect x="14" y="6" width="7" height="14" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="11" y="9" width="2" height="6" fill="#111"/><circle cx="6" cy="16" r="3.2" fill="#f4c430" stroke="#fff" stroke-width="1"/></svg></span>';
     }
+    if ($key === 'race') {
+        return '<span class="gicon gi-race" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="4" fill="#fff"/><path d="M2 3h4v2H2zm8 0h4v2h-4zm8 0h4v2h-4zM6 5h4v2H6zm8 0h4v2h-4z" fill="#111"/><circle cx="7" cy="16" r="4" fill="#ef4444"/><circle cx="17" cy="13" r="4" fill="#22c55e"/><path d="M7 21v2M17 18v4" stroke="#f59e0b" stroke-width="2"/></svg></span>';
+    }
     if ($key === 'tug') {
         return '<span class="gicon gi-tug" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="1" y="10.5" width="22" height="3" rx="1.5" fill="#d9ae6a"/><circle cx="4" cy="12" r="3.2" fill="#3b82f6"/><circle cx="20" cy="12" r="3.2" fill="#f97316"/><circle cx="12" cy="12" r="3" fill="#ef4444" stroke="#fff" stroke-width="1.2"/></svg></span>';
     }
