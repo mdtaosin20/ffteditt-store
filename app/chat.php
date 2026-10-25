@@ -129,7 +129,17 @@ function chat_target(array $row): ?array
     // (after a reconnect it can be left reading the old live video's chat, where nobody writes any more).
     // A changed target makes the worker look again; with no video known it reads the channel's /live page anew.
     $seen = (int) ($row['chat_seen'] ?? 0);
-    if ($started > 0 && time() - max($seen, $started) > 180) $t['again'] = intdiv(time(), 180);
+    if ($started > 0 && time() - max($seen, $started) > 180) {
+        $t['again'] = intdiv(time(), 180);
+        // the video we know may be an old one (and YouTube cannot be asked when its daily limit is used up):
+        // read the channel's /live page instead — it always shows the live that runs now —
+        // when no other live stream uses the same channel link
+        if ($channel !== '') {
+            $st = db()->prepare("SELECT COUNT(*) FROM streams WHERE status = 'live' AND id != ? AND channel_url = ?");
+            $st->execute([(int) ($row['id'] ?? 0), $channel]);
+            if ((int) $st->fetchColumn() === 0) $t['video'] = '';
+        }
+    }
     return $t;
 }
 
