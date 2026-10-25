@@ -34,7 +34,7 @@ function simulate(seed, n, fly) {
     const tx = (rnd() * 2 - 1) * 2.4, tz = CUP.z + (rnd() * 2 - 1) * 1.1;
     const sx = PX(i) + (k ? -0.42 : 0.42), sz = PZ + 0.75;
     const d = Math.hypot(tx - sx, tz - sz), sp = 6.6 + rnd() * 2.0;
-    const up = rnd() < 0.8 ? 3.5 + rnd() * 4.5 : 1 + rnd() * 1.5, hop = 1.4 + rnd() * 1.4, vy = fly ? up : hop;   // high kicks (menu option), or a small hop and then rolling on the grass
+    const up = rnd() < 0.8 ? 3.5 + rnd() * 4.5 : 1 + rnd() * 1.5, vy = fly ? up : 0;   // high kicks (menu option), or rolling on the grass all the way
     balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vy0: vy, vz: (tz - sz) / d * sp, on: false, id: balls.length });
     kicks.push({ team: i, t });
   }
