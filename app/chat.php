@@ -124,7 +124,13 @@ function chat_target(array $row): ?array
         $st->execute([(int) ($row['id'] ?? 0), $channel]);
         if ((int) $st->fetchColumn() > 0) return null;
     }
-    return ['video' => $video, 'channel' => $channel];
+    $t = ['video' => $video, 'channel' => $channel, 'start' => $started];
+    // The chat has been quiet for 3+ minutes while the stream is live: ask the worker to open the chat again
+    // (after a reconnect it can be left reading the old live video's chat, where nobody writes any more).
+    // A changed target makes the worker look again; with no video known it reads the channel's /live page anew.
+    $seen = (int) ($row['chat_seen'] ?? 0);
+    if ($started > 0 && time() - max($seen, $started) > 180) $t['again'] = intdiv(time(), 180);
+    return $t;
 }
 
 /** New events for the game page. First call (after = 0): the last few messages, marked old. */
