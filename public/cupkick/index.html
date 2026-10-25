@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Cup Kick · Which flag touches the cup?</title>
+<link rel="stylesheet" href="/cupkick/cupkick.css?v=1">
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div class="words" id="words">
+    <div class="w1" id="w1">Watch closely! 👀</div>
+    <div class="w2" id="w2">Which country touches the cup? 🏆</div>
+  </div>
+  <div class="tap" id="tap" hidden>tap the screen for the menu</div>
+</div>
+
+<div class="menu" id="menu">
+  <div class="card">
+    <h1>⚽ CUP KICK</h1>
+    <p class="muted">Pick 6 countries and press START. Then record your screen. Tap the screen any time for this menu.</p>
+    <div class="teams" id="teams"></div>
+    <label class="row"><span>Whose ball touches the cup?</span><select id="win"></select></label>
+    <label class="row"><span>Top text</span><input id="t1" maxlength="40" value="Watch closely! 👀"></label>
+    <label class="row"><span>Question</span><input id="t2" maxlength="44" value="Which country touches the cup? 🏆"></label>
+    <label class="row"><span>Text at the end</span><input id="t3" maxlength="44" value="Comment below 👇"></label>
+    <label class="row chk"><input type="checkbox" id="snd" checked> Sound</label>
+    <div class="btns"><button id="go" type="button">▶ START</button><button id="shuffle" type="button" class="ghost">🎲 Random countries</button></div>
+    <p class="small muted" id="answer"></p>
+  </div>
+</div>
+<script type="importmap">{ "imports": { "three": "/game/vendor/three.module.js" } }</script>
+<script type="module" src="/cupkick/cupkick.js?v=1"></script>
+</body>
+</html>
