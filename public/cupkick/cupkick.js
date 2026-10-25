@@ -24,47 +24,52 @@ const POPULAR = ['tr', 'br', 'fr', 'ar', 'pl', 'ma', 'us', 'gb', 'de', 'es', 'pt
 
 const rng = (s) => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 
-/* ---------------------------------------------------------------- the play (ground physics, x/z) */
+/* ---------------------------------------------------------------- the play: balls fly up when kicked, fall, bounce and roll */
+const G = 9.8, CUP_H = 1.05;   // gravity; the cup is this high (a ball flying over it does not touch it)
 function simulate(seed, n) {
   const rnd = rng(seed), balls = [], kicks = [];
   for (let i = 0; i < n; i++) for (let k = 0; k < 2; k++) {
     const t = 0.6 + rnd() * 3.0;
     const tx = (rnd() * 2 - 1) * 2.4, tz = CUP.z + (rnd() * 2 - 1) * 1.1;
     const sx = PX(i) + (k ? -0.42 : 0.42), sz = PZ + 0.75;
-    const d = Math.hypot(tx - sx, tz - sz), sp = 5.6 + rnd() * 2.0;
-    balls.push({ team: i, t, x: sx, z: sz, vx: (tx - sx) / d * sp, vz: (tz - sz) / d * sp, on: false, id: balls.length });
+    const d = Math.hypot(tx - sx, tz - sz), sp = 4.8 + rnd() * 2.0;
+    const vy = rnd() < 0.8 ? 3.5 + rnd() * 4.5 : 1 + rnd() * 1.5;   // most kicks go up in the air, some along the grass
+    balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vy0: vy, vz: (tz - sz) / d * sp, on: false, id: balls.length });
     kicks.push({ team: i, t });
   }
-  const steps = Math.ceil(13 / DT), track = balls.map(() => new Float32Array(steps * 2));
-  const touches = [], near = [], bumps = [];
+  const steps = Math.ceil(13 / DT), track = balls.map(() => new Float32Array(steps * 3));
+  const touches = [], near = [], bumps = [], lands = [];
   let simT = 0;
   for (let s = 0; s < steps; s++, simT += DT) {
     for (const b of balls) {
-      if (!b.on && simT >= b.t) b.on = true;
+      if (!b.on && simT >= b.t) { b.on = true; b.vy = b.vy0; }
       if (b.on) {
         b.x += b.vx * DT; b.z += b.vz * DT;
-        const f = Math.exp(-0.22 * DT); b.vx *= f; b.vz *= f;
+        // up in the air: gravity; on the grass: it bounces lower each time, then rolls
+        b.vy -= G * DT; b.y += b.vy * DT;
+        if (b.y <= R) { b.y = R; if (b.vy < -1.2) { if (b.vy < -3) lands.push({ t: simT, v: -b.vy }); b.vy = -b.vy * 0.55; b.vx *= 0.9; b.vz *= 0.9; } else b.vy = 0; }
+        const ground = b.y <= R + 0.01, f = Math.exp(-(ground ? 0.22 : 0.03) * DT); b.vx *= f; b.vz *= f;
         if (b.x < -WALL) { b.x = -WALL; b.vx = Math.abs(b.vx) * 0.6; } if (b.x > WALL) { b.x = WALL; b.vx = -Math.abs(b.vx) * 0.6; }
         const dx = b.x - CUP.x, dz = b.z - CUP.z, dd = Math.hypot(dx, dz);
-        if (dd < R + CUP.r) {
+        if (dd < R + CUP.r && b.y - R < CUP_H) {
           const nx = dx / dd, nz = dz / dd, vn = b.vx * nx + b.vz * nz;
           if (vn < 0) { b.vx -= 1.7 * vn * nx; b.vz -= 1.7 * vn * nz; touches.push({ id: b.id, t: simT }); }
           b.x = CUP.x + nx * (R + CUP.r); b.z = CUP.z + nz * (R + CUP.r);
-        } else if (dd < R + CUP.r + 0.6) near.push({ id: b.id, t: simT });
+        } else if (dd < R + CUP.r + 0.6 && b.y < CUP_H + 1) near.push({ id: b.id, t: simT });
       }
     }
     for (let a = 0; a < balls.length; a++) for (let c = a + 1; c < balls.length; c++) {
       const A = balls[a], B = balls[c]; if (!A.on || !B.on) continue;
       const dx = B.x - A.x, dz = B.z - A.z, dd = Math.hypot(dx, dz);
-      if (dd > 0 && dd < 2 * R) {
+      if (dd > 0 && dd < 2 * R && Math.abs(A.y - B.y) < 2 * R) {
         const nx = dx / dd, nz = dz / dd, rel = (A.vx - B.vx) * nx + (A.vz - B.vz) * nz;
         if (rel > 0) { const j = rel * 0.95; A.vx -= j * nx; A.vz -= j * nz; B.vx += j * nx; B.vz += j * nz; if (rel > 1.5) bumps.push(simT); }
         const o = (2 * R - dd) / 2; A.x -= nx * o; A.z -= nz * o; B.x += nx * o; B.z += nz * o;
       }
     }
-    balls.forEach((b, k) => { track[k][s * 2] = b.x; track[k][s * 2 + 1] = b.z; });
+    balls.forEach((b, k) => { track[k][s * 3] = b.x; track[k][s * 3 + 1] = b.y; track[k][s * 3 + 2] = b.z; });
   }
-  return { balls, kicks, track, touches, near, bumps, steps };
+  return { balls, kicks, track, touches, near, bumps, lands, steps };
 }
 // exactly ONE ball touches the cup, after a few seconds, with other balls close by at that moment
 function findPlay(n, want) {
@@ -108,6 +113,7 @@ class Sound {
     o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
   }
   kick() { this.tone(140, 50, 0.18, 0.6); this.tone(900, 300, 0.05, 0.08, 'triangle'); }
+  land(v) { this.tone(90, 40, 0.14, Math.min(0.5, v * 0.07)); }
   bump() { this.tone(320, 200, 0.07, 0.12, 'triangle'); }
   ding() { this.tone(1320, 0, 1.4, 0.25); this.tone(1980, 0, 1.0, 0.12); this.tone(2640, 0, 0.7, 0.06); this.swell(0.32, 2.5); }
 }
@@ -246,7 +252,7 @@ async function main() {
 
   /* ---------- play ---------- */
   const snd = new Sound();
-  let play = null, simT = 0, last = 0, playing = false, lastStep = 0, doneKick = new Set(), doneBump = 0, dinged = false, endT = 0;
+  let play = null, simT = 0, last = 0, playing = false, lastStep = 0, doneKick = new Set(), doneBump = 0, doneLand = 0, dinged = false, endT = 0;
   const axis = new THREE.Vector3(), dq = new THREE.Quaternion();
   const w1 = $('w1'), w2 = $('w2'), words = $('words');
   const setWords = (a, b, end) => { w1.textContent = a; w2.textContent = b; words.classList.toggle('end', end); w1.classList.remove('pop'); w2.classList.remove('pop'); void w1.offsetWidth; w1.classList.add('pop'); w2.classList.add('pop'); };
@@ -259,7 +265,7 @@ async function main() {
     ballGroup.clear();
     meshes = play.balls.map(() => { const m = new THREE.Mesh(ballGeo, ballMat); m.castShadow = true; ballGroup.add(m); return m; });
     quats = play.balls.map(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 6, Math.random() * 6, 0)));
-    simT = 0; lastStep = 0; doneKick = new Set(); doneBump = 0; dinged = false;
+    simT = 0; lastStep = 0; doneKick = new Set(); doneBump = 0; doneLand = 0; dinged = false;
     endT = play.touchT + 3.5;
     place(0);
     return true;
@@ -267,13 +273,13 @@ async function main() {
   const place = (step) => {
     for (let s = lastStep; s < step; s++) {
       play.balls.forEach((b, k) => {
-        const x0 = play.track[k][s * 2], z0 = play.track[k][s * 2 + 1], x1 = play.track[k][s * 2 + 2], z1 = play.track[k][s * 2 + 3];
-        const dx = x1 - x0, dz = z1 - z0, d = Math.hypot(dx, dz); if (d < 1e-6) return;
+        const T = play.track[k], x0 = T[s * 3], z0 = T[s * 3 + 2], x1 = T[s * 3 + 3], z1 = T[s * 3 + 5];
+        const dx = x1 - x0, dz = z1 - z0, d = Math.hypot(dx, dz); if (d < 1e-6) return;   // (it keeps spinning in the air)
         axis.set(dz / d, 0, -dx / d); dq.setFromAxisAngle(axis, d / R); quats[k].premultiply(dq);
       });
     }
     lastStep = step;
-    play.balls.forEach((b, k) => { meshes[k].position.set(play.track[k][step * 2], R, play.track[k][step * 2 + 1]); meshes[k].quaternion.copy(quats[k]); });
+    play.balls.forEach((b, k) => { meshes[k].position.set(play.track[k][step * 3], play.track[k][step * 3 + 1], play.track[k][step * 3 + 2]); meshes[k].quaternion.copy(quats[k]); });
   };
 
   const frame = (now) => {
@@ -286,6 +292,7 @@ async function main() {
       // sounds at the right moments
       play.kicks.forEach((k, i) => { if (simT >= k.t && !doneKick.has(i)) { doneKick.add(i); snd.kick(); } });
       while (doneBump < play.bumps.length && play.bumps[doneBump] <= simT) { if (doneBump % 2 === 0) snd.bump(); doneBump++; }
+      while (doneLand < play.lands.length && play.lands[doneLand].t <= simT) { snd.land(play.lands[doneLand].v); doneLand++; }
       if (!dinged && simT >= play.touchT) { dinged = true; snd.ding(); setWords($('t2').value.replace(/touches/i, 'touched').replace(/will touch/i, 'touched'), $('t3').value, true); }
     }
     const t = simT;
