@@ -9,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
 const CLOSE = new URLSearchParams(location.search).has('closeup');
 const R = 0.38, CUP = { x: 0, z: -1.5, r: 0.32 }, PZ = -19, PX = (i) => -4.0 + i * 1.6, WALL = 6.2;
-const SLOW = 0.4;                       // speed of the moment the cup is touched
+const SLOW = 1;                         // speed of the moment the cup is touched (1 = no slow motion)
 const KITS = {   // known shirts; other countries get colours from their flag
   fr: ['#1e3a8a', '#ffffff', '#ffffff', '#b91c1c'], br: ['#facc15', '#16a34a', '#1d4ed8', '#ffffff'], tr: ['#e30a17', '#ffffff', '#ffffff', '#e30a17'],
   ar: ['stripes', '#ffffff', '#111827', '#ffffff'], pl: ['#ffffff', '#dc2626', '#dc2626', '#ffffff'], ma: ['#c1121f', '#006233', '#006233', '#c1121f'],
@@ -33,8 +33,8 @@ function simulate(seed, n, fly) {
     const t = 0.6 + rnd() * 3.0;
     const tx = (rnd() * 2 - 1) * 2.4, tz = CUP.z + (rnd() * 2 - 1) * 1.1;
     const sx = PX(i) + (k ? -0.42 : 0.42), sz = PZ + 0.75;
-    const d = Math.hypot(tx - sx, tz - sz), sp = 4.8 + rnd() * 2.0;
-    const up = rnd() < 0.8 ? 3.5 + rnd() * 4.5 : 1 + rnd() * 1.5, vy = fly ? up : 0;   // flying kicks (menu option) or along the grass
+    const d = Math.hypot(tx - sx, tz - sz), sp = 6.6 + rnd() * 2.0;
+    const up = rnd() < 0.8 ? 3.5 + rnd() * 4.5 : 1 + rnd() * 1.5, hop = 1.4 + rnd() * 1.4, vy = fly ? up : hop;   // high kicks (menu option), or a small hop and then rolling on the grass
     balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vy0: vy, vz: (tz - sz) / d * sp, on: false, id: balls.length });
     kicks.push({ team: i, t });
   }
@@ -85,7 +85,7 @@ function findPlay(n, want, fly) {
     const ids = [...new Set(p.touches.map((t) => t.id))];
     if (ids.length !== 1) continue;
     const T = p.touches[0].t;
-    if (T < 4.6 || T > 8.6) continue;
+    if (T < 3.4 || T > 7.0) continue;
     const w = p.balls[ids[0]];
     if (want >= 0 && w.team !== want) continue;
     const close = new Set(p.near.filter((x) => x.id !== w.id && Math.abs(x.t - T) < 1.0).map((x) => x.id));
