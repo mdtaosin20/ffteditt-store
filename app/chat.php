@@ -114,6 +114,8 @@ function chat_target(array $row): ?array
     $video = ($row['yt_video'] ?? '') !== '' && $started > 0 && (int) ($row['yt_video_start'] ?? 0) === $started ? $row['yt_video'] : '';
     if ($video !== '' && $video === (string) (setting_get('chat_dead_' . (int) ($row['id'] ?? 0)) ?? '')) $video = '';   // that live already ended
     $channel = (string) ($row['channel_url'] ?? '');
+    // the channel link written in the "channel name" box by mistake still works
+    if ($channel === '' && preg_match('#^https?://(www\.|m\.)?youtube\.com/(@[\w.-]+|channel/[\w-]+|c/[\w.-]+)#i', trim((string) ($row['channel_name'] ?? '')), $m)) $channel = 'https://www.youtube.com/' . $m[2];
     if ($video === '' && $channel === '') return null;
     // with several streams on one channel the channel's /live page could show the wrong one, so wait for the video
     // ...but if YouTube still has not told us the video after 3 minutes (e.g. the daily limit is used up),
