@@ -126,6 +126,7 @@ export function countryMatcher(countries) {
       const code = String.fromCharCode(fe[1].codePointAt(0) - 0x1F1E6 + 97, fe[2].codePointAt(0) - 0x1F1E6 + 97);
       if (codes.has(code)) return code;
     }
+    if (/\u{1F3F4}\u{E0067}\u{E0062}/u.test(raw) && codes.has('gb')) return 'gb';   // the England / Scotland / Wales flags
     const t = norm(raw);
     if (t.length <= 3) { // a short code typed alone: "bd", "IND"; plain two letters only in capitals ("NO" yes, "no" no)
       if (short.has(t)) return short.get(t);

@@ -5,7 +5,7 @@
 // subscriber gives a free shield, a Super Chat gives both. Likes and viewers unlock goals for everyone.
 // The last flag left is the round champion, then a new round starts (about an hour a round).
 import { Sfx, holdScreen, PACE, reporter, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=21';
+import { liveChat, countryMatcher } from '/game/chat.js?v=22';
 import { goLive } from '/game/golive.js?v=1';
 import { Music, SongPlayer } from '/game/music.js?v=2';
 import { autoUpdate } from '/game/update.js?v=1';

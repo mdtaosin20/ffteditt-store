@@ -3,7 +3,7 @@
 // another country it takes that square and bounces back. A country whose land gets too small is out
 // and its land goes to the country that beat it. The last country left wins the world.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=20';
+import { liveChat, countryMatcher } from '/game/chat.js?v=22';
 import { goLive } from '/game/golive.js?v=1';
 import { autoUpdate } from '/game/update.js?v=1';
 
