@@ -26,20 +26,20 @@ const rng = (s) => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^
 
 /* ---------------------------------------------------------------- the play: balls fly up when kicked, fall, bounce and roll */
 const G = 9.8, CUP_H = 1.05;   // gravity; the cup is this high (a ball flying over it does not touch it)
-function simulate(seed, n) {
+function simulate(seed, n, fly) {
   const rnd = rng(seed), balls = [], kicks = [];
   for (let i = 0; i < n; i++) for (let k = 0; k < 2; k++) {
     const t = 0.6 + rnd() * 3.0;
     const tx = (rnd() * 2 - 1) * 2.4, tz = CUP.z + (rnd() * 2 - 1) * 1.1;
     const sx = PX(i) + (k ? -0.42 : 0.42), sz = PZ + 0.75;
     const d = Math.hypot(tx - sx, tz - sz), sp = 4.8 + rnd() * 2.0;
-    const vy = rnd() < 0.8 ? 3.5 + rnd() * 4.5 : 1 + rnd() * 1.5;   // most kicks go up in the air, some along the grass
+    const up = rnd() < 0.8 ? 3.5 + rnd() * 4.5 : 1 + rnd() * 1.5, vy = fly ? up : 0;   // flying kicks (menu option) or along the grass
     balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vy0: vy, vz: (tz - sz) / d * sp, on: false, id: balls.length });
     kicks.push({ team: i, t });
   }
   const steps = Math.ceil(13 / DT), track = balls.map(() => new Float32Array(steps * 3));
   const touches = [], near = [], bumps = [], lands = [];
-  let simT = 0;
+  let simT = 0, cupUp = true, fall = null;
   for (let s = 0; s < steps; s++, simT += DT) {
     for (const b of balls) {
       if (!b.on && simT >= b.t) { b.on = true; b.vy = b.vy0; }
@@ -51,9 +51,14 @@ function simulate(seed, n) {
         const ground = b.y <= R + 0.01, f = Math.exp(-(ground ? 0.22 : 0.03) * DT); b.vx *= f; b.vz *= f;
         if (b.x < -WALL) { b.x = -WALL; b.vx = Math.abs(b.vx) * 0.6; } if (b.x > WALL) { b.x = WALL; b.vx = -Math.abs(b.vx) * 0.6; }
         const dx = b.x - CUP.x, dz = b.z - CUP.z, dd = Math.hypot(dx, dz);
-        if (dd < R + CUP.r && b.y - R < CUP_H) {
+        if (cupUp && dd < R + CUP.r && b.y - R < CUP_H) {
           const nx = dx / dd, nz = dz / dd, vn = b.vx * nx + b.vz * nz;
-          if (vn < 0) { b.vx -= 1.7 * vn * nx; b.vz -= 1.7 * vn * nz; touches.push({ id: b.id, t: simT }); }
+          if (vn < 0) {
+            // the first touch knocks the cup over (it falls the way the ball was going); then it lies on the grass
+            const sp = Math.hypot(b.vx, b.vz) || 1;
+            fall = { t: simT, dx: b.vx / sp, dz: b.vz / sp };
+            b.vx -= 1.5 * vn * nx; b.vz -= 1.5 * vn * nz; touches.push({ id: b.id, t: simT }); cupUp = false;
+          }
           b.x = CUP.x + nx * (R + CUP.r); b.z = CUP.z + nz * (R + CUP.r);
         } else if (dd < R + CUP.r + 0.6 && b.y < CUP_H + 1) near.push({ id: b.id, t: simT });
       }
@@ -69,13 +74,13 @@ function simulate(seed, n) {
     }
     balls.forEach((b, k) => { track[k][s * 3] = b.x; track[k][s * 3 + 1] = b.y; track[k][s * 3 + 2] = b.z; });
   }
-  return { balls, kicks, track, touches, near, bumps, lands, steps };
+  return { balls, kicks, track, touches, near, bumps, lands, steps, fall };
 }
 // exactly ONE ball touches the cup, after a few seconds, with other balls close by at that moment
-function findPlay(n, want) {
+function findPlay(n, want, fly) {
   const start = (Math.random() * 1e9) | 0;
   for (let s = start; s < start + 30000; s++) {
-    const p = simulate(s, n);
+    const p = simulate(s, n, fly);
     const ids = [...new Set(p.touches.map((t) => t.id))];
     if (ids.length !== 1) continue;
     const T = p.touches[0].t;
@@ -113,6 +118,7 @@ class Sound {
     o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
   }
   kick() { this.tone(140, 50, 0.18, 0.6); this.tone(900, 300, 0.05, 0.08, 'triangle'); }
+  clank() { this.tone(520, 300, 0.25, 0.25, 'triangle'); this.tone(1650, 900, 0.3, 0.1, 'square'); this.tone(80, 40, 0.2, 0.4); }
   land(v) { this.tone(90, 40, 0.14, Math.min(0.5, v * 0.07)); }
   bump() { this.tone(320, 200, 0.07, 0.12, 'triangle'); }
   ding() { this.tone(1320, 0, 1.4, 0.25); this.tone(1980, 0, 1.0, 0.12); this.tone(2640, 0, 0.7, 0.06); this.swell(0.32, 2.5); }
@@ -202,7 +208,9 @@ async function main() {
   const cb = new THREE.Mesh(new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 64), gold); cb.castShadow = true; cup.add(cb);
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.56, 0.16, 48), new THREE.MeshStandardMaterial({ color: '#1f7a35', roughness: 0.4, metalness: 0.2 })); base.position.y = 0.22; cup.add(base);
   [-1, 1].forEach((s) => { const h = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.06, 16, 40, Math.PI * 1.15), gold); h.position.set(s * 0.62, 1.45, 0); h.rotation.z = s > 0 ? -Math.PI * 0.58 : Math.PI * 0.58 + Math.PI; h.castShadow = true; cup.add(h); });
-  cup.position.set(CUP.x, 0, CUP.z); cup.scale.setScalar(0.55); scene.add(cup);
+  cup.scale.setScalar(0.55);
+  const cupPivot = new THREE.Group(); cupPivot.position.set(CUP.x, 0, CUP.z); cupPivot.add(cup); scene.add(cupPivot);
+  const fallAxis = new THREE.Vector3(), cupBase = 0.3;   // the cup tips over its base edge
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.05, 12, 64), new THREE.MeshBasicMaterial({ color: '#fff6b0', transparent: true, opacity: 0 }));
   ring.rotation.x = -Math.PI / 2; ring.position.set(CUP.x, 0.45, CUP.z); scene.add(ring);
 
@@ -252,20 +260,20 @@ async function main() {
 
   /* ---------- play ---------- */
   const snd = new Sound();
-  let play = null, simT = 0, last = 0, playing = false, lastStep = 0, doneKick = new Set(), doneBump = 0, doneLand = 0, dinged = false, endT = 0;
+  let play = null, simT = 0, last = 0, playing = false, lastStep = 0, doneKick = new Set(), doneBump = 0, doneLand = 0, clanked = false, dinged = false, endT = 0;
   const axis = new THREE.Vector3(), dq = new THREE.Quaternion();
   const w1 = $('w1'), w2 = $('w2'), words = $('words');
   const setWords = (a, b, end) => { w1.textContent = a; w2.textContent = b; words.classList.toggle('end', end); w1.classList.remove('pop'); w2.classList.remove('pop'); void w1.offsetWidth; w1.classList.add('pop'); w2.classList.add('pop'); };
 
   const prepare = (codes, want) => {
     buildTeams(codes);
-    play = findPlay(codes.length, want);
+    play = findPlay(codes.length, want, $('fly').checked);
     if (!play) return false;
     players.forEach((pl, i) => { pl.kicks = play.kicks.filter((k) => k.team === i).map((k) => k.t); });
     ballGroup.clear();
     meshes = play.balls.map(() => { const m = new THREE.Mesh(ballGeo, ballMat); m.castShadow = true; ballGroup.add(m); return m; });
     quats = play.balls.map(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 6, Math.random() * 6, 0)));
-    simT = 0; lastStep = 0; doneKick = new Set(); doneBump = 0; doneLand = 0; dinged = false;
+    simT = 0; lastStep = 0; doneKick = new Set(); doneBump = 0; doneLand = 0; clanked = false; dinged = false;
     endT = play.touchT + 3.5;
     place(0);
     return true;
@@ -305,7 +313,13 @@ async function main() {
         pl.p.position.y = Math.abs(Math.sin(now / 330 + i)) * 0.04;
       });
       const since = t - play.touchT;
-      cup.rotation.z = since > 0 && since < 0.8 ? Math.sin(since * 40) * 0.12 * (1 - since / 0.8) : 0;
+      if (since > 0 && play.fall) {
+        // falls over in ~0.5 s (faster and faster), a small bounce, then lies on the grass
+        const f = play.fall, k = Math.min(1, since / 0.5), bounce = since > 0.5 && since < 0.75 ? Math.sin((since - 0.5) / 0.25 * Math.PI) * 0.12 : 0;
+        cupPivot.position.set(CUP.x + f.dx * cupBase, 0, CUP.z + f.dz * cupBase); cup.position.set(-f.dx * cupBase, 0, -f.dz * cupBase);
+        fallAxis.set(f.dz, 0, -f.dx); cupPivot.quaternion.setFromAxisAngle(fallAxis, k * k * (Math.PI / 2 - 0.12) - bounce);
+        if (since > 0.5 && !clanked) { clanked = true; snd.clank(); }
+      } else { cupPivot.position.set(CUP.x, 0, CUP.z); cup.position.set(0, 0, 0); cupPivot.quaternion.identity(); }
       ring.material.opacity = since > 0 && since < 0.6 ? 0.9 * (1 - since / 0.6) : 0; ring.scale.setScalar(since > 0 ? 1 + since * 3 : 1);
       const jump = since > 0 && since < 3 ? 0.25 : 0.06;
       for (let k = 0; k < ci; k++) { const [x, y, z, ph] = crowdPos[k]; m4.makeTranslation(x, y + Math.max(0, Math.sin(now / 140 + ph)) * jump, z); crowd.setMatrixAt(k, m4); }
