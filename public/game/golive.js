@@ -37,10 +37,11 @@ export function goLive(opt) {
   const box = document.createElement('div'); box.className = 'gl-box'; box.hidden = true;
   box.style.cssText = `left:${opt.left}px;top:${opt.top}px;width:${size}px;height:${size}px`;
   const video = document.createElement('video'); video.autoplay = true; video.playsInline = true;
+  const voice = document.createElement('audio'); voice.autoplay = true;
   const mic = document.createElement('div'); mic.className = 'gl-mic'; mic.innerHTML = MIC;
   const bars = document.createElement('div'); bars.className = 'gl-bars';
   const barEls = [0, 1, 2, 3].map(() => bars.appendChild(document.createElement('i')));
-  mic.appendChild(bars); box.append(video, mic);
+  mic.appendChild(bars); box.append(video, voice, mic);
   const tag = document.createElement('div'); tag.className = 'gl-tag'; tag.hidden = true;
   tag.style.cssText = `left:${opt.left + 12}px;top:${opt.top + size - 26}px`;
   stage.append(box, tag);
@@ -64,7 +65,7 @@ export function goLive(opt) {
   };
   const close = () => {
     if (pc) { try { pc.close(); } catch (e) { /* closed */ } }
-    pc = null; video.srcObject = null; show(false);
+    pc = null; video.srcObject = null; voice.srcObject = null; show(false);
     cancelAnimationFrame(levelT);
   };
   const level = () => { // the voice level moves the red bars (voice-only mode)
@@ -79,11 +80,16 @@ export function goLive(opt) {
   const answer = async (offer) => {
     close();
     pc = new RTCPeerConnection({ iceServers: ICE });
-    const remote = new MediaStream();
+    // The voice plays through its own <audio>: a <video> also holding a video track that gets no pictures
+    // (voice-only mode) never starts, and then its sound would not play either.
     pc.ontrack = (e) => {
-      remote.addTrack(e.track);
-      video.srcObject = remote; video.muted = false; video.volume = 1;
-      video.play().catch(() => {});
+      if (e.track.kind === 'video') {
+        video.srcObject = new MediaStream([e.track]); video.muted = true;
+        video.play().catch(() => {});
+        return;
+      }
+      voice.srcObject = new MediaStream([e.track]); voice.muted = false; voice.volume = 1;
+      voice.play().catch(() => {});
       if (e.track.kind === 'audio') {
         try {
           ctx = ctx || new AudioContext();
