@@ -146,19 +146,23 @@ page_start('Join Live', 'golive', $admin);
       await connect();
       clearInterval(pollT); pollT = setInterval(poll, 1500);
     } catch (e) {
-      status(e.name === 'NotAllowedError' ? 'Please allow the camera / microphone for this site' : 'Could not start: ' + e.message, false);
-      await leave(false);
+      await leave(false, true);   // (keeps the message below on screen)
+      status(e.name === 'NotAllowedError' ? '⚠️ The microphone is blocked. Allow it for this site (the 🔒 / ⓘ next to the address, and on a Mac also System Settings → Privacy & Security → Microphone), then try again.'
+        : e.name === 'NotFoundError' ? '⚠️ No microphone found on this device.'
+        : e.name === 'NotReadableError' ? '⚠️ The microphone is busy in another app (close Zoom / FaceTime / other tabs) and try again.'
+        : '⚠️ Could not start: ' + (e.message || e.name), false);
     }
     ui();
   };
-  const leave = async (quiet) => {
+  const leave = async (quiet, keepStatus) => {
     wantOn = false; clearInterval(pollT);
     if (sess && !quiet) { try { await post({ do: 'stop', sess }); } catch (e) { /* ignore */ } }
     try { pc && pc.close(); } catch (e) { /* closed */ }
     pc = null; sess = '';
     if (local) local.getTracks().forEach((t) => t.stop());
     local = null; analyser = null; $('gl-lvl').style.width = '0%'; $('gl-video').srcObject = null;
-    status('Not on the live'); ui();
+    if (!keepStatus) status('Not on the live');
+    ui();
   };
   const toggleCam = async () => {
     if (!pc) return;
