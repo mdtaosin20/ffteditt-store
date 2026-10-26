@@ -73,10 +73,11 @@ function ytx_pick(array $s): array
     $c = ytx_get($id);
     $start = (int) ($s['started_at'] ?? 0);
     $p = json_decode((string) (setting_get('ytx_pick_' . $id) ?? ''), true) ?: [];
-    if (($p['start'] ?? -1) !== $start || !array_key_exists('ti', $p)) {
+    $game = game_of_url((string) $s['page_url']);
+    if (($p['start'] ?? -1) !== $start || ($p['g'] ?? '') !== $game || !array_key_exists('ti', $p)) {
         $titles = $c['tmode'] === 'list' ? $c['titles'] : ($c['tmode'] === '' ? ytx_game_titles($s) : []);
         $thumbs = $c['thmode'] === 'list' ? array_merge(['main'], $c['thumbs']) : ($c['thmode'] === '' ? ytx_game_thumbs($s) : []);
-        $p = ['start' => $start,
+        $p = ['start' => $start, 'g' => $game,
               'ti' => $titles ? ytx_random(count($titles), (int) ($p['ti'] ?? -1)) : -1,
               'th' => count($thumbs) > 1 ? ytx_random(count($thumbs), (int) ($p['th'] ?? -1)) : -1];
         setting_set('ytx_pick_' . $id, json_encode($p));

@@ -102,12 +102,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $restart = $key !== $stream['stream_key'] || $v['rtmp_url'] !== $stream['rtmp_url'] || $v['page_url'] !== $stream['page_url']
                 || (int) $v['server_id'] !== (int) $stream['server_id'] || $v['quality'] !== $stream['quality']
                 || (int) $v['fps'] !== (int) $stream['fps'] || (int) $v['auto_restart'] !== (int) $stream['auto_restart'];
+            // only the game changed on a running live: no restart — the game page shows "GAME UPDATE" and opens the
+            // new game by itself (same YouTube live); the new game's title / thumbnail are put on that live
+            $switchOnly = $restart && $v['page_url'] !== $stream['page_url'] && $stream['desired'] === 'on'
+                && $key === $stream['stream_key'] && $v['rtmp_url'] === $stream['rtmp_url'] && (int) $v['server_id'] === (int) $stream['server_id']
+                && $v['quality'] === $stream['quality'] && (int) $v['fps'] === (int) $stream['fps'] && (int) $v['auto_restart'] === (int) $stream['auto_restart'];
+            if ($switchOnly) $restart = false;
             db()->prepare('UPDATE streams SET name=?, stream_key=?, rtmp_url=?, page_url=?, server_id=?, quality=?,
                            fps=?, auto_restart=?, channel_name=?, channel_url=?, rev = rev + ?, updated_at=? WHERE id=?')
                 ->execute([$v['name'], $key, $v['rtmp_url'], $v['page_url'], $v['server_id'], $v['quality'],
                            $v['fps'], $v['auto_restart'], $v['channel_name'], $v['channel_url'], $restart ? 1 : 0, $now, $id]);
-            log_activity("Stream updated: {$v['name']}" . ($newKey !== '' ? ' (new key)' : ''));
-            flash('Saved. If it is live, it restarts with the new settings in a few seconds.');
+            if ($switchOnly) {
+                $ng = games_list()[game_of_url($v['page_url'])]['name'] ?? 'the new game';
+                db()->prepare('UPDATE streams SET yt_rev = yt_rev + 1 WHERE id = ?')->execute([$id]);   // new title / thumbnail on the same live
+                log_activity("Game switched on the live: {$v['name']} → {$ng}", 'ok');
+                flash("Saved. Within about 10 seconds the live shows “GAME UPDATE” for 2 seconds and switches to {$ng} — the live keeps going. Its title and thumbnail change within about 3 minutes.");
+            } else {
+                log_activity("Stream updated: {$v['name']}" . ($newKey !== '' ? ' (new key)' : ''));
+                flash('Saved. If it is live, it restarts with the new settings in a few seconds.');
+            }
         } else {
             db()->prepare('INSERT INTO streams (name, stream_key, rtmp_url, page_url, server_id, quality, fps,
                            auto_restart, channel_name, channel_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
