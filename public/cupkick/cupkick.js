@@ -25,30 +25,32 @@ const POPULAR = ['tr', 'br', 'fr', 'ar', 'pl', 'ma', 'us', 'gb', 'de', 'es', 'pt
 
 const rng = (s) => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 
-/* ---------------------------------------------------------------- the play: balls fly up when kicked, fall, bounce and roll */
+/* ---------------------------------------------------------------- the play: balls are kicked one by one (1–2 s apart) and roll on the grass */
 const G = 9.8, CUP_H = 1.35;   // gravity; the cup is this high (a ball flying over it does not touch it)
-function simulate(seed, n, fly) {
+function simulate(seed, n) {
   const rnd = rng(seed), balls = [], kicks = [];
-  for (let i = 0; i < n; i++) for (let k = 0; k < 2; k++) {
-    const t = 0.6 + rnd() * 3.0;
+  // the kicks come one after another, 1–2 seconds apart, in a random order of the 12 balls
+  const order = []; for (let i = 0; i < n; i++) for (let k = 0; k < 2; k++) order.push([i, k]);
+  for (let a = order.length - 1; a > 0; a--) { const c = Math.floor(rnd() * (a + 1)); [order[a], order[c]] = [order[c], order[a]]; }
+  let t = 0.8;
+  for (const [i, k] of order) {
     const tx = (rnd() * 2 - 1) * 2.4, tz = CUP.z + (rnd() * 2 - 1) * 1.1;
     const sx = PX(i) + (k ? -0.42 : 0.42), sz = PZ + 0.75;
     const d = Math.hypot(tx - sx, tz - sz), sp = 6.6 + rnd() * 2.0;
-    const up = rnd() < 0.8 ? 3.5 + rnd() * 4.5 : 1 + rnd() * 1.5, vy = fly ? up : 0;   // high kicks (menu option), or rolling on the grass all the way
-    balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vy0: vy, vz: (tz - sz) / d * sp, on: false, id: balls.length });
+    // every ball rolls on the grass, it never goes up
+    balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vz: (tz - sz) / d * sp, on: false, id: balls.length });
     kicks.push({ team: i, t });
+    t += 1 + rnd();
   }
-  const steps = Math.ceil(13 / DT), track = balls.map(() => new Float32Array(steps * 3));
+  const steps = Math.ceil((t + 6) / DT), track = balls.map(() => new Float32Array(steps * 3));
   const touches = [], near = [], bumps = [], lands = [];
   let simT = 0, cupUp = true, fall = null;
   for (let s = 0; s < steps; s++, simT += DT) {
     for (const b of balls) {
-      if (!b.on && simT >= b.t) { b.on = true; b.vy = b.vy0; }
+      if (!b.on && simT >= b.t) b.on = true;
       if (b.on) {
         b.x += b.vx * DT; b.z += b.vz * DT;
-        // up in the air: gravity; on the grass: it bounces lower each time, then rolls
-        b.vy -= G * DT; b.y += b.vy * DT;
-        if (b.y <= R) { b.y = R; if (b.vy < -1.2) { if (b.vy < -3) lands.push({ t: simT, v: -b.vy }); b.vy = -b.vy * 0.55; b.vx *= 0.9; b.vz *= 0.9; } else b.vy = 0; }
+        b.y = R; b.vy = 0;   // always on the grass
         const ground = b.y <= R + 0.01, f = Math.exp(-(ground ? 0.22 : 0.03) * DT); b.vx *= f; b.vz *= f;
         if (b.x < -WALL) { b.x = -WALL; b.vx = Math.abs(b.vx) * 0.6; } if (b.x > WALL) { b.x = WALL; b.vx = -Math.abs(b.vx) * 0.6; }
         const dx = b.x - CUP.x, dz = b.z - CUP.z, dd = Math.hypot(dx, dz);
@@ -78,18 +80,18 @@ function simulate(seed, n, fly) {
   return { balls, kicks, track, touches, near, bumps, lands, steps, fall };
 }
 // exactly ONE ball touches the cup, after a few seconds, with other balls close by at that moment
-function findPlay(n, want, fly) {
+function findPlay(n, want) {
   const start = (Math.random() * 1e9) | 0;
   for (let s = start; s < start + 30000; s++) {
-    const p = simulate(s, n, fly);
+    const p = simulate(s, n);
     const ids = [...new Set(p.touches.map((t) => t.id))];
     if (ids.length !== 1) continue;
     const T = p.touches[0].t;
-    if (T < 3.4 || T > 7.0) continue;
+    if (T < 5.0 || T > 13.0) continue;   // a few kicks first, so people have to watch
     const w = p.balls[ids[0]];
     if (want >= 0 && w.team !== want) continue;
-    const close = new Set(p.near.filter((x) => x.id !== w.id && Math.abs(x.t - T) < 1.0).map((x) => x.id));
-    if (close.size < 2) continue;
+    const close = new Set(p.near.filter((x) => x.id !== w.id && Math.abs(x.t - T) < 1.5).map((x) => x.id));
+    if (close.size < 1) continue;
     return { ...p, touchT: T, winner: w.team };
   }
   return null;
@@ -309,7 +311,7 @@ async function main() {
 
   const prepare = (codes, want) => {
     buildTeams(codes);
-    play = findPlay(codes.length, want, $('fly').checked);
+    play = findPlay(codes.length, want);
     if (!play) return false;
     players.forEach((pl, i) => { pl.kicks = play.kicks.filter((k) => k.team === i).map((k) => k.t); });
     ballGroup.clear();
