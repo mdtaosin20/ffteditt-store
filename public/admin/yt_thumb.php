@@ -6,6 +6,12 @@ require_login();
 $st = db()->prepare('SELECT * FROM streams WHERE id = ?');
 $st->execute([(int) ($_GET['id'] ?? 0)]);
 $s = $st->fetch();
+if ($s && isset($_GET['x'])) {   // one of the extra thumbnails (YouTube Manager → More thumbnails)
+    $xf = ytx_thumb_path((int) $s['id'], (string) $_GET['x']);
+    if (!in_array(preg_replace('/[^a-z0-9]/', '', (string) $_GET['x']), ytx_get((int) $s['id'])['thumbs'], true) || !is_file($xf)) { http_response_code(404); exit; }
+    header('Content-Type: image/jpeg'); header('Cache-Control: private, max-age=300'); header('X-Content-Type-Options: nosniff');
+    readfile($xf); exit;
+}
 if ($s && isset($_GET['def'])) {
     $s['yt_thumb'] = 'default';
 }

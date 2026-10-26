@@ -243,6 +243,7 @@ if (function_exists('fastcgi_finish_request')) {
 ignore_user_abort(true);
 try {
     yt_tick($sid);
+    try { ytx_pin_tick($sid); } catch (Throwable $e) { /* never stops the worker check-in */ }
 } catch (Throwable $e) {
     // never break the worker check-in
 }

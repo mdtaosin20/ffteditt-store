@@ -513,8 +513,11 @@ function yt_apply(array $s): array
             $f = $g === 'lastflag' ? lastflag_config() : flags_config();
             if (!empty($f['music']) && ($f['music_src'] ?? '') === 'songs') $t['desc'] = rtrim($t['desc']) . "\n\n" . music_credit_text();
         }
+        // a different title / thumbnail from the owner's lists on every live (YouTube Manager → Title & thumbnail)
+        $pick = ytx_pick($s);
+        if ($pick['title'] !== null) $t['title'] = $pick['title'];
         // a little different on every live (to learn which title / thumbnail works best)
-        $thumb = yt_thumb_file($s);
+        $thumb = $pick['thumb'] ?? yt_thumb_file($s);
         $vary = null;
         if (!empty($s['yt_vary'])) {
             try { $vary = ytv_for_video($s, $t, $video, $thumb); } catch (Throwable $e) { $vary = null; }

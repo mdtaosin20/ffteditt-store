@@ -79,6 +79,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Choose a picture to upload, or pick the ready-made thumbnail.';
     }
 
+    // more choice: a list of titles, more thumbnails, a message for pinning
+    $x = ytx_get($id);
+    $x['tmode'] = ($_POST['tmode'] ?? '') === 'list' ? 'list' : 'one';
+    $x['titles'] = array_slice(array_values(array_filter(array_map(fn ($l) => trim(str_replace(['<', '>'], '', $l)), preg_split('/\R/', (string) ($_POST['titles'] ?? '')) ?: []), fn ($l) => $l !== '')), 0, YTX_MAX_TITLES);
+    foreach ($x['titles'] as $tl) if (mb_strlen($tl) > 100) $errors[] = 'A title in the list is too long (YouTube allows 100 letters): “' . mb_substr($tl, 0, 40) . '…”';
+    if ($x['tmode'] === 'list' && count($x['titles']) < 2) $errors[] = 'Write at least 2 titles in the list (one per line), or choose “Always the title above”.';
+    $x['thmode'] = ($_POST['thmode'] ?? '') === 'list' ? 'list' : 'one';
+    $del = array_map('strval', (array) ($_POST['xdel'] ?? []));
+    foreach ($del as $dn) if (in_array($dn, $x['thumbs'], true)) { @unlink(ytx_thumb_path($id, $dn)); }
+    $x['thumbs'] = array_values(array_filter($x['thumbs'], fn ($n) => !in_array($n, $del, true) && is_file(ytx_thumb_path($id, $n))));
+    $xf = $_FILES['xthumbs'] ?? null;
+    if ($xf && is_array($xf['name'] ?? null)) {
+        foreach (array_keys($xf['name']) as $i) {
+            if (($xf['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) continue;
+            if (count($x['thumbs']) >= YTX_MAX_THUMBS) { $errors[] = 'At most ' . YTX_MAX_THUMBS . ' extra pictures — remove one first.'; break; }
+            $inf = ($xf['error'][$i] === UPLOAD_ERR_OK) ? @getimagesize($xf['tmp_name'][$i]) : false;
+            if (!$inf || !in_array($inf[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) { $errors[] = '“' . $xf['name'][$i] . '” is not a JPG, PNG or WEBP picture (or it is too big to upload).'; continue; }
+            if ($inf[0] < 640) { $errors[] = '“' . $xf['name'][$i] . '” is too small. Use 1280 × 720 pixels.'; continue; }
+            $nm = bin2hex(random_bytes(4));
+            if (yt_shrink_thumb($xf['tmp_name'][$i], $inf[2], ytx_thumb_path($id, $nm))) $x['thumbs'][] = $nm;
+            else $errors[] = 'Could not save “' . $xf['name'][$i] . '”. Save it as JPG (1280 × 720) and try again.';
+        }
+    }
+    if ($x['thmode'] === 'list' && !$x['thumbs']) $errors[] = 'Add at least one more picture for “a different picture on every live”, or choose “Always one picture”.';
+    $x['pin_on'] = isset($_POST['pin_on']);
+    [$pinText, $pinErr] = ytp_clean_msg((string) ($_POST['pin_text'] ?? ''));
+    if ($x['pin_on'] && $pinErr !== '') $errors[] = 'Message for pinning: ' . $pinErr;
+    $x['pin_text'] = $pinText ?? trim((string) ($_POST['pin_text'] ?? ''));
+    $x['pin_every'] = in_array((int) ($_POST['pin_every'] ?? 60), [0, 30, 60, 120], true) ? (int) $_POST['pin_every'] : 60;
+    if ($x['pin_every'] === 0) $x['pin_every'] = 100000;   // only once, at the start
+    if ($errors) { $x0 = ytx_get($id); $x0['thumbs'] = $x['thumbs']; ytx_save($id, $x0); }   // (pictures already saved stay listed)
+    else ytx_save($id, $x);
+
     if (!$errors) {
         $saveTitle = $title === $def['title'] ? '' : $title;
         $saveDesc  = $desc === $def['desc'] ? '' : $desc;
@@ -128,6 +161,14 @@ page_start('Title & thumbnail', 'youtube', $admin);
     <div class="form">
       <label class="field"><span>Title <b class="count" id="tc"></b></span>
         <input name="title" id="title" maxlength="140" required value="<?= e($vTitle) ?>"></label>
+      <?php $x = ytx_get($id); $xt = $x['titles'] ?: [$vTitle]; ?>
+      <div class="field xbox"><span>Titles</span>
+        <div class="radios">
+          <label><input type="radio" name="tmode" value="one" <?= $x['tmode'] !== 'list' ? 'checked' : '' ?>> Always the title above</label>
+          <label><input type="radio" name="tmode" value="list" <?= $x['tmode'] === 'list' ? 'checked' : '' ?>> 🎲 A different title from this list on every live</label>
+        </div>
+        <textarea name="titles" rows="5" placeholder="One title per line"><?= e(implode("\n", $xt)) ?></textarea>
+        <small class="muted">One title per line (up to <?= YTX_MAX_TITLES ?>, 100 letters each). Each time the stream starts the panel picks one at random — never the same twice in a row.</small></div>
       <label class="field"><span>Description</span>
         <textarea name="desc" id="desc" rows="12"><?= e($vDesc) ?></textarea>
         <small class="muted">Words with # (like <code>#messi</code>) are also added as video tags.</small></label>
@@ -141,6 +182,19 @@ page_start('Title & thumbnail', 'youtube', $admin);
         <input type="hidden" name="image_data" id="image_data" value="">
         <small class="muted">JPG, PNG or WEBP, best 1280 × 720. Big pictures are made smaller by the panel. Custom thumbnails need a phone-verified channel (youtube.com/verify).</small>
       </div>
+      <div class="field xbox"><span>More thumbnails</span>
+        <div class="radios">
+          <label><input type="radio" name="thmode" value="one" <?= $x['thmode'] !== 'list' ? 'checked' : '' ?>> Always one picture (the one above)</label>
+          <label><input type="radio" name="thmode" value="list" <?= $x['thmode'] === 'list' ? 'checked' : '' ?>> 🎲 A different picture from these on every live</label>
+        </div>
+        <div class="xthumbs">
+          <figure><img alt="Main thumbnail" src="yt_thumb.php?id=<?= $id ?>&amp;v=<?= (int) $s['yt_rev'] ?>" onerror="this.style.visibility='hidden'"><figcaption>The one above</figcaption></figure>
+          <?php foreach ($x['thumbs'] as $xn): ?>
+            <figure><img alt="Extra thumbnail" src="yt_thumb.php?id=<?= $id ?>&amp;x=<?= e($xn) ?>"><figcaption><label class="check"><input type="checkbox" name="xdel[]" value="<?= e($xn) ?>"> remove</label></figcaption></figure>
+          <?php endforeach; ?>
+        </div>
+        <?php if (count($x['thumbs']) < YTX_MAX_THUMBS): ?><input type="file" name="xthumbs[]" accept="image/jpeg,image/png,image/webp" multiple><?php endif; ?>
+        <small class="muted">Add up to <?= YTX_MAX_THUMBS ?> more pictures (1280 × 720; big ones are made smaller). Each live gets one of them, or the one above, at random — never the same twice in a row.</small></div>
       <label class="check"><input type="checkbox" name="auto" <?= $s['yt_auto'] ? 'checked' : '' ?>> Put these on the live video automatically every time the stream starts</label>
       <label class="check"><input type="checkbox" name="vary" <?= $s['yt_vary'] ? 'checked' : '' ?>> Change them a little on every start (title words, the first line of the description, tags and a badge on the thumbnail) — Audience Insights shows which version gets the most viewers</label>
       <label class="field"><span>Thumbnail badges — one per line, used in turn (start with * for a white dot)</span>
@@ -150,6 +204,14 @@ page_start('Title & thumbnail', 'youtube', $admin);
         <div class="ytv-prev"><?php $nn = (int) db()->query('SELECT COUNT(*) FROM yt_variants WHERE stream_id = ' . $id)->fetchColumn();
           for ($k = 0; $k < 4; $k++): ?><figure><img loading="lazy" alt="Version <?= e(ytv_letter($nn + $k)) ?>" src="yt_thumb.php?id=<?= $id ?>&amp;var=<?= $nn + $k ?>&amp;r=<?= (int) $s['yt_rev'] ?>"><figcaption><?= e(ytv_letter($nn + $k)) ?></figcaption></figure><?php endfor; ?></div></div>
       <?php endif; ?>
+      <div class="field xbox"><span>Message for pinning</span>
+        <label class="check"><input type="checkbox" name="pin_on" <?= $x['pin_on'] ? 'checked' : '' ?>> Send this message in the live chat by itself when the live starts</label>
+        <textarea name="pin_text" rows="7" maxlength="400"><?= e($x['pin_text'] !== '' ? $x['pin_text'] : ytx_pin_default($game)) ?></textarea>
+        <label class="field" style="margin-top:6px"><span>Send it again</span>
+          <select name="pin_every"><?php foreach ([0 => 'Only once, at the start', 30 => 'Every 30 minutes', 60 => 'Every 60 minutes', 120 => 'Every 2 hours'] as $mv => $ml): ?>
+            <option value="<?= $mv ?>" <?= ($x['pin_every'] >= 100000 ? 0 : (int) $x['pin_every']) === $mv ? 'selected' : '' ?>><?= $ml ?></option><?php endforeach; ?></select></label>
+        <small class="muted">YouTube does not let a program pin messages: when it shows in the chat, tap it on your phone → <b>Pin</b>. Up to 200 letters. “N chats = 🛡” / “N chats = ♻” take the game's numbers by themselves. Each message uses 20 of the 10,000 daily YouTube units.</small>
+        <?php $pk = json_decode((string) (setting_get('ytx_pin_' . $id) ?? ''), true) ?: []; if (!empty($pk['msg'])): ?><small class="muted">Last: <?= e($pk['msg']) ?></small><?php endif; ?></div>
       <div class="form-actions">
         <button class="btn btn-blue" type="submit" name="do" value="save">Save</button>
         <?php if ($connected): ?><button class="btn btn-green" type="submit" name="do" value="apply">Save &amp; update live now</button><?php endif; ?>

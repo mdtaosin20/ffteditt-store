@@ -511,3 +511,11 @@ input[type=file] { color: var(--soft); font-family: inherit; font-size: 14px; ma
 .ytv-prev figure { margin: 0; position: relative; }
 .ytv-prev img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; display: block; background: #111; }
 .ytv-prev figcaption { position: absolute; left: 6px; top: 6px; padding: 1px 8px; border-radius: 6px; background: rgba(0,0,0,.75); font-weight: 700; font-size: 13px; }
+
+/* YouTube Manager → Title & thumbnail: title list, more thumbnails, message for pinning */
+.xbox { border: 1px solid rgba(255, 255, 255, .12); border-radius: 12px; padding: 12px; background: rgba(255, 255, 255, .02); }
+.xbox textarea { width: 100%; }
+.xthumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 8px 0; }
+.xthumbs figure { margin: 0; }
+.xthumbs img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; display: block; background: #111; }
+.xthumbs figcaption { font-size: 12px; color: var(--muted, #9aa4b2); margin-top: 4px; }
