@@ -12,7 +12,7 @@ const YTP_POLLS = [
     ['q' => 'Which country wins this round? 🏆', 'o' => ['My country! 💪', 'Asia 🌏', 'Africa / Europe 🌍', 'Americas 🌎']],
 ];
 const YTP_MSGS = [
-    "🌍 FLAG ARENA\n➊ Type your country 🌍\n➋ 10 chats = 🛡 Shield\n➌ Out? 20 chats = ♻ Revive\n➍ Subscribe 🔔 = Shield\n➎ Super Chat ⭐ = Both\n➏ Like 👍 = Hole stops 30s\n🔁 Share & bring your team!",
+    "🌍 FLAG ARENA\n➊ Type your country 🌍\n➋ 10 chats = 🛡 Shield\n➌ Out? 20 chats = ♻ Revive\n➍ Subscribe 🔔 / Share 📢 = 🛡 or ♻\n➎ Super Chat ⭐ = Both\n➏ Like 👍 = Hole stops 30s\n🔁 Share & bring your team!",
 ];
 const YTP_Q_MAX = 100, YTP_O_MAX = 35, YTP_MSG_MAX = 200;
 

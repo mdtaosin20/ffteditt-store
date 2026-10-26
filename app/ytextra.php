@@ -29,7 +29,7 @@ function ytx_pin_default(string $game): string
 {
     $name = ['lastflag' => 'LAST FLAG STANDING', 'flags' => 'FLAG ARENA'][$game] ?? '';
     if ($name === '') return "🌍 Type your country in the chat!\n🔔 Subscribe & 👍 Like\n🔁 Share & bring your team!";
-    return "🌍 {$name}\n➊ Type your country 🌍\n➋ 10 chats = 🛡 Shield\n➌ Out? 20 chats = ♻ Revive\n➍ Subscribe 🔔 = Shield\n➎ Super Chat ⭐ = Both\n🔁 Share & bring your team!";
+    return "🌍 {$name}\n➊ Type your country 🌍\n➋ 10 chats = 🛡 Shield\n➌ Out? 20 chats = ♻ Revive\n➍ Subscribe 🔔 / Share 📢 = 🛡 or ♻\n➎ Super Chat ⭐ = Both\n🔁 Share & bring your team!";
 }
 
 function ytx_thumb_path(int $id, string $name): string

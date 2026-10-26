@@ -25,4 +25,5 @@ echo json_encode([
     'url'   => signed_page_url((string) $s['page_url'], $id) . '&run=' . (int) ($s['run_id'] ?? 0),
     'name'  => $g['name'] ?? 'New game',
     'thumb' => $g['thumb'] ?? '',
+    'promo' => promo_for_stream($id),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

@@ -49,7 +49,24 @@
 @keyframes gsw-blink { to { opacity: .35; } }
 @keyframes gsw-arc { to { stroke-dashoffset: 0; } }
 @keyframes gsw-bar { to { width: 100%; } }
-@keyframes gsw-float { to { transform: translateY(-36px) rotate(18deg); } }`;
+@keyframes gsw-float { to { transform: translateY(-36px) rotate(18deg); } }
+.gpr { position: absolute; left: 48px; right: 48px; top: 636px; z-index: 99998; padding: 6px; border-radius: 52px; pointer-events: none; font-family: "Rajdhani", "Oswald", system-ui, sans-serif; color: #fff;
+  background: linear-gradient(135deg, #ff2d55, #ff2bd6 40%, #33f0ff); box-shadow: 0 0 100px rgba(255, 43, 214, .55); animation: gsw-pop .5s cubic-bezier(.2, 1.4, .4, 1); }
+.gpr.fixed { position: fixed; }
+.gpr.out { animation: gpr-out .45s ease-in forwards; }
+.gpr-in { border-radius: 46px; background: rgba(12, 6, 30, .96); padding: 28px 32px 26px; }
+.gpr h2 { font-family: "Anton", "Oswald", Impact, sans-serif; font-weight: 400; font-size: 70px; text-align: center; letter-spacing: 2px; line-height: 1; margin: 0; }
+.gpr h2 em { font-style: normal; color: #ffd23a; }
+.gpr-sub { text-align: center; font-size: 28px; color: #b99cff; letter-spacing: 2px; font-weight: 700; margin-top: 6px; }
+.gpr-r { display: flex; align-items: center; gap: 24px; margin-top: 20px; padding: 16px 20px; border-radius: 28px; background: rgba(255, 255, 255, .05); border: 3px solid; }
+.gpr-i { width: 92px; height: 92px; border-radius: 24px; display: grid; place-items: center; font-size: 52px; flex: 0 0 auto; }
+.gpr-r b { font-size: 46px; letter-spacing: 1px; display: block; line-height: 1.05; }
+.gpr-r small { display: block; font-size: 30px; opacity: .88; font-weight: 600; line-height: 1.15; }
+.gpr-eq { margin-left: auto; font-family: "Anton", "Oswald", Impact, sans-serif; font-size: 44px; white-space: nowrap; }
+.gpr-t { margin-top: 18px; height: 12px; border-radius: 8px; background: #2a1d4d; overflow: hidden; }
+.gpr-t i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff2bd6, #33f0ff); transform-origin: left; }
+@keyframes gpr-out { to { transform: translateY(-40px) scale(.9); opacity: 0; } }
+@keyframes gpr-time { to { transform: scaleX(0); } }`;
 
   const flagsHTML = async () => {
     try {
@@ -87,18 +104,46 @@
     return el;
   };
 
+  // ---- the "subscribe / share / like" card (Admin → Screen Notification)
+  let promoOn = false;
+  const showPromo = (p) => {
+    if (going || promoOn || !p) return;
+    if (!document.getElementById('gsw-css')) { const st = document.createElement('style'); st.id = 'gsw-css'; st.textContent = css; document.head.append(st); }
+    const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+    const stage = document.getElementById('stage');
+    const el = document.createElement('div'); el.className = 'gpr' + (stage ? '' : ' fixed');
+    const t = String(p.title || '').trim().split(/\s+/), last = t.length > 1 ? t.pop() : '';
+    const secs = Math.max(4, Math.min(15, Number(p.secs) || 7));
+    el.innerHTML = `<div class="gpr-in"><h2>${esc(t.join(' '))}${last ? ` <em>${esc(last)}</em>` : ''}</h2>${p.sub ? `<div class="gpr-sub">${esc(p.sub)}</div>` : ''}`
+      + (p.lines || []).map((l) => `<div class="gpr-r" style="border-color:${esc(l.c)}"><span class="gpr-i" style="background:${esc(l.c)}">${esc(l.i)}</span><div><b>${esc(l.b)}</b><small>${esc(l.s)}</small></div><span class="gpr-eq" style="color:${esc(l.c)}">${esc(l.r)}</span></div>`).join('')
+      + `<div class="gpr-t"><i style="animation:gpr-time ${secs}s linear forwards"></i></div></div>`;
+    if (!stage) { const k = Math.min(innerWidth / 1080, innerHeight / 1920); el.style.cssText = `width:${1080 - 96}px;left:50%;top:33%;transform:translateX(-50%) scale(${k});transform-origin:top center;`; }
+    (stage || document.body).append(el); promoOn = true;
+    setTimeout(() => { el.classList.add('out'); setTimeout(() => { el.remove(); promoOn = false; }, 500); }, secs * 1000);
+  };
+  const PKEY = 'fft_promo_seen_' + stream;
+  let lastAuto = performance.now();
+  const promoTick = (p) => {
+    if (!p) return;
+    let seen = null; try { seen = localStorage.getItem(PKEY); } catch (e) { /* ignore */ }
+    if (seen === null) { try { localStorage.setItem(PKEY, String(p.push || 0)); } catch (e) { /* ignore */ } seen = String(p.push || 0); }
+    if ((p.push || 0) > Number(seen)) { try { localStorage.setItem(PKEY, String(p.push)); } catch (e) { /* ignore */ } lastAuto = performance.now(); showPromo(p); return; }
+    if (p.every > 0 && performance.now() - lastAuto >= p.every * 60000) { lastAuto = performance.now(); showPromo(p); }
+  };
+
   const check = async () => {
     if (going) return;
     try {
       const r = await fetch(`/api/page.php?stream=${encodeURIComponent(stream)}&sig=${encodeURIComponent(sig)}`, { cache: 'no-store' });
       if (!r.ok) return;
       const j = await r.json();
-      if (!j.page || !j.url || norm(j.page) === here) return;
+      if (!j.page || !j.url || norm(j.page) === here) { promoTick(j.promo); return; }
       going = true;
       await show(j);
       setTimeout(() => { location.href = j.url; }, 2100);
     } catch (e) { /* offline: try again */ }
   };
+  if (demo === 'promo') { fetch('/admin/promo.php?json=1', { cache: 'no-store' }).then((r) => r.json()).then((p) => setTimeout(() => showPromo(p), 1500)).catch(() => {}); return; }
   if (demo) { setTimeout(() => show({ name: QS.get('name') || 'Last Flag Standing', thumb: QS.get('thumb') || '/assets/site/lastflag.jpg' }), 1500); return; }
   setTimeout(check, 4000);
   setInterval(check, 8000);

@@ -2,7 +2,7 @@
 // 50 flag balls bounce in a six-sided arena; a bearing (a ring with three bars) turns around the black hole
 // and pushes them around. Every few seconds the black hole draws the flag nearest to it: that country is out. The live chat can save countries:
 // enough chats give a SHIELD (survives one draw), a country that is out can be REVIVED, a new
-// subscriber gives a free shield, a Super Chat gives both. Likes and viewers unlock goals for everyone.
+// subscriber (or a viewer who shares and types "shared" + country) gives a shield — or brings the country back if it is out; a Super Chat gives both. Likes and viewers unlock goals for everyone.
 // The last flag left is the round champion, then a new round starts (about an hour a round).
 import { Sfx, holdScreen, PACE, reporter, freshRun } from '/game/audio.js?v=13';
 import { liveChat, countryMatcher } from '/game/chat.js?v=22';
@@ -113,7 +113,7 @@ async function main() {
   $('rule-s').textContent = `${cfg.shield} chats = SHIELD`;
   $('rule-r').textContent = `Out? ${cfg.revive} chats = BACK IN`;
   $('rules').innerHTML = `<div style="border-color:#33f0ff;color:#9df7ff">💬 ${cfg.shield} = 🛡</div><div style="border-color:#ff2bd6;color:#ffb3ef">💬 ${cfg.revive} = ♻</div>`
-    + `<div style="border-color:#ffd23a;color:#ffe680">🔔 SUB = 🛡</div><div style="border-color:#7dff8a;color:#c4ffca">⭐ SUPER = 🛡+♻</div>`;
+    + `<div style="border-color:#ffd23a;color:#ffe680">🔔📢 = 🛡/♻</div><div style="border-color:#7dff8a;color:#c4ffca">⭐ SUPER = 🛡+♻</div>`;
 
   /* ---------------------------------------------------------------- saved state (a reload continues the round) */
   const KEY = 'fft_lastflag';
@@ -291,6 +291,16 @@ async function main() {
     if (alive.has(code) && !shield.has(code) && prog.get(code) >= cfg.shield) { prog.set(code, 0); got.add(code); giveShield(code, name, 'SHIELD ON'); }
     else if (!alive.has(code) && prog.get(code) >= cfg.revive) { if (revive(code, name)) { prog.set(code, 0); got.add(code); } }
   };
+  // subscribe / share gift: in the arena = a shield, out = it comes back
+  const SUB_RX = /\bsubscribed\b|\bsubscriber?\s*(done|korsi|korlam|korechi|dilam|disi|kiya|kar\s*diya)\b|\bsub(bed|\s*done)\b|\bi\s*(just\s*)?subscribe\b|সাবস্ক্রাইব|सब्सक्राइब/i;
+  const SHARE_RX = /\bshar(e|ed|ing|ed it)\b|\bshr\b|শেয়ার|শেয়ার|शेयर/i;
+  const shareAt = new Map(), giftWait = new Map(), subDone = new Set();
+  const cleanName = (n) => String(n || '').toUpperCase().slice(0, 14);
+  const gift = (code, by, why) => {
+    if (!teams.includes(code) || phase !== 'play') return false;
+    if (alive.has(code)) return giveShield(code, by, `FREE SHIELD · ${why}`);
+    return revive(code, by);
+  };
   const statusLine = (code) => {
     if (!teams.includes(code)) return `IT JOINS THE NEXT ROUND — KEEP COMMENTING ${NAME(code)}!`;
     if (!alive.has(code)) {
@@ -307,15 +317,36 @@ async function main() {
     game: 'lastflag', rows: 4, alwaysOn: true,
     aiInfo: (code) => `Game: LAST FLAG STANDING — ${teams.length} country flags bounce in a six-sided neon arena; a bearing with three bars turns around the black hole and pushes them; the black hole in the middle opens every ${cfg.gap} seconds and a flag that falls in is OUT; the last flag left wins the round, then a new round starts. `
       + `Now: ${alive.size} of ${teams.length} left. ` + (code ? `The viewer's country ${NAME(code)}: ${statusLine(code)} ` : '')
-      + `Rules: type your country in chat to boost it; ${cfg.shield} chats = a SHIELD (it stays on until the hole would take the flag; then the shield breaks and the flag stays in); ${cfg.revive} chats bring an OUT country back${NOLIMIT ? ' (no limit)' : ''}; subscribe = free shield; Super Chat = shield and revive; countries not in this round join the next round.`,
+      + `Rules: type your country in chat to boost it; ${cfg.shield} chats = a SHIELD (it stays on until the hole would take the flag; then the shield breaks and the flag stays in); ${cfg.revive} chats bring an OUT country back${NOLIMIT ? ' (no limit)' : ''}; subscribe, or share the live and type "shared" + your country = a SHIELD (or it comes back if it is OUT); Super Chat = shield and revive; countries not in this round join the next round.`,
     match: countryMatcher(C),
     badge: (code) => flagNode(code, 32),
     duck: duckAll,
     sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
     onFan,
-    onSub: (name, code) => {
-      const c = code && alive.has(code) && !shield.has(code) ? code : [...power.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).find((k) => alive.has(k) && !shield.has(k));
+    onSub: (name, code) => {   // a new subscriber (seen by YouTube): their country gets a shield — or comes back if it is out
+      if (code && gift(code, name, 'SUBSCRIBER')) return;
+      const c = [...power.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).find((k) => alive.has(k) && !shield.has(k));
       if (c) giveShield(c, name.toUpperCase().slice(0, 14), 'FREE SHIELD · SUBSCRIBER');
+    },
+    // "subscribed" / "shared" + country in chat: YouTube does not tell us about shares (and a subscribe only by name),
+    // so we trust the viewer — subscribe once per viewer, share once every 10 minutes per viewer
+    onText: (name, text, code, author) => {
+      const no = (w) => new RegExp("\\b(don'?t|do not|not|no|never|can'?t|won'?t|will)\\s+" + w, 'i').test(text);
+      let kind = SUB_RX.test(text) && !no('sub') ? 'sub' : SHARE_RX.test(text) && !no('shar') ? 'share' : '';
+      const now = performance.now() / 1000, pend = giftWait.get(author);
+      if (!kind && pend && pend.at > now - 300 && code) kind = pend.kind;
+      else if (!kind) return null;
+      const VERB = kind === 'sub' ? 'SUBSCRIBING' : 'SHARING';
+      if (kind === 'sub' && subDone.has(author)) return ['YOU ARE ALREADY IN THE FAMILY, ', { name }, '! NOW SHARE THE LIVE AND TYPE "SHARED" + YOUR COUNTRY!'];
+      if (kind === 'share' && (shareAt.get(author) || -1e9) > now - 600) return ['THANK YOU FOR SHARING AGAIN, ', { name }, '! ONE SHARE GIFT EVERY 10 MINUTES — KEEP CHATTING!'];
+      if (!code) { giftWait.set(author, { kind, at: now }); return [`THANK YOU FOR ${VERB}, `, { name }, '! NOW TYPE YOUR COUNTRY — IT GETS A SHIELD, OR COMES BACK IF IT IS OUT!']; }
+      giftWait.delete(author);
+      if (!teams.includes(code)) { S.want[code] = (S.want[code] || 0) + 3; return [`THANK YOU FOR ${VERB}, `, { name }, '! ', { node: flagNode(code) }, NAME(code) + ' JOINS THE NEXT ROUND!']; }
+      if (phase !== 'play') { giftWait.set(author, { kind, at: now }); return [`THANK YOU FOR ${VERB}, `, { name }, '! A NEW ROUND STARTS IN A MOMENT — TYPE ', { node: flagNode(code) }, NAME(code) + ' THEN!']; }
+      const wasOut = !alive.has(code);
+      if (!gift(code, cleanName(name), kind === 'sub' ? 'SUBSCRIBER' : 'SHARE')) return [`THANK YOU FOR ${VERB}, `, { name }, '! ', { node: flagNode(code) }, NAME(code) + (shield.has(code) ? ' ALREADY HAS A SHIELD — KEEP CHATTING!' : ' — KEEP CHATTING FOR IT!')];
+      if (kind === 'sub') { subDone.add(author); chat.subBanner?.(name); } else shareAt.set(author, now);
+      return [`THANK YOU FOR ${VERB}, `, { name }, '! ', { node: flagNode(code) }, NAME(code) + (wasOut ? ' IS BACK IN THE ARENA!' : ' GOT A SHIELD!') + ' MORE FRIENDS = SAFER COUNTRY!'];
     },
     onSuper: (code, name) => {
       if (!code || !teams.includes(code)) return;
@@ -323,11 +354,12 @@ async function main() {
     },
     onStats: (st) => { lastStats = st; },
     emptyHint: `Type your country — ${cfg.shield} chats give it a SHIELD!`,
-    hints: ['TYPE YOUR COUNTRY — ENOUGH CHATS GIVE IT A SHIELD!', 'LIKE IF YOU SEE YOUR COUNTRY FLAG!', 'SUBSCRIBE AND YOUR COUNTRY GETS A FREE SHIELD!'],
+    hints: ['TYPE YOUR COUNTRY — ENOUGH CHATS GIVE IT A SHIELD!', 'LIKE IF YOU SEE YOUR COUNTRY FLAG!', 'SUBSCRIBE OR SHARE — YOUR COUNTRY GETS A SHIELD OR COMES BACK!'],
     idleLines: [
       [`TYPE YOUR COUNTRY IN CHAT! ${cfg.shield} CHATS GIVE IT A SHIELD AGAINST THE BLACK HOLE!`],
       ['LIKE IF YOU SEE YOUR COUNTRY FLAG IN THE ARENA!'],
-      ['SUBSCRIBE AND YOUR COUNTRY GETS A FREE SHIELD — RIGHT NOW!'],
+      ['SUBSCRIBE AND YOUR COUNTRY GETS A FREE SHIELD — AND IF IT IS OUT, IT COMES BACK!'],
+      ['SHARE THE LIVE AND TYPE SHARED + YOUR COUNTRY — IT GETS A SHIELD, OR COMES BACK IF IT IS OUT!'],
       ['YOUR COUNTRY IS NOT IN THE ARENA? COMMENT IT AND IT JOINS THE NEXT ROUND!'],
       ['WATCH THE SPINNING BEARING — IT PUSHES THE FLAGS TOWARDS THE BLACK HOLE! A SHIELD KEEPS YOUR COUNTRY SAFE!'],
       [`YOUR COUNTRY IS OUT? ${cfg.revive} CHATS AND IT COMES BACK — SEE THE REVIVE BOX AT THE TOP!`],

@@ -43,4 +43,5 @@ require APP_DIR . '/golive.php';
 require APP_DIR . '/ytvary.php';
 require APP_DIR . '/ytpoll.php';
 require APP_DIR . '/ytextra.php';
+require APP_DIR . '/promo.php';
 require APP_DIR . '/insights.php';
