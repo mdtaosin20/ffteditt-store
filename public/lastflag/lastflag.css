@@ -18,20 +18,27 @@ body { position: fixed; inset: 0; overflow: clip; }
 .fc { width: 34px; height: 34px; border-radius: 50%; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; box-shadow: 0 0 0 2px rgba(255, 255, 255, .9); }
 
 /* ---------- header ---------- */
-.brand { position: absolute; left: 28px; top: 112px; font-family: var(--display); font-weight: 400; font-size: 70px; line-height: .95; letter-spacing: 1px; text-shadow: 0 0 22px var(--violet), 0 0 3px #fff; }
+.brand { position: absolute; left: 24px; top: 112px; font-family: var(--display); font-weight: 400; font-size: 64px; line-height: .95; letter-spacing: 1px; text-shadow: 0 0 22px var(--violet), 0 0 3px #fff; }
 .brand em { font-style: normal; color: var(--cyan); text-shadow: 0 0 22px var(--cyan); }
+/* how to save a country: the short rules in the middle of the header */
+.how { position: absolute; left: 388px; top: 106px; width: 318px; height: 172px; padding: 8px 12px; border-radius: 18px; border: 2px solid rgba(255, 255, 255, .25);
+  background: linear-gradient(160deg, rgba(51, 240, 255, .12), rgba(255, 43, 214, .12)); box-shadow: 0 0 18px rgba(177, 77, 255, .3); }
+.how h4 { font-size: 16px; font-weight: 700; letter-spacing: 1.5px; color: #e6d6ff; margin-bottom: 4px; white-space: nowrap; }
+.how p { font-size: 23px; font-weight: 700; line-height: 1.38; white-space: nowrap; }
+.how p small { font-size: 15px; opacity: .8; }
+.how .s b { color: var(--cyan); } .how .r b { color: #ff7ae6; } .how .f b { color: var(--gold); } .how .x b { color: var(--green); }
 .round { position: absolute; left: 32px; top: 252px; font-size: 21px; font-weight: 700; letter-spacing: 4px; color: #b99cff; }
 .alive { position: absolute; right: 28px; top: 112px; width: 224px; height: 160px; border-radius: 26px; border: 4px solid var(--cyan); text-align: center;
   background: rgba(7, 4, 20, .7); box-shadow: 0 0 24px var(--cyan), inset 0 0 24px rgba(51, 240, 255, .55); }
 .alive b { display: block; font-family: var(--display); font-weight: 400; font-size: 92px; line-height: 116px; font-variant-numeric: tabular-nums; }
 .alive span { display: block; font-size: 19px; font-weight: 700; letter-spacing: 4px; color: #9df7ff; }
-.clock { position: absolute; right: 272px; top: 124px; width: 132px; height: 132px; }
+.clock { position: absolute; right: 262px; top: 134px; width: 108px; height: 108px; }
 .clock svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .clock circle { fill: rgba(7, 4, 20, .85); stroke-width: 11; }
 .clock .bg { stroke: #2a1d4d; }
 .clock .fg { fill: none; stroke: var(--pink); stroke-linecap: round; stroke-dasharray: 264; transition: stroke-dashoffset .25s linear; filter: drop-shadow(0 0 6px var(--pink)); }
-.clock b { position: absolute; inset: 0 0 16px; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 400; font-size: 46px; }
-.clock small { position: absolute; left: 0; right: 0; top: 84px; text-align: center; font-size: 14px; font-weight: 700; letter-spacing: 2px; color: #ffb3ef; }
+.clock b { position: absolute; inset: 0 0 14px; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 400; font-size: 36px; }
+.clock small { position: absolute; left: 0; right: 0; top: 66px; text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: #ffb3ef; }
 .clock.hot b { animation: beat .5s ease-in-out infinite alternate; color: #ffb3ef; }
 .clock.lock .fg { stroke: var(--green); filter: drop-shadow(0 0 6px var(--green)); }
 @keyframes beat { to { transform: scale(1.15); } }
@@ -121,7 +128,7 @@ body { position: fixed; inset: 0; overflow: clip; }
 /* live chat pieces (from /game/chat.js): the chat rows sit inside the yellow LIVE CHAT panel, LUNA above the arena */
 .lc.lc-lastflag .lc-sub { top: 618px; }
 .lc.lc-lastflag .lc-fans { display: none !important; }
-.lc.lc-lastflag .lc-box { top: 362px; left: 736px; right: auto; width: 314px; height: 150px; padding: 0; border: 0; background: none; box-shadow: none; overflow: hidden; }
+.lc.lc-lastflag .lc-box { top: 362px; left: 732px; right: auto; width: 320px; height: 150px; padding: 0 0 0 6px; border: 0; background: none; box-shadow: none; overflow: hidden; }
 .lc.lc-lastflag .lc-box-h { display: none; }
 .lc.lc-lastflag .lc-box .lc-row { font-size: 21px; padding: 2px 0; line-height: 1.2; }
 .lc.lc-lastflag .lc-box .lc-row .flag { transform: scale(.7); }

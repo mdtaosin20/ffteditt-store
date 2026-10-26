@@ -108,6 +108,8 @@ async function main() {
     const w = cfg.title.trim().split(/\s+/), last = w.length > 1 ? w.pop() : '';
     $('title').innerHTML = ''; $('title').append(w.join(' ')); if (last) { $('title').append(document.createElement('br')); const em = document.createElement('em'); em.textContent = last; $('title').append(em); }
   }
+  $('how').querySelector('.s').innerHTML = `🛡 <b>SHIELD</b> = ${cfg.shield} chats`;
+  $('how').querySelector('.r').innerHTML = `♻ <b>REVIVE</b> = ${cfg.revive} chats <small>(if out)</small>`;
   $('rule-s').textContent = `${cfg.shield} chats = SHIELD`;
   $('rule-r').textContent = `Out? ${cfg.revive} chats = BACK IN`;
   $('rules').innerHTML = `<div style="border-color:#33f0ff;color:#9df7ff">💬 ${cfg.shield} = 🛡</div><div style="border-color:#ff2bd6;color:#ffb3ef">💬 ${cfg.revive} = ♻</div>`
