@@ -4,7 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Cup Kick · Which flag touches the cup?</title>
-<link rel="stylesheet" href="/cupkick/cupkick.css?v=3">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cup Kick">
+<link rel="manifest" href="/cupkick/manifest.json">
+<link rel="icon" href="/cupkick/icon-192.png">
+<link rel="apple-touch-icon" href="/cupkick/icon-180.png">
+<link rel="stylesheet" href="/cupkick/cupkick.css?v=4">
 </head>
 <body>
 <div id="stage">
@@ -49,10 +57,14 @@
     <label class="row"><span>Text at the end</span><input id="t3" maxlength="44" value="Comment below 👇"></label>
     <label class="row chk"><input type="checkbox" id="snd" checked> Sound</label>
     <div class="btns"><button id="go" type="button">▶ START</button><button id="shuffle" type="button" class="ghost">🎲 Random countries</button></div>
+    <div class="app" id="app">
+      <button id="install" type="button" class="ghost" hidden>📲 Install as app</button>
+      <p class="small muted" id="apphelp"></p>
+    </div>
     <p class="small muted" id="answer"></p>
   </div>
 </div>
 <script type="importmap">{ "imports": { "three": "/game/vendor/three.module.js" } }</script>
-<script type="module" src="/cupkick/cupkick.js?v=22"></script>
+<script type="module" src="/cupkick/cupkick.js?v=23"></script>
 </body>
 </html>

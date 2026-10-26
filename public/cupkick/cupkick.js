@@ -686,3 +686,20 @@ async function main() {
   buildTeams(saved);
 }
 main();
+
+/* ---------------------------------------------------------------- the phone app (install on the home screen, opens full screen) */
+(() => {
+  const btn = $('install'), help = $('apphelp');
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/cupkick/sw.js', { scope: '/cupkick/' }).catch(() => {});
+  const inApp = matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (inApp) { help.textContent = '✅ Running as the Cup Kick app (full screen).'; return; }
+  let ask = null;
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); ask = e; btn.hidden = false; help.textContent = 'Install it once: then open Cup Kick from your home screen — full screen, no browser bar in your recordings.'; });
+  btn.addEventListener('click', async () => { if (!ask) return; ask.prompt(); const r = await ask.userChoice.catch(() => null); ask = null; btn.hidden = true; if (r && r.outcome === 'accepted') help.textContent = '✅ Installed. Open Cup Kick from your home screen.'; });
+  addEventListener('appinstalled', () => { btn.hidden = true; help.textContent = '✅ Installed. Open Cup Kick from your home screen.'; });
+  setTimeout(() => {
+    if (ask) return;
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    help.textContent = ios ? '📲 To get the app: in Safari tap Share ⬆ → "Add to Home Screen".' : '📲 To get the app: Chrome menu ⋮ → "Install app" (or "Add to Home screen").';
+  }, 2500);
+})();
