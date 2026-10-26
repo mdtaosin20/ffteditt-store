@@ -128,14 +128,7 @@ class Sound {
   start() {
     if (!this.on) return;
     if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    this.ctx.resume();
-    if (this.crowd) return;
-    const c = this.ctx, len = c.sampleRate * 2, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    const src = c.createBufferSource(); src.buffer = buf; src.loop = true;
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
-    this.crowd = c.createGain(); this.crowd.gain.value = 0.08;
-    src.connect(lp).connect(this.crowd).connect(c.destination); src.start();
+    this.ctx.resume();   // (no crowd noise in the background any more: only kicks, bumps and the cup sounds)
   }
   swell(v, secs) { if (!this.crowd) return; const g = this.crowd.gain, t = this.ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(v, t + 0.15); g.linearRampToValueAtTime(0.08, t + secs); }
   tone(f, f2, dur, vol, type = 'sine') {
