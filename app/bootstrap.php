@@ -28,6 +28,7 @@ require APP_DIR . '/flags.php';
 require APP_DIR . '/war.php';
 require APP_DIR . '/tug.php';
 require APP_DIR . '/race.php';
+require APP_DIR . '/lastflag.php';
 require APP_DIR . '/keeper.php';
 require APP_DIR . '/music.php';
 require APP_DIR . '/voice.php';

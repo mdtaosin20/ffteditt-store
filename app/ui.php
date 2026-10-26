@@ -72,6 +72,9 @@ function game_badge(string $key): string
     if ($key === 'war') {
         return '<span class="gicon gi-war" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="10" height="10" fill="#3b82f6"/><rect x="12" y="2" width="10" height="10" fill="#f59e0b"/><rect x="2" y="12" width="10" height="10" fill="#22c55e"/><rect x="12" y="12" width="10" height="10" fill="#ef4444"/><circle cx="12" cy="12" r="4" fill="#fff"/></svg></span>';
     }
+    if ($key === 'lastflag') {
+        return '<span class="gicon gi-lastflag" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="4" fill="#120a2a"/><path d="M7 3.5h10l5 8.5-5 8.5H7L2 12z" fill="none" stroke="#33f0ff" stroke-width="1.6"/><circle cx="12" cy="12" r="3.2" fill="#000" stroke="#ff2bd6" stroke-width="1.4"/><circle cx="7.5" cy="9" r="1.8" fill="#ef4444"/><circle cx="16.5" cy="15" r="1.8" fill="#22c55e"/></svg></span>';
+    }
     if ($key === 'flags') {
         return '<span class="gicon gi-flags" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" fill="#16a34a"/><circle cx="10" cy="12" r="4" fill="#ef4444"/></svg></span>';
     }

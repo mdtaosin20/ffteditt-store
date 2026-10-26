@@ -47,6 +47,7 @@ function games_list(): array
     $tug   = tug_config();
     $kp    = keeper_config();
     $race  = race_config();
+    $lf    = lastflag_config();
     return [
         'ball'  => ['id' => 1, 'key' => 'ball',  'name' => 'Ball Drop',      'url' => '/ball/',  'settings' => 'game.php',
                     'title' => ucwords(strtolower($ball['players'][0]['name'])) . ' vs ' . ucwords(strtolower($ball['players'][1]['name'])), 'category' => 'football',
@@ -94,6 +95,12 @@ function games_list(): array
                     'desc' => 'Country flags race to the finish line — every chat is a boost. A new race every minute!',
                     'autoplay' => (bool) $race['autoplay'], 'pace' => (string) $race['pace'],
                     'detail' => (int) $race['racers'] . ' racers · ~' . (int) $race['secs'] . ' s races'],
+        'lastflag' => ['id' => 9, 'key' => 'lastflag', 'name' => 'Last Flag Standing', 'url' => '/lastflag/', 'settings' => 'lastflag.php',
+                    'title' => 'Last Flag Standing', 'category' => 'countries',
+                    'tags' => ['countries', 'battle', 'chat'], 'thumb' => '/assets/site/lastflag.jpg',
+                    'desc' => 'A neon arena with a turning bearing: the black hole pulls the flags in one by one. Chat to shield or revive your country — the last flag standing wins!',
+                    'autoplay' => (bool) $lf['autoplay'], 'pace' => (string) $lf['pace'],
+                    'detail' => (int) $lf['count'] . ' countries · hole every ' . (int) $lf['gap'] . ' s'],
     ];
 }
 
@@ -116,6 +123,7 @@ function game_of_url(string $url): string
     if (preg_match('#/keeper/?(\?|$)#', $path)) return 'keeper';
     if (preg_match('#/reactor/?(\?|$)#', $path)) return 'reactor';
     if (preg_match('#/race/?(\?|$)#', $path)) return 'race';
+    if (preg_match('#/lastflag/?(\?|$)#', $path)) return 'lastflag';
     if (preg_match('#/cupkick/?(\?|$)#', $path)) return 'cupkick';
     return preg_match('#/flags/?(\?|$)#', $path) ? 'flags' : 'ball';
 }

@@ -20,8 +20,8 @@ if (in_array($key, ['cupkick', 'reactor'], true)) {   // these have no live sett
     flash("{$name} has no live settings here — open the game to use it.", 'error');
     redirect($back);
 }
-$cfg  = match ($key) { 'flags' => flags_config(), 'war' => war_config(), 'tug' => tug_config(), 'keeper' => keeper_config(), 'race' => race_config(), default => game_config() };
-$save = fn (array $c) => match ($key) { 'flags' => flags_save($c), 'war' => war_save($c), 'tug' => tug_save($c), 'keeper' => keeper_save($c), 'race' => race_save($c), default => game_save($c) };
+$cfg  = match ($key) { 'flags' => flags_config(), 'war' => war_config(), 'tug' => tug_config(), 'keeper' => keeper_config(), 'race' => race_config(), 'lastflag' => lastflag_config(), default => game_config() };
+$save = fn (array $c) => match ($key) { 'flags' => flags_save($c), 'war' => war_save($c), 'tug' => tug_save($c), 'keeper' => keeper_save($c), 'race' => race_save($c), 'lastflag' => lastflag_save($c), default => game_save($c) };
 
 if ($do === 'autoplay') {
     $cfg['autoplay'] = ($_POST['to'] ?? '') === 'on';

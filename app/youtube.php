@@ -294,6 +294,25 @@ function yt_defaults(string $game): array
                 . "#territorywar #countryballs #worldwar #countries #flags #marblerace #satisfying #live #gaming #geography #bangladesh #india #pakistan #usa #brazil",
         ];
     }
+    if ($game === 'lastflag') {
+        $f = lastflag_config();
+        return [
+            'title' => "🔴 LIVE Last Flag Standing 🌍 {$f['count']} Countries vs the Black Hole! Type Your Country to SAVE It 🛡️",
+            'desc'  => "🌍 LAST FLAG STANDING — {$f['count']} country flags in a neon arena… a turning bearing pushes them and the BLACK HOLE pulls them in one by one!\n"
+                . "Only ONE flag is left standing — the ROUND CHAMPION 🏆\n\n"
+                . "👇 YOU CAN SAVE YOUR COUNTRY:\n"
+                . "💬 {$f['shield']} chats with your country's name = 🛡️ SHIELD (survives the black hole)\n"
+                . "💬 {$f['revive']} chats when it is out = ♻️ REVIVE (it comes back!)\n"
+                . "🔔 Subscribe = FREE SHIELD · ⭐ Super Chat = SHIELD + REVIVE\n"
+                . "👍 Like goals stop the black hole · 👀 Viewer goals give free shields\n\n"
+                . "🎙️ LUNA, our live host, reads your comments and answers you live.\n"
+                . "🌍 Your country is not in the arena? Type it — it joins the next round!\n"
+                . "⏱️ Live 24/7\n\n"
+                . (!empty($f['music']) && ($f['music_src'] ?? '') === 'songs' && music_tracks() ? music_credit_text() . "\n" : '')
+                . "👍 LIKE IF YOU SEE YOUR COUNTRY FLAG and share with friends from your country!\n\n"
+                . "#lastflagstanding #countryballs #flags #countries #battleroyale #live #interactive #chatgame #geography #bangladesh #india #pakistan #brazil #usa #egypt",
+        ];
+    }
     if ($game === 'flags') {
         $f = flags_config();
         return [

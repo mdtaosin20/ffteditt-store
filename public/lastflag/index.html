@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Last Flag Standing · Type Your Country to Save It</title>
+<link rel="stylesheet" href="/lastflag/lastflag.css?v=1">
+<link rel="stylesheet" href="/game/chat.css?v=3">
+</head>
+<body>
+<div id="stage">
+  <div class="grid" aria-hidden="true"></div>
+  <header class="top">
+    <h1 class="brand" id="title">LAST FLAG<br><em>STANDING</em></h1>
+    <div class="round" id="round">ROUND 1 · LIVE 24/7</div>
+    <div class="clock" id="clock"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="42" class="bg"/><circle cx="50" cy="50" r="42" class="fg" id="clock-arc"/></svg><b id="clock-n">9</b><small>NEXT PULL</small></div>
+    <div class="alive"><b id="n-left">50</b><span id="n-all">OF 50 ALIVE</span></div>
+  </header>
+
+  <section class="pn sup">
+    <h3>🛡 CHAT SUPPORT</h3><div class="rule" id="rule-s">10 chats = SHIELD</div>
+    <div class="rows" id="sup-rows"></div>
+    <div class="foot" id="sup-pg"></div>
+  </section>
+  <section class="pn rev">
+    <h3>♻ REVIVE</h3><div class="rule" id="rule-r">Out? 20 chats = BACK IN</div>
+    <div class="rows" id="rev-rows"></div>
+    <div class="foot" id="rev-foot"></div>
+  </section>
+  <section class="pn chatpn" id="chatpn">
+    <h3>💬 LIVE CHAT</h3>
+    <div class="rule">Type your country to save it!</div>
+  </section>
+
+  <canvas id="arena" aria-label="Flags bouncing in the arena"></canvas>
+  <div class="pops" id="pops"></div>
+
+  <div class="feed" id="feed"></div>
+  <div class="goals" id="goals" hidden>
+    <div class="goal"><span id="g-like-t">👍 LIKES 0/50</span><i><u id="g-like"></u></i><small>HOLE STOPS 30s</small></div>
+    <div class="goal v"><span id="g-view-t">👀 WATCHING 0/100</span><i><u id="g-view"></u></i><small>TOP 3 GET 🛡</small></div>
+  </div>
+  <div class="cta">💬 TYPE YOUR COUNTRY IN CHAT!<small>Save it before the black hole gets it</small></div>
+  <div class="rules" id="rules"></div>
+  <div class="count" id="out-count">0 / 50 OUT</div>
+
+  <div class="banner" id="banner" hidden><div class="banner-in" id="banner-text"></div></div>
+
+  <div class="win" id="win" hidden>
+    <div class="win-in">
+      <div class="crown" aria-hidden="true">♛</div>
+      <div class="t" id="win-t">LAST FLAG STANDING</div>
+      <span class="flag big" id="win-flag"></span>
+      <div class="c" id="win-name">BANGLADESH</div>
+      <div class="q2" id="win-sub">ROUND 1</div>
+      <div class="heroes" id="win-heroes"></div>
+    </div>
+  </div>
+
+  <button class="sound-btn" id="sound-btn" type="button" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    TAP FOR SOUND
+  </button>
+</div>
+<script type="module" src="/lastflag/lastflag.js?v=1"></script>
+</body>
+</html>

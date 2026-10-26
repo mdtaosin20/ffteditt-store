@@ -1,0 +1,133 @@
+@import url("https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@500;600;700&family=Rajdhani:wght@600;700&display=swap");
+
+/* Last Flag Standing — the neon Flag Arena. Fixed 1080x1920 stage, scaled to fit the window.
+   On phones YouTube's name bar covers the top ~110px and its chat covers below ~1400px:
+   everything that matters (numbers, support, revive, chat, host, the arena) sits between. */
+:root {
+  --cyan: #33f0ff; --pink: #ff2bd6; --violet: #b14dff; --gold: #ffd23a; --green: #7dff8a;
+  --display: "Anton", "Oswald", Impact, sans-serif;
+  --ui: "Rajdhani", "Oswald", system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; background: #030208; overflow: hidden; }
+body { position: fixed; inset: 0; overflow: clip; }
+#stage { position: absolute; left: 50%; top: 50%; width: 1080px; height: 1920px; transform-origin: 50% 50%; overflow: hidden;
+  color: #fff; font-family: var(--ui); background: radial-gradient(60% 30% at 50% 52%, rgba(120, 40, 255, .25), transparent 70%), #07040f; }
+.grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(140, 80, 255, .09) 2px, transparent 2px), linear-gradient(90deg, rgba(140, 80, 255, .09) 2px, transparent 2px); background-size: 54px 54px; }
+.flag { background-image: url("/flags/flags.png?v=2"); background-repeat: no-repeat; display: inline-block; flex: 0 0 auto; border-radius: 3px; vertical-align: middle; }
+.fc { width: 34px; height: 34px; border-radius: 50%; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; box-shadow: 0 0 0 2px rgba(255, 255, 255, .9); }
+
+/* ---------- header ---------- */
+.brand { position: absolute; left: 28px; top: 112px; font-family: var(--display); font-weight: 400; font-size: 70px; line-height: .95; letter-spacing: 1px; text-shadow: 0 0 22px var(--violet), 0 0 3px #fff; }
+.brand em { font-style: normal; color: var(--cyan); text-shadow: 0 0 22px var(--cyan); }
+.round { position: absolute; left: 32px; top: 252px; font-size: 21px; font-weight: 700; letter-spacing: 4px; color: #b99cff; }
+.alive { position: absolute; right: 28px; top: 112px; width: 224px; height: 160px; border-radius: 26px; border: 4px solid var(--cyan); text-align: center;
+  background: rgba(7, 4, 20, .7); box-shadow: 0 0 24px var(--cyan), inset 0 0 24px rgba(51, 240, 255, .55); }
+.alive b { display: block; font-family: var(--display); font-weight: 400; font-size: 92px; line-height: 116px; font-variant-numeric: tabular-nums; }
+.alive span { display: block; font-size: 19px; font-weight: 700; letter-spacing: 4px; color: #9df7ff; }
+.clock { position: absolute; right: 272px; top: 124px; width: 132px; height: 132px; }
+.clock svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.clock circle { fill: rgba(7, 4, 20, .85); stroke-width: 11; }
+.clock .bg { stroke: #2a1d4d; }
+.clock .fg { fill: none; stroke: var(--pink); stroke-linecap: round; stroke-dasharray: 264; transition: stroke-dashoffset .25s linear; filter: drop-shadow(0 0 6px var(--pink)); }
+.clock b { position: absolute; inset: 0 0 16px; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 400; font-size: 46px; }
+.clock small { position: absolute; left: 0; right: 0; top: 84px; text-align: center; font-size: 14px; font-weight: 700; letter-spacing: 2px; color: #ffb3ef; }
+.clock.hot b { animation: beat .5s ease-in-out infinite alternate; color: #ffb3ef; }
+.clock.lock .fg { stroke: var(--green); filter: drop-shadow(0 0 6px var(--green)); }
+@keyframes beat { to { transform: scale(1.15); } }
+
+/* ---------- the three panels ---------- */
+.pn { position: absolute; top: 292px; width: 336px; height: 226px; padding: 12px 14px 8px; border-radius: 20px; border: 3px solid; background: rgba(10, 5, 30, .9); overflow: hidden; }
+.pn h3 { font-family: var(--ui); font-weight: 700; font-size: 25px; letter-spacing: 1px; line-height: 1.05; white-space: nowrap; }
+.pn .rule { font-size: 19px; font-weight: 700; opacity: .9; margin: 1px 0 6px; white-space: nowrap; }
+.pn .rows { min-height: 132px; }
+.pn .row { display: flex; align-items: center; gap: 8px; height: 42px; font-size: 21px; font-weight: 700; white-space: nowrap; }
+.pn .nm { width: 98px; overflow: hidden; text-overflow: ellipsis; }
+.pn .bar { flex: 1; height: 11px; border-radius: 6px; background: #1d1640; overflow: hidden; }
+.pn .bar i { display: block; height: 100%; border-radius: 6px; transition: width .3s; }
+.pn .ct { width: 58px; text-align: right; font-variant-numeric: tabular-nums; }
+.pn .empty { font-size: 20px; font-weight: 700; color: #a99bd6; white-space: normal; line-height: 1.2; padding-top: 6px; }
+.pn .foot { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+.sup { left: 20px; border-color: var(--cyan); box-shadow: 0 0 20px rgba(51, 240, 255, .35); }
+.sup h3, .sup .foot { color: #9df7ff; } .sup .bar i { background: linear-gradient(90deg, #1aa3ff, var(--cyan)); }
+.sup .row.on .ct { color: var(--cyan); }
+.rev { left: 372px; border-color: var(--pink); box-shadow: 0 0 20px rgba(255, 43, 214, .35); }
+.rev h3, .rev .foot { color: #ffb3ef; } .rev .bar i { background: linear-gradient(90deg, var(--violet), var(--pink)); }
+.chatpn { left: 724px; border-color: var(--gold); box-shadow: 0 0 20px rgba(255, 210, 58, .3); }
+.chatpn h3 { color: #ffe680; }
+#sup-rows.flip, #rev-rows.flip { animation: pflip .45s ease-out; }
+@keyframes pflip { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ---------- arena ---------- */
+#arena { position: absolute; left: 0; top: 612px; width: 1080px; height: 800px; }
+.pops { position: absolute; left: 0; top: 612px; width: 1080px; height: 800px; pointer-events: none; }
+.pop { position: absolute; display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-radius: 18px; white-space: nowrap;
+  font-family: var(--ui); font-weight: 700; animation: pop 3.2s ease-out forwards; }
+.pop small { display: block; font-size: 19px; letter-spacing: 2px; }
+.pop b { display: block; font-family: var(--display); font-weight: 400; font-size: 38px; line-height: 1.05; }
+.pop.out { background: rgba(50, 0, 30, .94); border: 3px solid var(--pink); box-shadow: 0 0 20px var(--pink); } .pop.out small { color: #ffb3ef; }
+.pop.rev { background: rgba(10, 40, 10, .94); border: 3px solid var(--green); box-shadow: 0 0 20px var(--green); } .pop.rev small { color: #c4ffca; }
+.pop.shd { background: rgba(2, 30, 50, .94); border: 3px solid var(--cyan); box-shadow: 0 0 20px var(--cyan); } .pop.shd small { color: #9df7ff; }
+@keyframes pop { 0% { transform: scale(.5); opacity: 0; } 10% { transform: scale(1.06); opacity: 1; } 18%, 80% { transform: none; opacity: 1; } 100% { opacity: 0; transform: translateY(-20px); } }
+
+/* ---------- under the arena (on phones the YouTube chat covers this part) ---------- */
+.feed { position: absolute; left: 20px; right: 20px; top: 1420px; height: 46px; display: flex; gap: 10px; justify-content: center; overflow: hidden; }
+.kf { display: flex; align-items: center; gap: 8px; padding: 3px 14px 3px 5px; border-radius: 12px; font-size: 21px; font-weight: 700; white-space: nowrap;
+  background: rgba(255, 43, 214, .15); border: 2px solid var(--pink); animation: pflip .45s ease-out; }
+.kf .fc { width: 34px; height: 34px; }
+.kf.r { background: rgba(125, 255, 138, .12); border-color: var(--green); }
+.goals { position: absolute; top: 1476px; left: 20px; right: 20px; height: 56px; display: flex; gap: 12px; }
+.goals[hidden] { display: none; }
+.goal { flex: 1; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-radius: 14px; background: rgba(10, 5, 30, .9); border: 2px solid rgba(255, 255, 255, .2); font-size: 21px; font-weight: 700; white-space: nowrap; }
+.goal i { flex: 1; height: 12px; border-radius: 6px; background: #1d1640; overflow: hidden; }
+.goal u { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #33d17a, #a3ff6b); transition: width .6s; }
+.goal.v u { background: linear-gradient(90deg, #ffb020, var(--gold)); }
+.goal small { font-size: 15px; color: #c4ffca; } .goal.v small { color: #ffe680; }
+.cta { position: absolute; left: 20px; right: 20px; top: 1550px; padding: 16px 10px 14px; border-radius: 26px; text-align: center;
+  background: linear-gradient(90deg, var(--pink), #7b3cff, var(--cyan)); font-family: var(--display); font-weight: 400; font-size: 46px; letter-spacing: 1px; text-shadow: 0 3px 0 rgba(0, 0, 0, .3); }
+.cta small { display: block; font-family: var(--ui); font-weight: 700; font-size: 24px; letter-spacing: 1px; }
+.rules { position: absolute; left: 20px; right: 20px; top: 1690px; display: flex; gap: 10px; }
+.rules div { flex: 1; text-align: center; border-radius: 14px; border: 2px solid; padding: 8px 4px; font-size: 21px; font-weight: 700; white-space: nowrap; }
+.count { position: absolute; left: 0; right: 0; top: 1760px; text-align: center; font-size: 26px; letter-spacing: 4px; color: #a99bd6; font-weight: 700; }
+
+/* ---------- banner + winner ---------- */
+.banner { position: absolute; left: 0; right: 0; top: 880px; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
+.banner[hidden] { display: none; }
+.banner-in { font-family: var(--display); font-weight: 400; font-size: 78px; letter-spacing: 2px; line-height: 1; padding: 20px 46px; text-align: center;
+  border-radius: 26px; background: rgba(10, 5, 30, .94); border: 4px solid var(--cyan); box-shadow: 0 0 44px rgba(51, 240, 255, .6); animation: banner 3.4s ease-in-out forwards; }
+.banner-in small { display: block; font-family: var(--ui); font-weight: 700; font-size: 34px; letter-spacing: 3px; color: var(--gold); margin-top: 10px; }
+.banner-in.red { border-color: var(--pink); box-shadow: 0 0 50px rgba(255, 43, 214, .7); }
+.banner-in.gold { border-color: var(--gold); box-shadow: 0 0 50px rgba(255, 210, 58, .6); }
+.banner-in .box { display: block; font-size: 100px; margin-bottom: 6px; }
+@keyframes banner { 0% { transform: scale(.4); opacity: 0; } 12% { transform: scale(1.06); opacity: 1; } 22%, 85% { transform: scale(1); opacity: 1; } 100% { transform: scale(.9); opacity: 0; } }
+.win { position: absolute; left: 0; right: 0; top: 520px; display: flex; justify-content: center; pointer-events: none; z-index: 6; }
+.win[hidden] { display: none; }
+.win-in { width: 900px; padding: 26px 40px 34px; text-align: center; border: 6px solid var(--cyan); border-radius: 34px;
+  background: rgba(10, 5, 30, .96); box-shadow: 0 0 80px var(--cyan), 0 0 140px rgba(255, 43, 214, .45); animation: winin .6s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes winin { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+.win .crown { font-size: 110px; line-height: .9; color: var(--gold); text-shadow: 0 0 30px rgba(255, 200, 60, .8); }
+.win .t { font-family: var(--display); font-weight: 400; font-size: 58px; color: var(--cyan); letter-spacing: 3px; text-shadow: 0 0 20px var(--cyan); }
+.win .flag.big { margin: 18px auto 12px; display: block; box-shadow: 0 0 34px rgba(255, 255, 255, .35); border-radius: 8px; }
+.win .c { font-family: var(--display); font-weight: 400; font-size: 96px; line-height: 1.05; text-transform: uppercase; }
+.win .q2 { font-size: 34px; color: var(--gold); font-weight: 700; letter-spacing: 3px; margin-top: 6px; }
+.win .heroes { margin-top: 14px; font-size: 32px; color: #9df7ff; font-weight: 700; }
+.win .heroes b { display: block; color: #fff; font-size: 38px; margin-top: 4px; }
+
+.sound-btn { position: absolute; right: 30px; top: 1820px; display: flex; align-items: center; gap: 14px; padding: 16px 26px; border-radius: 999px;
+  border: 3px solid #fff; background: rgba(0, 0, 0, .75); color: #fff; font-family: var(--ui); font-weight: 700; font-size: 32px; letter-spacing: 2px; cursor: pointer; z-index: 40; }
+.sound-btn svg { width: 42px; height: 42px; }
+.sound-btn[hidden] { display: none; }
+
+/* live chat pieces (from /game/chat.js): the chat rows sit inside the yellow LIVE CHAT panel, LUNA above the arena */
+.lc.lc-lastflag .lc-sub { top: 618px; }
+.lc.lc-lastflag .lc-fans { display: none !important; }
+.lc.lc-lastflag .lc-box { top: 362px; left: 736px; right: auto; width: 314px; height: 150px; padding: 0; border: 0; background: none; box-shadow: none; overflow: hidden; }
+.lc.lc-lastflag .lc-box-h { display: none; }
+.lc.lc-lastflag .lc-box .lc-row { font-size: 21px; padding: 2px 0; line-height: 1.2; }
+.lc.lc-lastflag .lc-box .lc-row .flag { transform: scale(.7); }
+.lc.lc-lastflag .lc-robot, .lc.lc-lastflag .lc-robot.girl { top: 530px; bottom: auto; left: 20px; right: 20px; height: 76px; min-height: 0; padding: 2px 18px 2px 104px; gap: 0;
+  border: 3px solid var(--violet); border-radius: 38px; background: linear-gradient(90deg, rgba(177, 77, 255, .3), rgba(10, 5, 30, .95)); box-shadow: 0 0 20px rgba(177, 77, 255, .45); overflow: visible; }
+.lc.lc-lastflag .lc-robot .lc-rb-face { position: absolute; left: 4px; bottom: -2px; width: 92px; }
+.lc.lc-lastflag .lc-rb-name { font-size: 15px; letter-spacing: 3px; color: #d6a8ff; }
+.lc.lc-lastflag .lc-rb-text { font-size: 24px; line-height: 1.05; max-height: 52px; overflow: hidden; }
+.lc.lc-lastflag .lc-rb-text .flag { transform: scale(.65); margin: 0 2px; }
