@@ -181,10 +181,11 @@ async function main() {
   scene.background = new THREE.Color('#0b1024'); scene.fog = new THREE.Fog('#0b1024', 30, 60);
   scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   const camera = new THREE.PerspectiveCamera(50, 9 / 16, 0.1, 400);
-  const fit = () => { const w = stage.clientWidth, h = stage.clientHeight; renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1)); renderer.setSize(w, h, false); };
+  let sharp = false;   // menu → CONTROL → Picture quality: Sharp = the phone's full resolution (for recording in high quality)
+  const fit = () => { const w = stage.clientWidth, h = stage.clientHeight; renderer.setPixelRatio(sharp ? Math.min(4, devicePixelRatio || 1) : Math.min(2, devicePixelRatio || 1)); renderer.setSize(w, h, false); };
   fit(); addEventListener('resize', fit);
 
-  scene.add(new THREE.HemisphereLight('#dfe8ff', '#2c5a2c', 0.7));
+  const hemi = new THREE.HemisphereLight('#dfe8ff', '#2c5a2c', 0.7); scene.add(hemi);
   const sun = new THREE.DirectionalLight('#fff4e0', 2.0);
   sun.position.set(6, 14, 8); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.05;   // no flickering stripes of shadow on the players' arms and bodies
@@ -192,32 +193,104 @@ async function main() {
   const tex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
   const R2 = rng(7);
 
-  const fieldTex = tex(1024, 1024, (g, w, h) => {
-    for (let i = 0; i < 16; i++) { g.fillStyle = i % 2 ? '#2f8f34' : '#287d2d'; g.fillRect(0, i * h / 16, w, h / 16); }
-    g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 8; g.beginPath(); g.moveTo(0, 300); g.lineTo(w, 300); g.stroke();
+  // the ground of each place: stripes in two colours, painted lines, and some speckles (sand, snow, concrete)
+  const groundTex = (a, b, line, dots) => tex(1024, 1024, (g, w, h) => {
+    for (let i = 0; i < 16; i++) { g.fillStyle = i % 2 ? a : b; g.fillRect(0, i * h / 16, w, h / 16); }
+    if (dots) { const r = rng(3); for (let i = 0; i < 9000; i++) { g.fillStyle = dots[i % dots.length]; g.fillRect(r() * w, r() * h, 2 + r() * 3, 2 + r() * 3); } }
+    g.strokeStyle = line; g.lineWidth = 8; g.beginPath(); g.moveTo(0, 300); g.lineTo(w, 300); g.stroke();
     g.beginPath(); g.ellipse(512, 700, 300, 300, 0, 0, 7); g.stroke();
   });
+  const fieldTex = groundTex('#2f8f34', '#287d2d', 'rgba(255,255,255,.9)');
   const field = new THREE.Mesh(new THREE.PlaneGeometry(40, 46), new THREE.MeshStandardMaterial({ map: fieldTex, roughness: 1 }));
   field.rotation.x = -Math.PI / 2; field.position.z = -8; field.receiveShadow = true; scene.add(field);
   const standMat = new THREE.MeshStandardMaterial({ color: '#3a4050', roughness: 0.9 });
   const crowdCols = ['#f5c518', '#2563eb', '#e11d48', '#f8fafc', '#16a34a', '#f97316'];
+  const stadium = new THREE.Group(); scene.add(stadium);   // stands, crowd, roof and lights (hidden on the beach and in the street)
   const crowd = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.5, 0.3), new THREE.MeshStandardMaterial({ roughness: 0.8 }), 3200);
   let ci = 0; const m4 = new THREE.Matrix4(), col = new THREE.Color(), crowdPos = [];
   for (let r = 0; r < 16; r++) {
     const z = -22 - r * 1.1, y = 0.6 + r * 0.9;
-    const step = new THREE.Mesh(new THREE.BoxGeometry(40, 0.9, 1.1), standMat); step.position.set(0, y - 0.45, z); step.receiveShadow = true; scene.add(step);
+    const step = new THREE.Mesh(new THREE.BoxGeometry(40, 0.9, 1.1), standMat); step.position.set(0, y - 0.45, z); step.receiveShadow = true; stadium.add(step);
     for (let k = 0; k < 96 && ci < 3200; k++) {
       if (R2() < 0.12) continue;
       const x = -19 + k * 0.42 + (r % 2) * 0.2; crowdPos.push([x, y + 0.25, z, R2() * 6]);
       m4.makeTranslation(x, y + 0.25, z); crowd.setMatrixAt(ci, m4); crowd.setColorAt(ci, col.set(crowdCols[(k * 7 + r * 3 + (R2() * 3 | 0)) % 6])); ci++;
     }
   }
-  crowd.count = ci; scene.add(crowd);
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(44, 0.8, 14), new THREE.MeshStandardMaterial({ color: '#141a2e' })); roof.position.set(0, 16.2, -32); scene.add(roof);
-  for (let k = 0; k < 9; k++) { const l = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 0.3), new THREE.MeshBasicMaterial({ color: '#fffbe6' })); l.position.set(-16 + k * 4, 15.6, -25.2); scene.add(l); }
+  crowd.count = ci; stadium.add(crowd);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(44, 0.8, 14), new THREE.MeshStandardMaterial({ color: '#141a2e' })); roof.position.set(0, 16.2, -32); stadium.add(roof);
+  const lamps = new THREE.Group(); stadium.add(lamps);
+  for (let k = 0; k < 9; k++) { const l = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 0.3), new THREE.MeshBasicMaterial({ color: '#fffbe6' })); l.position.set(-16 + k * 4, 15.6, -25.2); lamps.add(l); }
   const ledTex = tex(2048, 128, (g, w, h) => { g.fillStyle = '#0b1230'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffd23a'; g.font = 'bold 74px Arial'; g.textBaseline = 'middle'; for (let x = 30; x < w; x += 520) g.fillText('★ FLAG CUP ★', x, h / 2); });
   ledTex.wrapS = THREE.RepeatWrapping; ledTex.repeat.set(2, 1);
   const led = new THREE.Mesh(new THREE.BoxGeometry(40, 0.9, 0.2), new THREE.MeshStandardMaterial({ map: ledTex, emissive: '#fff', emissiveMap: ledTex, emissiveIntensity: 0.5 })); led.position.set(0, 0.45, -21); scene.add(led);
+
+  /* ---------- places: night stadium, day stadium, sunset, beach, snow, street ---------- */
+  const sky = (top, mid, low) => { const t = tex(16, 512, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, top); gr.addColorStop(0.55, mid); gr.addColorStop(1, low); g.fillStyle = gr; g.fillRect(0, 0, w, h); }); return t; };
+  const extras = new THREE.Group(); scene.add(extras);
+  const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
+  const props = {
+    beach() {
+      const sea = new THREE.Mesh(new THREE.PlaneGeometry(300, 120), new THREE.MeshStandardMaterial({ color: '#1e88c7', roughness: 0.25, metalness: 0.1 }));
+      sea.rotation.x = -Math.PI / 2; sea.position.set(0, -0.05, -90); extras.add(sea);
+      const foam = new THREE.Mesh(new THREE.PlaneGeometry(300, 1.2), new THREE.MeshBasicMaterial({ color: '#e8fbff' })); foam.rotation.x = -Math.PI / 2; foam.position.set(0, 0.0, -31); extras.add(foam);
+      const sand = new THREE.Mesh(new THREE.PlaneGeometry(300, 30), lam('#e9cf98')); sand.rotation.x = -Math.PI / 2; sand.position.set(0, -0.02, -16); extras.add(sand);
+      for (const [x, z, h] of [[-13, -25, 7], [-8.5, -28, 8.5], [9, -26, 7.5], [14, -23, 6.5], [-17, -21, 6]]) {   // palm trees
+        const p = new THREE.Group(); p.position.set(x, 0, z);
+        for (let k = 0; k < 8; k++) { const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, h / 8 + 0.05, 8), lam(k % 2 ? '#8a5a2b' : '#9b6a35')); seg.position.set(Math.sin(k / 8) * 0.8, (k + 0.5) * h / 8, 0); p.add(seg); }
+        for (let k = 0; k < 7; k++) { const leaf = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.08, 0.7), lam(k % 2 ? '#2f9e44' : '#37b24d')); leaf.position.set(0.8, h, 0); leaf.rotation.set(0, k / 7 * Math.PI * 2, -0.45); leaf.translateX(1.4); p.add(leaf); }
+        extras.add(p);
+      }
+      const sunD = new THREE.Mesh(new THREE.CircleGeometry(3, 32), new THREE.MeshBasicMaterial({ color: '#fff6c8', fog: false })); sunD.position.set(14, 26, -120); extras.add(sunD);
+    },
+    snow() {
+      const n = 900, g = new THREE.BufferGeometry(), pos = new Float32Array(n * 3), r = rng(11);
+      for (let i = 0; i < n; i++) { pos[i * 3] = (r() * 2 - 1) * 20; pos[i * 3 + 1] = r() * 18; pos[i * 3 + 2] = -30 + r() * 38; }
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const flakes = new THREE.Points(g, new THREE.PointsMaterial({ color: '#ffffff', size: 0.12, transparent: true, opacity: 0.9 }));
+      flakes.userData.fall = true; extras.add(flakes);
+      const snowRoof = new THREE.Mesh(new THREE.BoxGeometry(44.2, 0.3, 14.2), lam('#f4f8ff')); snowRoof.position.set(0, 16.7, -32); extras.add(snowRoof);
+    },
+    street() {
+      const r = rng(5);
+      for (let k = 0; k < 9; k++) {   // city blocks with lit windows
+        const w = 4 + r() * 3, h = 8 + r() * 14, x = -22 + k * 5.4, z = -27 - r() * 6;
+        const winTex = tex(128, 256, (g, W, H) => { g.fillStyle = ['#3b3f58', '#4a3f55', '#2f4858', '#55463a'][k % 4]; g.fillRect(0, 0, W, H); for (let yy = 10; yy < H - 10; yy += 22) for (let xx = 10; xx < W - 10; xx += 22) { g.fillStyle = r() < 0.55 ? '#ffd98a' : '#1b1e2c'; g.fillRect(xx, yy, 12, 14); } });
+        winTex.repeat.set(Math.round(w / 2.5), Math.round(h / 5)); winTex.wrapS = winTex.wrapT = THREE.RepeatWrapping;
+        const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 4), new THREE.MeshStandardMaterial({ map: winTex, emissive: '#ffffff', emissiveMap: winTex, emissiveIntensity: 0.35, roughness: 0.9 }));
+        b.position.set(x, h / 2, z); extras.add(b);
+      }
+      const fence = tex(512, 128, (g, W, H) => { g.clearRect(0, 0, W, H); g.strokeStyle = '#c9ced6'; g.lineWidth = 3; for (let x = -H; x < W; x += 24) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + H, H); g.stroke(); g.beginPath(); g.moveTo(x + H, 0); g.lineTo(x, H); g.stroke(); } });
+      fence.wrapS = THREE.RepeatWrapping; fence.repeat.set(10, 1);
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(44, 3.2), new THREE.MeshBasicMaterial({ map: fence, transparent: true })); f.position.set(0, 1.6, -23); extras.add(f);
+      for (const x of [-12, 0, 12]) { const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 9, 8), lam('#59606e')); pole.position.set(x, 4.5, -23.5); extras.add(pole); const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.35, 0.6), new THREE.MeshBasicMaterial({ color: '#fff3c4' })); lamp.position.set(x, 9, -23.2); extras.add(lamp); }
+    },
+    sunset() { const sunD = new THREE.Mesh(new THREE.CircleGeometry(5, 40), new THREE.MeshBasicMaterial({ color: '#ffcf7a', fog: false })); sunD.position.set(-12, 14, -110); extras.add(sunD); },
+  };
+  const THEMES = {
+    night: { name: '🌙 Night stadium', bg: '#0b1024', fog: [30, 60], sun: ['#fff4e0', 2.0], hemi: ['#dfe8ff', '#2c5a2c', 0.7], exp: 0.9, ground: ['#2f8f34', '#287d2d', 'rgba(255,255,255,.9)'], stand: '#3a4050', roof: '#141a2e', stadium: true, lamps: true },
+    day: { name: '☀️ Day stadium', sky: ['#3d8fe0', '#8cc4f5', '#d9eefc'], fog: [45, 120], fogC: '#cfe6fa', sun: ['#fffaf0', 2.6], hemi: ['#ffffff', '#3c7a3c', 1.0], exp: 1.0, ground: ['#46a83c', '#3d9634', 'rgba(255,255,255,.95)'], stand: '#9aa3b5', roof: '#cfd6e2', stadium: true, lamps: false },
+    sunset: { name: '🌅 Sunset stadium', sky: ['#2b1d5c', '#e0567a', '#ffb067'], fog: [40, 110], fogC: '#e78a7a', sun: ['#ffb36b', 2.2], hemi: ['#ffd2b0', '#3a4a2a', 0.8], exp: 0.95, ground: ['#3f8d36', '#367d2e', 'rgba(255,240,220,.9)'], stand: '#5a4560', roof: '#2a1d3a', stadium: true, lamps: true, extra: 'sunset' },
+    beach: { name: '🏖 Beach', sky: ['#1f7fd6', '#7cc3f2', '#e6f6ff'], fog: [60, 160], fogC: '#cdeaf9', sun: ['#fffaf0', 2.7], hemi: ['#ffffff', '#c9a56a', 1.0], exp: 1.0, ground: ['#ecd29c', '#e4c88f', 'rgba(30,110,200,.85)', ['#d8bb80', '#f6e2b4']], stadium: false, extra: 'beach' },
+    snow: { name: '❄️ Snow', sky: ['#7d8fa8', '#b9c6d6', '#e8eef5'], fog: [30, 80], fogC: '#dfe7f0', sun: ['#f2f6ff', 1.8], hemi: ['#f4f8ff', '#b0bccb', 1.1], exp: 1.0, ground: ['#f3f7fb', '#e6edf5', 'rgba(220,40,60,.85)', ['#ffffff', '#d4dee9', '#c5d9c0']], stand: '#7d8796', roof: '#5d6675', stadium: true, lamps: true, extra: 'snow' },
+    street: { name: '🏙 Street court', sky: ['#141a3a', '#3b3f75', '#c06a6a'], fog: [40, 90], fogC: '#3b3f75', sun: ['#ffe6c2', 1.7], hemi: ['#c8d2ff', '#3d3d48', 0.8], exp: 0.95, ground: ['#7c818c', '#747984', 'rgba(255,214,58,.95)', ['#6b707a', '#8a8f99']], stadium: false, extra: 'street' },
+  };
+  const applyTheme = (key) => {
+    const th = THEMES[key] || THEMES.night;
+    extras.clear();
+    if (th.sky) { scene.background = sky(...th.sky); scene.fog = new THREE.Fog(th.fogC, th.fog[0], th.fog[1]); }
+    else { scene.background = new THREE.Color(th.bg); scene.fog = new THREE.Fog(th.bg, th.fog[0], th.fog[1]); }
+    sun.color.set(th.sun[0]); sun.intensity = th.sun[1];
+    hemi.color.set(th.hemi[0]); hemi.groundColor.set(th.hemi[1]); hemi.intensity = th.hemi[2];
+    renderer.toneMappingExposure = th.exp;
+    if (field.material.map) field.material.map.dispose();
+    field.material.map = groundTex(...th.ground); field.material.needsUpdate = true;
+    stadium.visible = th.stadium; lamps.visible = !!th.lamps;
+    if (th.stand) standMat.color.set(th.stand);
+    if (th.roof) roof.material.color.set(th.roof);
+    if (th.extra) props[th.extra]();
+  };
+  applyTheme('night');
 
   // flags
   const atlas = await new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.src = '/flags/flags.png?v=2'; });
@@ -428,6 +501,7 @@ async function main() {
     const k = play ? Math.min(1, simT / endT) : 0;
     camera.position.set(Math.sin(now / 3300) * 0.25, 3.2 - k * 0.5, 9.5 - k * 2.2); camera.lookAt(0, 2.6 - k * 0.6, -10);
     if (CLOSE) { camera.position.set(0.2, 0.9, 1.4); camera.lookAt(0, 0.62, -1.5); }   // ?closeup=1: a close look at the trophy
+    for (const o of extras.children) if (o.userData.fall) { const p = o.geometry.attributes.position; for (let i = 0; i < p.count; i++) { let y = p.getY(i) - 0.03; if (y < 0) y = 18; p.setY(i, y); p.setX(i, p.getX(i) + Math.sin(now / 900 + i) * 0.004); } p.needsUpdate = true; }
     renderer.render(scene, camera);
   };
   requestAnimationFrame(frame);
@@ -448,7 +522,12 @@ async function main() {
     l.append(f, s); teamsEl.appendChild(l); selects.push(s);
   }
   // control: ball speed, all kicks within N seconds, how messy (remembered on this phone)
-  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1 });
+  const setQuality = (q) => {
+    sharp = q === 'sharp'; fit();
+    const size = sharp ? 4096 : 2048;
+    if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  };
+  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, place: $('place').value, quality: $('quality').value });
   const showCtl = () => {
     const sp = Number($('speed').value);
     $('speedV').textContent = (sp < 0.95 ? 'Slow' : sp > 1.05 ? 'Fast' : 'Normal') + ` (${sp.toFixed(1)}×)`;
@@ -456,11 +535,13 @@ async function main() {
   };
   try {
     const c = JSON.parse(localStorage.getItem('fft_cupkick_ctl') || 'null');
-    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); }
+    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.place && THEMES[c.place]) $('place').value = c.place; if (c.quality) $('quality').value = c.quality; }
   } catch (e) { /* ignore */ }
-  showCtl(); PS = ctl().size;
+  showCtl(); PS = ctl().size; applyTheme(ctl().place); setQuality(ctl().quality);
+  $('place').addEventListener('change', () => applyTheme(ctl().place));
+  $('quality').addEventListener('change', () => setQuality(ctl().quality));
   $('size').addEventListener('change', () => { PS = ctl().size; play = null; ballGroup.clear(); buildTeams(selects.map((x) => x.value)); });   // see the new size at once
-  ['speed', 'within', 'mess', 'size'].forEach((id) => $(id).addEventListener('input', () => {
+  ['speed', 'within', 'mess', 'size', 'place', 'quality'].forEach((id) => $(id).addEventListener('input', () => {
     showCtl(); try { localStorage.setItem('fft_cupkick_ctl', JSON.stringify(ctl())); } catch (e) { /* ignore */ }
   }));
   const fillWin = () => { const v = winEl.value; winEl.innerHTML = '<option value="-1">🎲 Random</option>' + selects.map((s, i) => `<option value="${i}">${NAME(s.value)}</option>`).join(''); winEl.value = [...winEl.options].some((o) => o.value === v) ? v : '-1'; };
