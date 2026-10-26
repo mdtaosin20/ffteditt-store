@@ -38,17 +38,14 @@ function simulate(seed, n, o = PLAY) {
   const order = []; for (let i = 0; i < n; i++) order.push(i);   // one ball for each player
   for (let a = order.length - 1; a > 0; a--) { const c = Math.floor(rnd() * (a + 1)); [order[a], order[c]] = [order[c], order[a]]; }
   let t = 0.8;
-  const aimX = 2.4 - mess * 0.5, aimZ = 1.1 - mess * 0.2;   // messier = the balls are aimed closer together, so they crash more
+  const aimX = 2.4 - Math.min(mess, 2.6) * 0.5, aimZ = 1.1 - Math.min(mess, 2.6) * 0.2;   // messier = the balls are aimed closer together, so they crash more
   for (const i of order) {
     const sx = PX(i) + 0.25 * PS, sz = PZ + 0.3 * PS + R + 0.06;   // in front of his right (kicking) foot
     // messier = more balls are kicked across to the other side, so their paths cross and they swap places on the way
     const across = mess > 0 && rnd() < 0.35 + mess * 0.25;
     let tx = across ? -Math.sign(sx || 1) * (0.3 + rnd() * aimX) : (rnd() * 2 - 1) * aimX; const tz = CUP.z + (rnd() * 2 - 1) * aimZ;
-    // (when a country is picked in the menu: its ball aims near the cup, the others aim to pass beside it; crashes still change everything)
-    if (o.want === i) tx = (rnd() * 2 - 1) * 0.7;
-    else if (o.want >= 0 && Math.abs(tx) < 1.1) tx = (tx < 0 ? -1 : 1) * (1.1 + rnd() * 0.6);
     const d = Math.hypot(tx - sx, tz - sz), sp = (6.6 + rnd() * 2.0) * o.speed;
-    const curl = (rnd() * 2 - 1) * 0.9 * mess * Math.min(1, o.speed);   // the ball bends left or right a little while it rolls
+    const curl = (rnd() * 2 - 1) * 0.9 * Math.min(mess, 2.5) * Math.min(1, o.speed);   // the ball bends left or right a little while it rolls
     balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vz: (tz - sz) / d * sp, curl, on: false, id: balls.length });
     kicks.push({ team: i, t });
     t += o.within / (n - 1) * (0.4 + rnd() * 0.9);
@@ -140,7 +137,15 @@ function findPlay(n, want, o = PLAY) {
           const sd = Math.sign(A[st * 3] - C[st * 3]); if (side && sd && sd !== side) { swaps++; if (a === w.id || c === w.id) mine++; } if (sd) side = sd;
         }
       }
-      if (swaps < o.mess + 1 || (o.mess > 1 && mine < 1)) continue;
+      if (swaps < o.mess + 1 || (o.mess > 1 && mine < 1) || (o.mess > 2 && mine < 2)) continue;
+    }
+    // Very hard: a crowd of balls at the cup when it is hit, and a moment before, another ball looks like the one that will hit it
+    if (o.mess > 2 && easy < 2) {
+      const at = (k, tt) => { const st = Math.max(0, Math.floor(tt / DT)); return Math.hypot(p.track[k][st * 3] - CUP.x, p.track[k][st * 3 + 2] - CUP.z); };
+      let crowd = 0; for (let k = 0; k < p.balls.length; k++) if (k !== w.id && p.balls[k].t < T && at(k, T) < 2.0) crowd++;
+      if (crowd < 2) continue;
+      let decoy = false; for (let k = 0; k < p.balls.length; k++) if (k !== w.id && p.balls[k].t < T - 0.7 && at(k, T - 0.7) < at(w.id, T - 0.7)) decoy = true;
+      if (!decoy) continue;
     }
     return { ...p, touchT: T, winner: w.team };
   }
@@ -463,9 +468,11 @@ async function main() {
   const setWords = (a, b, end) => { w1.textContent = a; w2.textContent = b; words.classList.toggle('end', end); w1.classList.remove('pop'); w2.classList.remove('pop'); void w1.offsetWidth; w1.classList.add('pop'); w2.classList.add('pop'); };
 
   const prepare = (codes, want) => {
-    buildTeams(codes);
-    play = findPlay(codes.length, want, ctl());
+    play = findPlay(codes.length, -1, ctl());
     if (!play) return false;
+    // the country picked in the menu simply stands where the winning ball is kicked from (the line-up order changes, the play stays fair)
+    if (want >= 0 && play.winner !== want) { const c = codes[want]; codes[want] = codes[play.winner]; codes[play.winner] = c; }
+    buildTeams(codes);
     players.forEach((pl, i) => { pl.kicks = play.kicks.filter((k) => k.team === i).map((k) => k.t); pl.gseed = Math.random() * 1000; });
     ballGroup.clear();
     meshes = play.balls.map(() => { const m = new THREE.Mesh(ballGeo, ballMat); m.castShadow = true; ballGroup.add(m); return m; });
