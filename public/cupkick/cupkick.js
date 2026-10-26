@@ -49,6 +49,8 @@ function simulate(seed, n, o = PLAY) {
   let simT = 0, cupUp = true, fall = null;
   const lying = { ax: 0, az: 0, bx: 0, bz: 0, r: 0.3 };   // the fallen cup, as a fat stick on the grass
   for (let s = 0; s < steps; s++, simT += DT) {
+    if (cupUp && o.maxT && simT > o.maxT) return null;   // (searching) nobody touched the cup in time: try the next play
+    if (!cupUp && o.want >= 0 && balls[touches[0].id].team !== o.want) return null;   // (searching) the wrong country touched it
     for (const b of balls) {
       if (!b.on && simT >= b.t) b.on = true;
       if (!b.on) continue;
@@ -105,11 +107,12 @@ function simulate(seed, n, o = PLAY) {
 // exactly ONE ball knocks the cup over, a little after the kicks, with other balls close by at that moment
 function findPlay(n, want, o = PLAY) {
   const start = (Math.random() * 1e9) | 0, travel = 17.5 / (7.6 * o.speed);
+  const minT = 0.8 + travel + Math.min(1.5, o.within * 0.5), maxT = 0.8 + o.within + travel * 1.8 + 1;
   for (let s = start; s < start + 30000; s++) {
-    const p = simulate(s, n, o);
-    if (p.touches.length !== 1) continue;
+    const p = simulate(s, n, { ...o, maxT, want });
+    if (!p || p.touches.length !== 1) continue;
     const T = p.touches[0].t;
-    if (T < 0.8 + travel + Math.min(1.5, o.within * 0.5) || T > 0.8 + o.within + travel * 1.8 + 1) continue;
+    if (T < minT || T > maxT) continue;
     const w = p.balls[p.touches[0].id];
     if (want >= 0 && w.team !== want) continue;
     const close = new Set(p.near.filter((x) => x.id !== w.id && Math.abs(x.t - T) < 1.0).map((x) => x.id));
@@ -333,7 +336,7 @@ async function main() {
 
   const prepare = (codes, want) => {
     buildTeams(codes);
-    play = findPlay(codes.length, want);
+    play = findPlay(codes.length, want, ctl());
     if (!play) return false;
     players.forEach((pl, i) => { pl.kicks = play.kicks.filter((k) => k.team === i).map((k) => k.t); });
     ballGroup.clear();
@@ -413,6 +416,21 @@ async function main() {
     s.addEventListener('change', () => { f.style.cssText = flagCss(s.value); fillWin(); });
     l.append(f, s); teamsEl.appendChild(l); selects.push(s);
   }
+  // control: ball speed, all kicks within N seconds, how messy (remembered on this phone)
+  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value) });
+  const showCtl = () => {
+    const sp = Number($('speed').value);
+    $('speedV').textContent = (sp < 0.95 ? 'Slow' : sp > 1.05 ? 'Fast' : 'Normal') + ` (${sp.toFixed(1)}×)`;
+    const w = Number($('within').value); $('withinV').textContent = `${w} second${w === 1 ? '' : 's'}`;
+  };
+  try {
+    const c = JSON.parse(localStorage.getItem('fft_cupkick_ctl') || 'null');
+    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); }
+  } catch (e) { /* ignore */ }
+  showCtl();
+  ['speed', 'within', 'mess'].forEach((id) => $(id).addEventListener('input', () => {
+    showCtl(); try { localStorage.setItem('fft_cupkick_ctl', JSON.stringify(ctl())); } catch (e) { /* ignore */ }
+  }));
   const fillWin = () => { const v = winEl.value; winEl.innerHTML = '<option value="-1">🎲 Random</option>' + selects.map((s, i) => `<option value="${i}">${NAME(s.value)}</option>`).join(''); winEl.value = [...winEl.options].some((o) => o.value === v) ? v : '-1'; };
   fillWin();
   $('shuffle').addEventListener('click', () => {
