@@ -83,6 +83,11 @@ function games_list(): array
                     'tags' => ['countries', 'strategy', 'chat'], 'thumb' => '/assets/site/war.jpg',
                     'desc' => 'A new strategy arena: four countries power up reactor cores, deploy drones and defend their energy systems.',
                     'autoplay' => true, 'pace' => 'normal', 'detail' => '4 countries · energy reactor strategy'],
+        'cupkick' => ['id' => 8, 'key' => 'cupkick', 'name' => 'Cup Kick', 'url' => '/cupkick/', 'settings' => '/cupkick/',
+                    'title' => 'Cup Kick · Which Country Touches the Cup?', 'category' => 'football',
+                    'tags' => ['football', 'countries', 'arcade'], 'thumb' => '/assets/site/cupkick.jpg',
+                    'desc' => 'Six countries kick their balls at the cup in a 3D stadium — only one touches it. Can you see whose ball it was?',
+                    'autoplay' => true, 'pace' => 'normal', 'detail' => '3D · 6 countries · for short videos (not for 24/7 lives)'],
         'race'  => ['id' => 7, 'key' => 'race', 'name' => 'Flag Race', 'url' => '/race/', 'settings' => 'race.php',
                     'title' => 'Flag Race', 'category' => 'countries',
                     'tags' => ['countries', 'race', 'chat'], 'thumb' => '/assets/site/race.jpg',
@@ -111,6 +116,7 @@ function game_of_url(string $url): string
     if (preg_match('#/keeper/?(\?|$)#', $path)) return 'keeper';
     if (preg_match('#/reactor/?(\?|$)#', $path)) return 'reactor';
     if (preg_match('#/race/?(\?|$)#', $path)) return 'race';
+    if (preg_match('#/cupkick/?(\?|$)#', $path)) return 'cupkick';
     return preg_match('#/flags/?(\?|$)#', $path) ? 'flags' : 'ball';
 }
 
