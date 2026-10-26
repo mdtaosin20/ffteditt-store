@@ -146,9 +146,9 @@ function ytp_end_poll(array $s): array
 }
 
 /** "20 chats = 🛡 Shield" / "Out? 40 chats = ♻ Revive" in a saved message: use the numbers Flag Arena uses now. */
-function ytp_fill(string $text): string
+function ytp_fill(string $text, string $game = 'flags'): string
 {
-    $f = flags_config();
+    $f = $game === 'lastflag' ? lastflag_config() : flags_config();
     $text = preg_replace('/\b\d+(\s*chats?\s*=\s*🛡)/u', (int) $f['shield'] . '$1', $text) ?? $text;
     return preg_replace('/\b\d+(\s*chats?\s*=\s*♻)/u', (int) $f['revive'] . '$1', $text) ?? $text;
 }
@@ -156,7 +156,7 @@ function ytp_fill(string $text): string
 /** Send a message in the live chat as the channel (pin it from the phone afterwards). */
 function ytp_say(array $s, string $text): void
 {
-    $text = ytp_fill($text);
+    $text = ytp_fill($text, game_of_url((string) $s['page_url']));
     $tok = yt_token($s);
     $chat = ytp_chat_id($s, $tok);
     $r = ytp_post($tok, 'liveChat/messages', ['part' => 'snippet'], ['snippet' => [

@@ -508,8 +508,9 @@ function yt_apply(array $s): array
 
         $t = yt_texts($s);
         // NCS asks for this credit when its songs play in a livestream: always add it (once)
-        if (game_of_url($s['page_url']) === 'flags' && music_tracks() && !str_contains($t['desc'], 'spoti.fi/NCS')) {
-            $f = flags_config();
+        $g = game_of_url($s['page_url']);
+        if (($g === 'flags' || $g === 'lastflag') && music_tracks() && !str_contains($t['desc'], 'spoti.fi/NCS')) {
+            $f = $g === 'lastflag' ? lastflag_config() : flags_config();
             if (!empty($f['music']) && ($f['music_src'] ?? '') === 'songs') $t['desc'] = rtrim($t['desc']) . "\n\n" . music_credit_text();
         }
         // a little different on every live (to learn which title / thumbnail works best)

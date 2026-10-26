@@ -329,6 +329,8 @@ async function main() {
       ['LIKE IF YOU SEE YOUR COUNTRY FLAG IN THE ARENA!'],
       ['SUBSCRIBE AND YOUR COUNTRY GETS A FREE SHIELD — RIGHT NOW!'],
       ['YOUR COUNTRY IS NOT IN THE ARENA? COMMENT IT AND IT JOINS THE NEXT ROUND!'],
+      ['WATCH THE SPINNING BEARING — IT PUSHES THE FLAGS TOWARDS THE BLACK HOLE! A SHIELD KEEPS YOUR COUNTRY SAFE!'],
+      [`YOUR COUNTRY IS OUT? ${cfg.revive} CHATS AND IT COMES BACK — SEE THE REVIVE BOX AT THE TOP!`],
     ],
     welcome: (name, code, text) => {
       const hi = isSalam(text) ? 'WA ALAIKUM ASSALAM ' : 'WELCOME ';
@@ -416,7 +418,7 @@ async function main() {
     $('win-heroes').innerHTML = top.length ? '🏅 TOP SUPPORTERS<b></b>' : '';
     if (top.length) $('win-heroes').querySelector('b').textContent = top.join(' · ');
     $('win').hidden = false; $('banner').hidden = true; sfx.win();
-    host(['WE HAVE A CHAMPION! ', { node: flagNode(code) }, NAME(code) + ` WINS ROUND ${S.round}!`, ...(top.length ? [' THANK YOU ', ...top.flatMap((n, i) => [{ name: n }, i < top.length - 1 ? ', ' : ''])] : []), '! A NEW ROUND STARTS SOON!'], 3);
+    host(['LAST FLAG STANDING! ', { node: flagNode(code) }, NAME(code) + ` WINS ROUND ${S.round}!`, ...(top.length ? [' THANK YOU ', ...top.flatMap((n, i) => [{ name: n }, i < top.length - 1 ? ', ' : ''])] : []), '! A NEW ROUND STARTS SOON!'], 3);
     report({ round: S.round, final: false, qualified: out.length, event: 'qualified', code, name: C[byCode.get(code)].name });
     report({ round: S.round, final: true, qualified: out.length, event: 'champion', code, name: C[byCode.get(code)].name });
     S.live = null; save();
