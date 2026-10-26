@@ -8,7 +8,8 @@ import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
 const CLOSE = new URLSearchParams(location.search).has('closeup');
-const R = 0.38, CUP = { x: 0, z: -1.5, r: 0.32 }, PZ = -19;
+let R = 0.45;   // ball size (menu → CONTROL → Ball size): 0.38 = small, 0.45 = a little bigger, 0.52 = big
+const CUP = { x: 0, z: -1.5, r: 0.32 }, PZ = -19;
 let PS = 1;   // player size (menu → CONTROL): 1 = normal, 1.4 = bigger, 1.7 = biggest; bigger players stand further apart
 const PX = (i) => (i - 2.5) * (1.58 * PS + 0.2);   // a player is 1.58 wide (with arms): keep a small gap so they never touch
 const WALL = () => Math.max(6.2, PX(5) + 0.9);   // the side lines the balls bounce off
@@ -39,10 +40,15 @@ function simulate(seed, n, o = PLAY) {
   let t = 0.8;
   const aimX = 2.4 - mess * 0.5, aimZ = 1.1 - mess * 0.2;   // messier = the balls are aimed closer together, so they crash more
   for (const i of order) {
-    const tx = (rnd() * 2 - 1) * aimX, tz = CUP.z + (rnd() * 2 - 1) * aimZ;
-    const sx = PX(i) + 0.25 * PS, sz = PZ + 0.75 * PS;   // in front of his right (kicking) foot
+    const sx = PX(i) + 0.25 * PS, sz = PZ + 0.3 * PS + R + 0.06;   // in front of his right (kicking) foot
+    // messier = more balls are kicked across to the other side, so their paths cross and they swap places on the way
+    const across = mess > 0 && rnd() < 0.35 + mess * 0.25;
+    let tx = across ? -Math.sign(sx || 1) * (0.3 + rnd() * aimX) : (rnd() * 2 - 1) * aimX; const tz = CUP.z + (rnd() * 2 - 1) * aimZ;
+    // (when a country is picked in the menu: its ball aims near the cup, the others aim to pass beside it; crashes still change everything)
+    if (o.want === i) tx = (rnd() * 2 - 1) * 0.7;
+    else if (o.want >= 0 && Math.abs(tx) < 1.1) tx = (tx < 0 ? -1 : 1) * (1.1 + rnd() * 0.6);
     const d = Math.hypot(tx - sx, tz - sz), sp = (6.6 + rnd() * 2.0) * o.speed;
-    const curl = (rnd() * 2 - 1) * 0.9 * mess * o.speed;   // the ball bends left or right a little while it rolls
+    const curl = (rnd() * 2 - 1) * 0.9 * mess * Math.min(1, o.speed);   // the ball bends left or right a little while it rolls
     balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vz: (tz - sz) / d * sp, curl, on: false, id: balls.length });
     kicks.push({ team: i, t });
     t += o.within / (n - 1) * (0.4 + rnd() * 0.9);
@@ -111,7 +117,10 @@ function simulate(seed, n, o = PLAY) {
 function findPlay(n, want, o = PLAY) {
   const start = (Math.random() * 1e9) | 0, travel = 17.5 / (7.6 * o.speed);
   const minT = 0.8 + travel + Math.min(1.5, o.within * 0.5), maxT = 0.8 + o.within + travel * 1.8 + 1;
-  for (let s = start; s < start + 30000; s++) {
+  // looks for a good play; if it takes long (rare settings), it asks for a little less mixing, so START never hangs
+  const t0 = Date.now(); let easy = 0;
+  for (let s = start; s < start + 60000; s++) {
+    if ((s & 63) === 0) { const ms = Date.now() - t0; easy = ms > 3000 ? 2 : ms > 1500 ? 1 : 0; if (ms > 9000) break; }
     const p = simulate(s, n, { ...o, maxT, want });
     if (!p || p.touches.length !== 1) continue;
     const T = p.touches[0].t;
@@ -119,7 +128,20 @@ function findPlay(n, want, o = PLAY) {
     const w = p.balls[p.touches[0].id];
     if (want >= 0 && w.team !== want) continue;
     const close = new Set(p.near.filter((x) => x.id !== w.id && Math.abs(x.t - T) < 1.0).map((x) => x.id));
-    if (close.size < 1) continue;   // at least one other ball close by, so it is not easy
+    if (close.size < 1 && easy < 2) continue;   // at least one other ball close by, so it is not easy
+    // the balls must get mixed up on the way: count how often two balls swap left/right (while near each other)
+    if (o.mess > 0 && easy < 1) {
+      let swaps = 0, mine = 0; const every = Math.round(0.05 / DT), last = Math.floor(T / DT);
+      for (let a = 0; a < p.balls.length; a++) for (let c = a + 1; c < p.balls.length; c++) {
+        let side = 0;
+        for (let st = 0; st <= last; st += every) {
+          const A = p.track[a], C = p.track[c]; if (st * DT < p.balls[a].t || st * DT < p.balls[c].t) continue;
+          if (Math.abs(A[st * 3 + 2] - C[st * 3 + 2]) > 4) continue;
+          const sd = Math.sign(A[st * 3] - C[st * 3]); if (side && sd && sd !== side) { swaps++; if (a === w.id || c === w.id) mine++; } if (sd) side = sd;
+        }
+      }
+      if (swaps < o.mess + 1 || (o.mess > 1 && mine < 1)) continue;
+    }
     return { ...p, touchT: T, winner: w.team };
   }
   return null;
@@ -320,7 +342,7 @@ async function main() {
     }
   });
   const ballMat = new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.45 });
-  const ballGeo = new THREE.SphereGeometry(R, 40, 28);
+  let ballGeo = new THREE.SphereGeometry(R, 40, 28);
 
   // the trophy (our own design): a black-and-gold base with laurel-and-ball badges, a fluted golden stem,
   // golden prongs holding a golden football on top; it stands on a glowing golden stage
@@ -488,7 +510,7 @@ async function main() {
       if (play) {
         let best = -1, bt = -1; play.balls.forEach((b, k) => { if (b.team === i && b.t <= t && b.t > bt) { bt = b.t; best = k; } });
         if (best >= 0 && meshes[best]) { tx = meshes[best].position.x; tz = meshes[best].position.z; }
-        else { tx = pl.p.position.x; tz = PZ + 0.75 * PS; ty = 0.2; }   // before kicking: looks down at his ball
+        else { tx = pl.p.position.x; tz = PZ + 0.3 * PS + R; ty = 0.2; }   // before kicking: looks down at his ball
       }
       pl.p.getWorldPosition(headV); headV.y += 2.75 * PS;
       tmpV.set(tx - headV.x, ty - headV.y, tz - headV.z).normalize();
@@ -592,7 +614,7 @@ async function main() {
     const size = sharp ? 4096 : 2048;
     if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
   };
-  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, place: $('place').value, quality: $('quality').value });
+  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, quality: $('quality').value });
   const showCtl = () => {
     const sp = Number($('speed').value);
     $('speedV').textContent = (sp < 0.95 ? 'Slow' : sp > 1.05 ? 'Fast' : 'Normal') + ` (${sp.toFixed(1)}×)`;
@@ -600,13 +622,15 @@ async function main() {
   };
   try {
     const c = JSON.parse(localStorage.getItem('fft_cupkick_ctl') || 'null');
-    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.place && THEMES[c.place]) $('place').value = c.place; if (c.quality) $('quality').value = c.quality; }
+    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && THEMES[c.place]) $('place').value = c.place; if (c.quality) $('quality').value = c.quality; }
   } catch (e) { /* ignore */ }
-  showCtl(); PS = ctl().size; applyTheme(ctl().place); setQuality(ctl().quality);
+  const setBall = (r) => { if (r === R) return; R = r; ballGeo.dispose(); ballGeo = new THREE.SphereGeometry(R, 40, 28); play = null; ballGroup.clear(); };
+  showCtl(); PS = ctl().size; setBall(ctl().ball);
+  $('ball').addEventListener('change', () => setBall(ctl().ball)); applyTheme(ctl().place); setQuality(ctl().quality);
   $('place').addEventListener('change', () => applyTheme(ctl().place));
   $('quality').addEventListener('change', () => setQuality(ctl().quality));
   $('size').addEventListener('change', () => { PS = ctl().size; play = null; ballGroup.clear(); buildTeams(selects.map((x) => x.value)); });   // see the new size at once
-  ['speed', 'within', 'mess', 'size', 'place', 'quality'].forEach((id) => $(id).addEventListener('input', () => {
+  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality'].forEach((id) => $(id).addEventListener('input', () => {
     showCtl(); try { localStorage.setItem('fft_cupkick_ctl', JSON.stringify(ctl())); } catch (e) { /* ignore */ }
   }));
   const fillWin = () => { const v = winEl.value; winEl.innerHTML = '<option value="-1">🎲 Random</option>' + selects.map((s, i) => `<option value="${i}">${NAME(s.value)}</option>`).join(''); winEl.value = [...winEl.options].some((o) => o.value === v) ? v : '-1'; };
