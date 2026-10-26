@@ -21,6 +21,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('Saved. Now press "Connect YouTube" next to a channel.');
         }
     }
+    if (($_POST['do'] ?? '') === 'golive') {
+        $gs = db()->prepare('SELECT * FROM streams WHERE id = ?');
+        $gs->execute([(int) ($_POST['id'] ?? 0)]);
+        if ($row = $gs->fetch()) { [$ok, $msg] = yt_start_now($row); flash(($row['channel_name'] ?: $row['name']) . ': ' . $msg, $ok ? 'ok' : 'error'); }
+        redirect('youtube.php');
+    }
     if (($_POST['do'] ?? '') === 'chat_cfg') {
         $name = mb_strtoupper(trim(preg_replace('/[^\p{L}\p{N} .!-]/u', '', (string) ($_POST['robot_name'] ?? '')) ?? ''));
         chat_save([
@@ -107,6 +113,10 @@ page_start('YouTube Manager', 'youtube', $admin);
               <button class="btn btn-red btn-sm" type="submit" <?= $ready ? '' : 'disabled title="Do step 1 first"' ?>><?= icon('youtube') ?>Connect YouTube</button></form>
           <?php endif; ?>
           <a class="btn btn-ghost btn-sm" href="yt_live.php?id=<?= $sid ?>"><?= icon('pencil') ?>Title &amp; thumbnail</a>
+          <?php if ($s['yt_refresh'] !== '' && $s['status'] === 'live'): ?>
+            <form method="post"><?= csrf_field() ?><input type="hidden" name="do" value="golive"><input type="hidden" name="id" value="<?= $sid ?>">
+              <button class="btn btn-green btn-sm" type="submit" title="If YouTube shows the live as Upcoming / Scheduled, this starts it">▶ Go live on YouTube</button></form>
+          <?php endif; ?>
         </div></td>
       </tr>
     <?php endforeach; ?>

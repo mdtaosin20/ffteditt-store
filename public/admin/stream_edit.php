@@ -85,6 +85,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$stream && $newKey === '') {
         $errors[] = 'Paste the YouTube stream key.';
     }
+    {   // one stream key = one live: two streams on the same key break each other on YouTube
+        $useKey = $newKey !== '' ? $newKey : (string) ($stream['stream_key'] ?? '');
+        $dup = db()->prepare('SELECT name FROM streams WHERE stream_key = ? AND id != ?');
+        $dup->execute([$useKey, (int) ($stream['id'] ?? 0)]);
+        if ($useKey !== '' && ($dn = $dup->fetchColumn()) !== false) {
+            $errors[] = 'This stream key is already used by the stream “' . $dn . '”. Each live needs its own key: make a new one in YouTube Studio (Go live → Stream → stream key list → Create new stream key), or use another channel.';
+        }
+    }
 
     if (!$errors) {
         $now = time();

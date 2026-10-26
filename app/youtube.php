@@ -746,6 +746,44 @@ function yt_subscribers_tick(int $serverId): void
  * Makes sure the live video really is live. Returns true when nothing more is needed
  * (live, ended, or not ours to start). About 2 units, + 50 when it has to press "Go live".
  */
+/**
+ * Admin → YouTube Manager → "Go live on YouTube": finds (or opens) the live video for this stream and starts it,
+ * or says plainly why it cannot start. @return array{0:bool,1:string}
+ */
+function yt_start_now(array $s): array
+{
+    if ($s['status'] !== 'live') return [false, 'This stream is not running. Start it in Live Stream Manager first.'];
+    if ($s['yt_refresh'] === '') return [false, 'This channel is not connected to YouTube (press Connect YouTube).'];
+    $dup = db()->prepare('SELECT name FROM streams WHERE stream_key = ? AND id != ?');
+    $dup->execute([$s['stream_key'], (int) $s['id']]);
+    if (($dn = $dup->fetchColumn()) !== false) return [false, "The stream “{$dn}” uses the same stream key. Two streams on one key break each other — stop one, or give it its own key."];
+    if (yt_units_out()) return [false, 'YouTube\'s daily limit is used up — it works again after about 1–2 PM Bangladesh time.'];
+    try {
+        $tok = yt_token($s);
+        $active = null;
+        $r = yt_get($tok, 'liveStreams', ['part' => 'id,cdn,status', 'mine' => 'true', 'maxResults' => 50]);
+        if ($r[0] !== 200) return [false, yt_err($r)];
+        foreach ($r[1]['items'] ?? [] as $ls) {
+            if (($ls['cdn']['ingestionInfo']['streamName'] ?? '') === $s['stream_key']) $active = ($ls['status']['streamStatus'] ?? '') === 'active';
+        }
+        if ($active === null) return [false, 'This stream key is not on the connected YouTube channel. Check that the key and the connected channel belong together.'];
+        if (!$active) return [false, 'YouTube is not receiving our video on this key yet. Wait a minute after starting; if it stays like this, Stop and Start the stream in Live Stream Manager (and check the VPS in VPS Monitor).'];
+        $video = yt_find_video($s, $tok, true);
+        if ($video === '') return [false, 'Could not find or open the live video. Try again in a minute.'];
+        db()->prepare('UPDATE streams SET yt_video = ?, yt_video_start = COALESCE(started_at, 0) WHERE id = ?')->execute([$video, $s['id']]);
+        $s['yt_video'] = $video;
+        setting_set('yt_go_' . (int) $s['id'], '');   // a fresh press (the automatic tries have a small limit)
+        yt_kick($s, $tok);
+        $r = yt_get($tok, 'liveBroadcasts', ['part' => 'status', 'id' => $video]);
+        $life = (string) ($r[1]['items'][0]['status']['lifeCycleStatus'] ?? '');
+        if (in_array($life, ['live', 'liveStarting'], true)) { log_activity("YouTube: {$s['name']} started from the panel", 'ok'); return [true, 'The live is on YouTube now (it may take a few seconds to show).']; }
+        if ($life === 'testing' || $life === 'testStarting') return [true, 'YouTube is getting ready — press the button again in about 30 seconds.'];
+        return [false, 'YouTube says the live video is “' . ($life ?: 'unknown') . '”. Press again in a minute.'];
+    } catch (Throwable $e) {
+        return [false, $e->getMessage()];
+    }
+}
+
 function yt_kick(array $s, string $tok): bool
 {
     $video = (string) $s['yt_video'];
