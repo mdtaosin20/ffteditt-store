@@ -8,7 +8,10 @@ import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
 const CLOSE = new URLSearchParams(location.search).has('closeup');
-const R = 0.38, CUP = { x: 0, z: -1.5, r: 0.32 }, PZ = -19, PX = (i) => -4.0 + i * 1.6, WALL = 6.2;
+const R = 0.38, CUP = { x: 0, z: -1.5, r: 0.32 }, PZ = -19;
+let PS = 1;   // player size (menu → CONTROL): 1 = normal, 1.4 = bigger, 1.7 = biggest; bigger players stand further apart
+const PX = (i) => (i - 2.5) * 1.6 * Math.max(1, PS * 0.92);
+const WALL = () => Math.max(6.2, PX(5) + 0.9);   // the side lines the balls bounce off
 const SLOW = 1;                         // speed of the moment the cup is touched (1 = no slow motion)
 const KITS = {   // known shirts; other countries get colours from their flag
   fr: ['#1e3a8a', '#ffffff', '#ffffff', '#b91c1c'], br: ['#facc15', '#16a34a', '#1d4ed8', '#ffffff'], tr: ['#e30a17', '#ffffff', '#ffffff', '#e30a17'],
@@ -30,14 +33,14 @@ const rng = (s) => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^
 const G = 9.8, CUP_H = 1.35;   // the cup is this high
 const PLAY = { speed: 1, within: 2, mess: 1 };   // ball speed (1 = normal), all kicks within N seconds, how messy (0 = calm, 1 = normal, 2 = wild)
 function simulate(seed, n, o = PLAY) {
-  const rnd = rng(seed), balls = [], kicks = [], mess = o.mess;
+  const rnd = rng(seed), balls = [], kicks = [], mess = o.mess, W = WALL();
   const order = []; for (let i = 0; i < n; i++) for (let k = 0; k < 2; k++) order.push([i, k]);
   for (let a = order.length - 1; a > 0; a--) { const c = Math.floor(rnd() * (a + 1)); [order[a], order[c]] = [order[c], order[a]]; }
   let t = 0.8;
   const aimX = 2.4 - mess * 0.5, aimZ = 1.1 - mess * 0.2;   // messier = the balls are aimed closer together, so they crash more
   for (const [i, k] of order) {
     const tx = (rnd() * 2 - 1) * aimX, tz = CUP.z + (rnd() * 2 - 1) * aimZ;
-    const sx = PX(i) + (k ? -0.42 : 0.42), sz = PZ + 0.75;
+    const sx = PX(i) + (k ? -0.42 : 0.42) * PS, sz = PZ + 0.75 * PS;
     const d = Math.hypot(tx - sx, tz - sz), sp = (6.6 + rnd() * 2.0) * o.speed;
     const curl = (rnd() * 2 - 1) * 0.9 * mess * o.speed;   // the ball bends left or right a little while it rolls
     balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vz: (tz - sz) / d * sp, curl, on: false, id: balls.length });
@@ -59,7 +62,7 @@ function simulate(seed, n, o = PLAY) {
       b.x += b.vx * DT; b.z += b.vz * DT;
       b.y = R; b.vy = 0;   // always on the grass, never goes up
       const f = Math.exp(-0.22 * DT); b.vx *= f; b.vz *= f;
-      if (b.x < -WALL) { b.x = -WALL; b.vx = Math.abs(b.vx) * 0.6; } if (b.x > WALL) { b.x = WALL; b.vx = -Math.abs(b.vx) * 0.6; }
+      if (b.x < -W) { b.x = -W; b.vx = Math.abs(b.vx) * 0.6; } if (b.x > W) { b.x = W; b.vx = -Math.abs(b.vx) * 0.6; }
       // the cup: standing (round post), falling (still a post for a moment), or lying on the grass
       let px = CUP.x, pz = CUP.z, pr = CUP.r;
       if (fall && simT > fall.t + 0.35) {
@@ -316,7 +319,7 @@ async function main() {
     team.clear();
     players = codes.map((code, i) => {
       const [sh, trim, shorts, socks] = flagKit(code), sk = skin[i % 6], p = new THREE.Group();
-      p.position.set(PX(i), 0, PZ);
+      p.position.set(PX(i), 0, PZ); p.scale.setScalar(PS);
       const shirt = std(sh === 'stripes' ? '#bae6fd' : sh);
       const shirtM = new THREE.MeshStandardMaterial({ roughness: 0.7, map: tex(256, 256, (g, w, h) => {
         if (sh === 'stripes') { for (let k = 0; k < 8; k++) { g.fillStyle = k % 2 ? '#7dd3fc' : '#ffffff'; g.fillRect(k * 32, 0, 32, h); } } else { g.fillStyle = sh; g.fillRect(0, 0, w, h); }
@@ -444,7 +447,7 @@ async function main() {
     l.append(f, s); teamsEl.appendChild(l); selects.push(s);
   }
   // control: ball speed, all kicks within N seconds, how messy (remembered on this phone)
-  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value) });
+  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1 });
   const showCtl = () => {
     const sp = Number($('speed').value);
     $('speedV').textContent = (sp < 0.95 ? 'Slow' : sp > 1.05 ? 'Fast' : 'Normal') + ` (${sp.toFixed(1)}×)`;
@@ -452,10 +455,11 @@ async function main() {
   };
   try {
     const c = JSON.parse(localStorage.getItem('fft_cupkick_ctl') || 'null');
-    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); }
+    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); }
   } catch (e) { /* ignore */ }
-  showCtl();
-  ['speed', 'within', 'mess'].forEach((id) => $(id).addEventListener('input', () => {
+  showCtl(); PS = ctl().size;
+  $('size').addEventListener('change', () => { PS = ctl().size; play = null; ballGroup.clear(); buildTeams(selects.map((x) => x.value)); });   // see the new size at once
+  ['speed', 'within', 'mess', 'size'].forEach((id) => $(id).addEventListener('input', () => {
     showCtl(); try { localStorage.setItem('fft_cupkick_ctl', JSON.stringify(ctl())); } catch (e) { /* ignore */ }
   }));
   const fillWin = () => { const v = winEl.value; winEl.innerHTML = '<option value="-1">🎲 Random</option>' + selects.map((s, i) => `<option value="${i}">${NAME(s.value)}</option>`).join(''); winEl.value = [...winEl.options].some((o) => o.value === v) ? v : '-1'; };
