@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'c' => preg_match('/^#[0-9a-f]{6}$/i', $col) ? $col : '#33f0ff'];
     }
     $c['lines'] = $lines;
-    $c['secs'] = max(4, min(15, (int) ($_POST['secs'] ?? 7)));
+    $c['secs'] = max(1, min(3600, (int) ($_POST['secs'] ?? 7)));
     $c['every'] = in_array((int) ($_POST['every'] ?? 0), [0, 3, 5, 10, 15, 30], true) ? (int) $_POST['every'] : 0;
     if (($_POST['do'] ?? '') === 'reset') { $p = $c['push']; $c = promo_defaults(); $c['push'] = $p; }
     if (($_POST['do'] ?? '') === 'show') {
@@ -64,7 +64,7 @@ page_start('Screen Notification', 'promo', $admin);
     </div>
   <?php endfor; ?>
   <div class="row2" style="margin-top:10px">
-    <label class="field"><span>Show for (seconds)</span><input name="secs" type="number" min="4" max="15" value="<?= (int) $c['secs'] ?>"></label>
+    <label class="field"><span>Show for (seconds)</span><input name="secs" type="number" min="1" max="3600" step="1" value="<?= (int) $c['secs'] ?>"></label>
     <label class="field"><span>Show by itself</span><select name="every">
       <?php foreach ([0 => 'Only when I press “Show now”', 3 => 'Every 3 minutes', 5 => 'Every 5 minutes', 10 => 'Every 10 minutes', 15 => 'Every 15 minutes', 30 => 'Every 30 minutes'] as $v => $t): ?>
         <option value="<?= $v ?>" <?= (int) $c['every'] === $v ? 'selected' : '' ?>><?= $t ?></option><?php endforeach; ?></select></label>

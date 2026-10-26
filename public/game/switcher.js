@@ -113,7 +113,7 @@
     const stage = document.getElementById('stage');
     const el = document.createElement('div'); el.className = 'gpr' + (stage ? '' : ' fixed');
     const t = String(p.title || '').trim().split(/\s+/), last = t.length > 1 ? t.pop() : '';
-    const secs = Math.max(4, Math.min(15, Number(p.secs) || 7));
+    const secs = Math.max(1, Math.min(3600, Number(p.secs) || 7));
     el.innerHTML = `<div class="gpr-in"><h2>${esc(t.join(' '))}${last ? ` <em>${esc(last)}</em>` : ''}</h2>${p.sub ? `<div class="gpr-sub">${esc(p.sub)}</div>` : ''}`
       + (p.lines || []).map((l) => `<div class="gpr-r" style="border-color:${esc(l.c)}"><span class="gpr-i" style="background:${esc(l.c)}">${esc(l.i)}</span><div><b>${esc(l.b)}</b><small>${esc(l.s)}</small></div><span class="gpr-eq" style="color:${esc(l.c)}">${esc(l.r)}</span></div>`).join('')
       + `<div class="gpr-t"><i style="animation:gpr-time ${secs}s linear forwards"></i></div></div>`;
