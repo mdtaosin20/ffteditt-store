@@ -25,11 +25,11 @@ const POPULAR = ['tr', 'br', 'fr', 'ar', 'pl', 'ma', 'us', 'gb', 'de', 'es', 'pt
 
 const rng = (s) => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 
-/* ---------------------------------------------------------------- the play: balls are kicked one by one (1–2 s apart) and roll on the grass */
+/* ---------------------------------------------------------------- the play: balls are all kicked within 2 s and roll on the grass */
 const G = 9.8, CUP_H = 1.35;   // gravity; the cup is this high (a ball flying over it does not touch it)
 function simulate(seed, n) {
   const rnd = rng(seed), balls = [], kicks = [];
-  // the kicks come one after another, 1–2 seconds apart, in a random order of the 12 balls
+  // all 12 balls are kicked forward within 2 seconds, in a random order
   const order = []; for (let i = 0; i < n; i++) for (let k = 0; k < 2; k++) order.push([i, k]);
   for (let a = order.length - 1; a > 0; a--) { const c = Math.floor(rnd() * (a + 1)); [order[a], order[c]] = [order[c], order[a]]; }
   let t = 0.8;
@@ -40,7 +40,7 @@ function simulate(seed, n) {
     // every ball rolls on the grass, it never goes up
     balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vz: (tz - sz) / d * sp, on: false, id: balls.length });
     kicks.push({ team: i, t });
-    t += 1 + rnd();
+    t += 2 / (n * 2 - 1) * (0.4 + rnd() * 0.9);
   }
   const steps = Math.ceil((t + 6) / DT), track = balls.map(() => new Float32Array(steps * 3));
   const touches = [], near = [], bumps = [], lands = [];
@@ -87,11 +87,11 @@ function findPlay(n, want) {
     const ids = [...new Set(p.touches.map((t) => t.id))];
     if (ids.length !== 1) continue;
     const T = p.touches[0].t;
-    if (T < 5.0 || T > 13.0) continue;   // a few kicks first, so people have to watch
+    if (T < 3.4 || T > 6.5) continue;
     const w = p.balls[ids[0]];
     if (want >= 0 && w.team !== want) continue;
-    const close = new Set(p.near.filter((x) => x.id !== w.id && Math.abs(x.t - T) < 1.5).map((x) => x.id));
-    if (close.size < 1) continue;
+    const close = new Set(p.near.filter((x) => x.id !== w.id && Math.abs(x.t - T) < 1.0).map((x) => x.id));
+    if (close.size < 2) continue;
     return { ...p, touchT: T, winner: w.team };
   }
   return null;
