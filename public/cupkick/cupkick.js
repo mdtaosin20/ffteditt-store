@@ -25,70 +25,92 @@ const POPULAR = ['tr', 'br', 'fr', 'ar', 'pl', 'ma', 'us', 'gb', 'de', 'es', 'pt
 
 const rng = (s) => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 
-/* ---------------------------------------------------------------- the play: balls are all kicked within 2 s and roll on the grass */
-const G = 9.8, CUP_H = 1.35;   // gravity; the cup is this high (a ball flying over it does not touch it)
-function simulate(seed, n) {
-  const rnd = rng(seed), balls = [], kicks = [];
-  // all 12 balls are kicked forward within 2 seconds, in a random order
+/* ---------------------------------------------------------------- the play: all balls are kicked within a few seconds and roll on the grass,
+   curling a little and knocking each other around; the first ball that touches the cup knocks it over, later balls bounce off the fallen cup */
+const G = 9.8, CUP_H = 1.35;   // the cup is this high
+const PLAY = { speed: 1, within: 2, mess: 1 };   // ball speed (1 = normal), all kicks within N seconds, how messy (0 = calm, 1 = normal, 2 = wild)
+function simulate(seed, n, o = PLAY) {
+  const rnd = rng(seed), balls = [], kicks = [], mess = o.mess;
   const order = []; for (let i = 0; i < n; i++) for (let k = 0; k < 2; k++) order.push([i, k]);
   for (let a = order.length - 1; a > 0; a--) { const c = Math.floor(rnd() * (a + 1)); [order[a], order[c]] = [order[c], order[a]]; }
   let t = 0.8;
+  const aimX = 2.4 - mess * 0.5, aimZ = 1.1 - mess * 0.2;   // messier = the balls are aimed closer together, so they crash more
   for (const [i, k] of order) {
-    const tx = (rnd() * 2 - 1) * 2.4, tz = CUP.z + (rnd() * 2 - 1) * 1.1;
+    const tx = (rnd() * 2 - 1) * aimX, tz = CUP.z + (rnd() * 2 - 1) * aimZ;
     const sx = PX(i) + (k ? -0.42 : 0.42), sz = PZ + 0.75;
-    const d = Math.hypot(tx - sx, tz - sz), sp = 6.6 + rnd() * 2.0;
-    // every ball rolls on the grass, it never goes up
-    balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vz: (tz - sz) / d * sp, on: false, id: balls.length });
+    const d = Math.hypot(tx - sx, tz - sz), sp = (6.6 + rnd() * 2.0) * o.speed;
+    const curl = (rnd() * 2 - 1) * 0.9 * mess * o.speed;   // the ball bends left or right a little while it rolls
+    balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vz: (tz - sz) / d * sp, curl, on: false, id: balls.length });
     kicks.push({ team: i, t });
-    t += 2 / (n * 2 - 1) * (0.4 + rnd() * 0.9);
+    t += o.within / (n * 2 - 1) * (0.4 + rnd() * 0.9);
   }
-  const steps = Math.ceil((t + 6) / DT), track = balls.map(() => new Float32Array(steps * 3));
+  const steps = Math.ceil((t + 3 + 22 / (7.6 * o.speed)) / DT), track = balls.map(() => new Float32Array(steps * 3));
   const touches = [], near = [], bumps = [], lands = [];
   let simT = 0, cupUp = true, fall = null;
+  const lying = { ax: 0, az: 0, bx: 0, bz: 0, r: 0.3 };   // the fallen cup, as a fat stick on the grass
   for (let s = 0; s < steps; s++, simT += DT) {
     for (const b of balls) {
       if (!b.on && simT >= b.t) b.on = true;
-      if (b.on) {
-        b.x += b.vx * DT; b.z += b.vz * DT;
-        b.y = R; b.vy = 0;   // always on the grass
-        const ground = b.y <= R + 0.01, f = Math.exp(-(ground ? 0.22 : 0.03) * DT); b.vx *= f; b.vz *= f;
-        if (b.x < -WALL) { b.x = -WALL; b.vx = Math.abs(b.vx) * 0.6; } if (b.x > WALL) { b.x = WALL; b.vx = -Math.abs(b.vx) * 0.6; }
-        const dx = b.x - CUP.x, dz = b.z - CUP.z, dd = Math.hypot(dx, dz);
-        if (cupUp && dd < R + CUP.r && b.y - R < CUP_H) {
-          const nx = dx / dd, nz = dz / dd, vn = b.vx * nx + b.vz * nz;
-          if (vn < 0) {
-            // the first touch knocks the cup over (it falls the way the ball was going); then it lies on the grass
-            const sp = Math.hypot(b.vx, b.vz) || 1;
-            fall = { t: simT, dx: b.vx / sp, dz: b.vz / sp };
-            b.vx -= 1.5 * vn * nx; b.vz -= 1.5 * vn * nz; touches.push({ id: b.id, t: simT }); cupUp = false;
-          }
-          b.x = CUP.x + nx * (R + CUP.r); b.z = CUP.z + nz * (R + CUP.r);
-        } else if (dd < R + CUP.r + 0.6 && b.y < CUP_H + 1) near.push({ id: b.id, t: simT });
+      if (!b.on) continue;
+      const v = Math.hypot(b.vx, b.vz);
+      if (v > 0.5) { const c = b.curl * DT / v; b.vx += -b.vz * c; b.vz += b.vx * c; b.curl *= Math.exp(-0.5 * DT); }
+      b.x += b.vx * DT; b.z += b.vz * DT;
+      b.y = R; b.vy = 0;   // always on the grass, never goes up
+      const f = Math.exp(-0.22 * DT); b.vx *= f; b.vz *= f;
+      if (b.x < -WALL) { b.x = -WALL; b.vx = Math.abs(b.vx) * 0.6; } if (b.x > WALL) { b.x = WALL; b.vx = -Math.abs(b.vx) * 0.6; }
+      // the cup: standing (round post), falling (still a post for a moment), or lying on the grass
+      let px = CUP.x, pz = CUP.z, pr = CUP.r;
+      if (fall && simT > fall.t + 0.35) {
+        const L = lying, ex = L.bx - L.ax, ez = L.bz - L.az;
+        const u = Math.max(0, Math.min(1, ((b.x - L.ax) * ex + (b.z - L.az) * ez) / (ex * ex + ez * ez)));
+        px = L.ax + ex * u; pz = L.az + ez * u; pr = L.r;
       }
+      const dx = b.x - px, dz = b.z - pz, dd = Math.hypot(dx, dz) || 1e-6;
+      if (dd < R + pr) {
+        const nx = dx / dd, nz = dz / dd, vn = b.vx * nx + b.vz * nz;
+        if (vn < 0) {
+          if (cupUp) {
+            // the first touch knocks the cup over (it falls the way the ball was going)
+            const sp = Math.hypot(b.vx, b.vz) || 1;
+            fall = { t: simT, dx: b.vx / sp, dz: b.vz / sp }; cupUp = false;
+            lying.ax = CUP.x + fall.dx * 0.3; lying.az = CUP.z + fall.dz * 0.3;
+            lying.bx = CUP.x + fall.dx * (0.3 + CUP_H - 0.15); lying.bz = CUP.z + fall.dz * (0.3 + CUP_H - 0.15);
+            touches.push({ id: b.id, t: simT });
+          } else bumps.push(simT);
+          // bounce off it (a hard bounce, a bit to the side)
+          b.vx -= 1.75 * vn * nx; b.vz -= 1.75 * vn * nz;
+          const kick = (rnd() * 2 - 1) * 0.35 * Math.abs(vn) * (0.5 + mess * 0.5); b.vx += -nz * kick; b.vz += nx * kick;
+        }
+        b.x = px + nx * (R + pr); b.z = pz + nz * (R + pr);
+      } else if (cupUp && dd < R + CUP.r + 0.6) near.push({ id: b.id, t: simT });
     }
     for (let a = 0; a < balls.length; a++) for (let c = a + 1; c < balls.length; c++) {
       const A = balls[a], B = balls[c]; if (!A.on || !B.on) continue;
       const dx = B.x - A.x, dz = B.z - A.z, dd = Math.hypot(dx, dz);
-      if (dd > 0 && dd < 2 * R && Math.abs(A.y - B.y) < 2 * R) {
+      if (dd > 0 && dd < 2 * R) {
         const nx = dx / dd, nz = dz / dd, rel = (A.vx - B.vx) * nx + (A.vz - B.vz) * nz;
-        if (rel > 0) { const j = rel * 0.95; A.vx -= j * nx; A.vz -= j * nz; B.vx += j * nx; B.vz += j * nz; if (rel > 1.5) bumps.push(simT); }
-        const o = (2 * R - dd) / 2; A.x -= nx * o; A.z -= nz * o; B.x += nx * o; B.z += nz * o;
+        if (rel > 0) {
+          const j = rel * 0.95; A.vx -= j * nx; A.vz -= j * nz; B.vx += j * nx; B.vz += j * nz;
+          // the balls fly apart a little to the side too, so a crash sends them here and there
+          const side = (rnd() * 2 - 1) * rel * 0.3 * mess; A.vx -= -nz * side; A.vz -= nx * side; B.vx += -nz * side; B.vz += nx * side;
+          if (rel > 1.5) bumps.push(simT);
+        }
+        const o2 = (2 * R - dd) / 2; A.x -= nx * o2; A.z -= nz * o2; B.x += nx * o2; B.z += nz * o2;
       }
     }
     balls.forEach((b, k) => { track[k][s * 3] = b.x; track[k][s * 3 + 1] = b.y; track[k][s * 3 + 2] = b.z; });
   }
   return { balls, kicks, track, touches, near, bumps, lands, steps, fall };
 }
-// exactly ONE ball touches the cup, after a few seconds, with other balls close by at that moment
-function findPlay(n, want) {
-  const start = (Math.random() * 1e9) | 0;
+// exactly ONE ball knocks the cup over, a little after the kicks, with other balls close by at that moment
+function findPlay(n, want, o = PLAY) {
+  const start = (Math.random() * 1e9) | 0, travel = 17.5 / (7.6 * o.speed);
   for (let s = start; s < start + 30000; s++) {
-    const p = simulate(s, n);
-    const ids = [...new Set(p.touches.map((t) => t.id))];
-    if (ids.length !== 1) continue;
+    const p = simulate(s, n, o);
+    if (p.touches.length !== 1) continue;
     const T = p.touches[0].t;
-    if (T < 3.4 || T > 6.5) continue;
-    const w = p.balls[ids[0]];
+    if (T < 0.8 + travel + Math.min(1.5, o.within * 0.5) || T > 0.8 + o.within + travel * 1.8 + 1) continue;
+    const w = p.balls[p.touches[0].id];
     if (want >= 0 && w.team !== want) continue;
     const close = new Set(p.near.filter((x) => x.id !== w.id && Math.abs(x.t - T) < 1.0).map((x) => x.id));
     if (close.size < 2) continue;
