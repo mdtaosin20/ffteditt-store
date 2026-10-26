@@ -17,7 +17,7 @@ const FAST = clamp(Number(QS.get('fast')) || 1, 1, 200);   // testing only
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-const DEF = { gap: 5, music: true, music_style: 'upbeat', music_vol: 35, title: 'LAST FLAG STANDING', count: 50, minutes: 55, shield: 10, revive: 20, revives: 5, likes: 50, viewers: 100, events: true, rev: '', reset: '' };
+const DEF = { gap: 5, music: true, music_style: 'upbeat', music_vol: 35, title: 'LAST FLAG STANDING', count: 99, minutes: 55, shield: 10, revive: 20, revives: 5, likes: 50, viewers: 100, events: true, rev: '', reset: '' };
 // the world's biggest countries, biggest first: the first BIG_ALWAYS are in every round, the rest fill up the free places
 const BIG = ['cn', 'in', 'us', 'id', 'pk', 'ng', 'br', 'bd', 'ru', 'mx', 'jp', 'et', 'ph', 'eg', 'vn', 'cd', 'ir', 'tr', 'de', 'th',
   'gb', 'fr', 'it', 'za', 'tz', 'ke', 'kr', 'co', 'mm', 'es', 'ar', 'dz', 'sd', 'ug', 'iq', 'ca', 'pl', 'ma', 'af', 'ua',
@@ -99,7 +99,7 @@ async function main() {
   const flagCss = (code, w) => { const i = byCode.get(code), h = w * 0.75; return `width:${w}px;height:${h}px;background-size:${COLS_A * w}px ${ROWS_A * h}px;background-position:${-(i % COLS_A) * w}px ${-Math.floor(i / COLS_A) * h}px`; };
   const flagHTML = (code, w) => `<span class="flag" style="${flagCss(code, w)}"></span>`;
   const flagNode = (code, w = 40) => { const d = document.createElement('span'); d.className = 'flag'; d.style.cssText = flagCss(code, w); return d; };
-  const COUNT = clamp(Math.round(cfg.count) || 50, 16, 100);
+  const COUNT = clamp(Math.round(cfg.count) || 99, 16, 100);
   const R = COUNT > 72 ? 31 : COUNT > 48 ? 36 : 41;      // ball radius
   const SPEED = 190;
   const CYCLE = clamp(Number(cfg.gap) || 5, 2, 30);   // seconds the hole stays closed between openings

@@ -12,6 +12,12 @@ if ($s && isset($_GET['x'])) {   // one of the extra thumbnails (YouTube Manager
     header('Content-Type: image/jpeg'); header('Cache-Control: private, max-age=300'); header('X-Content-Type-Options: nosniff');
     readfile($xf); exit;
 }
+if ($s && isset($_GET['g'])) {   // the game's ready-made picture number g (2, 3 …)
+    $gf = APP_DIR . '/yt/' . game_of_url((string) $s['page_url']) . '_' . max(2, min(9, (int) $_GET['g'])) . '.jpg';
+    if (!is_file($gf)) { http_response_code(404); exit; }
+    header('Content-Type: image/jpeg'); header('Cache-Control: private, max-age=300'); header('X-Content-Type-Options: nosniff');
+    readfile($gf); exit;
+}
 if ($s && isset($_GET['def'])) {
     $s['yt_thumb'] = 'default';
 }

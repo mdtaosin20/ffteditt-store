@@ -7,7 +7,7 @@ function lastflag_defaults(): array
 {
     return array_merge(flags_defaults(), [
         'title' => 'LAST FLAG STANDING',
-        'count' => 50,
+        'count' => 99,
         'shield' => 10,
         'revive' => 20,
         'revives' => 0,

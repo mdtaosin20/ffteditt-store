@@ -14,7 +14,7 @@ const YTX_MAX_TITLES = 20, YTX_MAX_THUMBS = 5;   // own extra pictures (+ the ma
 
 function ytx_get(int $id): array
 {
-    $d = ['tmode' => '', 'titles' => [], 'thmode' => 'one', 'thumbs' => [], 'pin_on' => false, 'pin_text' => '', 'pin_every' => 60];
+    $d = ['tmode' => '', 'titles' => [], 'thmode' => '', 'thumbs' => [], 'pin_on' => false, 'pin_text' => '', 'pin_every' => 60];
     $c = json_decode((string) (setting_get('ytx_' . $id) ?? ''), true);
     return is_array($c) ? array_merge($d, array_intersect_key($c, $d)) : $d;
 }
@@ -45,6 +45,16 @@ function ytx_game_titles(array $s): array
     return array_values(array_filter((array) ($d['titles'] ?? []), fn ($t) => mb_strlen($t) <= 100));
 }
 
+/** The game's ready-made thumbnails (app/yt/<game>.jpg, <game>_2.jpg …) — used in turn when the stream uses the ready-made one. */
+function ytx_game_thumbs(array $s): array
+{
+    if ((string) ($s['yt_thumb'] ?? 'default') !== 'default') return [];
+    $g = game_of_url((string) $s['page_url']);
+    $out = [];
+    foreach (['', '_2', '_3', '_4', '_5'] as $k) { $f = APP_DIR . '/yt/' . $g . $k . '.jpg'; if (is_file($f)) $out[] = $f; }
+    return count($out) > 1 ? $out : [];
+}
+
 /** Pick at random, but not the one used last time (when there is a choice). */
 function ytx_random(int $n, int $last): int
 {
@@ -65,7 +75,7 @@ function ytx_pick(array $s): array
     $p = json_decode((string) (setting_get('ytx_pick_' . $id) ?? ''), true) ?: [];
     if (($p['start'] ?? -1) !== $start || !array_key_exists('ti', $p)) {
         $titles = $c['tmode'] === 'list' ? $c['titles'] : ($c['tmode'] === '' ? ytx_game_titles($s) : []);
-        $thumbs = $c['thmode'] === 'list' ? array_merge(['main'], $c['thumbs']) : [];
+        $thumbs = $c['thmode'] === 'list' ? array_merge(['main'], $c['thumbs']) : ($c['thmode'] === '' ? ytx_game_thumbs($s) : []);
         $p = ['start' => $start,
               'ti' => $titles ? ytx_random(count($titles), (int) ($p['ti'] ?? -1)) : -1,
               'th' => count($thumbs) > 1 ? ytx_random(count($thumbs), (int) ($p['th'] ?? -1)) : -1];
@@ -77,6 +87,9 @@ function ytx_pick(array $s): array
     if ($c['thmode'] === 'list' && $p['th'] > 0 && isset($c['thumbs'][$p['th'] - 1])) {
         $f = ytx_thumb_path($id, (string) $c['thumbs'][$p['th'] - 1]);
         if (is_file($f)) $thumb = [$f, 'image/jpeg'];
+    } elseif ($c['thmode'] === '' && $p['th'] >= 0) {
+        $g = ytx_game_thumbs($s);
+        if (isset($g[$p['th']]) && is_file($g[$p['th']])) $thumb = [$g[$p['th']], 'image/jpeg'];
     }
     return ['title' => $title, 'thumb' => $thumb];
 }

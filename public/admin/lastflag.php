@@ -89,7 +89,7 @@ page_start('Last Flag Standing', 'games', $admin);
       </label>
       <label class="field"><span>Countries in a round</span>
         <input name="count" type="number" min="16" max="100" required value="<?= (int) $cfg['count'] ?>">
-        <small class="muted">50 = normal. Your viewers' countries are always in; countries people comment join the next round.</small>
+        <small class="muted">99 = normal (fewer = bigger flags). Your viewers' countries are always in; countries people comment join the next round.</small>
       </label>
       <label class="field"><span>Black hole opens every (seconds)</span>
         <input name="gap" type="number" min="2" max="30" required value="<?= (int) $cfg['gap'] ?>">

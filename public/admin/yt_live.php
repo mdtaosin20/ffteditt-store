@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $x['titles'] = array_slice(array_values(array_filter(array_map(fn ($l) => trim(str_replace(['<', '>'], '', $l)), preg_split('/\R/', (string) ($_POST['titles'] ?? '')) ?: []), fn ($l) => $l !== '')), 0, YTX_MAX_TITLES);
     foreach ($x['titles'] as $tl) if (mb_strlen($tl) > 100) $errors[] = 'A title in the list is too long (YouTube allows 100 letters): “' . mb_substr($tl, 0, 40) . '…”';
     if ($x['tmode'] === 'list' && count($x['titles']) < 2) $errors[] = 'Write at least 2 titles in the list (one per line), or choose “Always the title above”.';
-    $x['thmode'] = ($_POST['thmode'] ?? '') === 'list' ? 'list' : 'one';
+    $x['thmode'] = in_array($_POST['thmode'] ?? 'one', ['list', ''], true) ? (string) $_POST['thmode'] : 'one';
     $del = array_map('strval', (array) ($_POST['xdel'] ?? []));
     foreach ($del as $dn) if (in_array($dn, $x['thumbs'], true)) { @unlink(ytx_thumb_path($id, $dn)); }
     $x['thumbs'] = array_values(array_filter($x['thumbs'], fn ($n) => !in_array($n, $del, true) && is_file(ytx_thumb_path($id, $n))));
@@ -184,11 +184,15 @@ page_start('Title & thumbnail', 'youtube', $admin);
       </div>
       <div class="field xbox"><span>More thumbnails</span>
         <div class="radios">
-          <label><input type="radio" name="thmode" value="one" <?= $x['thmode'] !== 'list' ? 'checked' : '' ?>> Always one picture (the one above)</label>
+          <label><input type="radio" name="thmode" value="one" <?= $x['thmode'] === 'one' || ($x['thmode'] === '' && !ytx_game_thumbs($s)) ? 'checked' : '' ?>> Always one picture (the one above)</label>
+          <?php if (ytx_game_thumbs(['yt_thumb' => 'default'] + $s)): ?><label><input type="radio" name="thmode" value="" <?= $x['thmode'] === '' && $thumbChoice === 'default' ? 'checked' : '' ?>> 🎲 The game's <?= count(ytx_game_thumbs(['yt_thumb' => 'default'] + $s)) ?> ready-made pictures, a different one on every live</label><?php endif; ?>
           <label><input type="radio" name="thmode" value="list" <?= $x['thmode'] === 'list' ? 'checked' : '' ?>> 🎲 A different picture from these on every live</label>
         </div>
         <div class="xthumbs">
           <figure><img alt="Main thumbnail" src="yt_thumb.php?id=<?= $id ?>&amp;v=<?= (int) $s['yt_rev'] ?>" onerror="this.style.visibility='hidden'"><figcaption>The one above</figcaption></figure>
+          <?php foreach (array_slice(ytx_game_thumbs(['yt_thumb' => 'default'] + $s), 1) as $gi => $gf): ?>
+            <figure><img alt="Ready-made thumbnail" src="yt_thumb.php?id=<?= $id ?>&amp;g=<?= $gi + 2 ?>"><figcaption>Ready-made <?= $gi + 2 ?></figcaption></figure>
+          <?php endforeach; ?>
           <?php foreach ($x['thumbs'] as $xn): ?>
             <figure><img alt="Extra thumbnail" src="yt_thumb.php?id=<?= $id ?>&amp;x=<?= e($xn) ?>"><figcaption><label class="check"><input type="checkbox" name="xdel[]" value="<?= e($xn) ?>"> remove</label></figcaption></figure>
           <?php endforeach; ?>
