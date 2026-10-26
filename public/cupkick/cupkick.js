@@ -143,6 +143,29 @@ class Sound {
   land(v) { this.tone(90, 40, 0.14, Math.min(0.5, v * 0.07)); }
   bump() { this.tone(320, 200, 0.07, 0.12, 'triangle'); }
   ding() { this.tone(1320, 0, 1.4, 0.25); this.tone(1980, 0, 1.0, 0.12); this.tone(2640, 0, 0.7, 0.06); this.swell(0.32, 2.5); }
+  // everybody shouts together "HEYYY!": many voices (buzzing tones through mouth-like filters)
+  win() {
+    if (!this.ctx || !this.on) return;
+    const c = this.ctx, t0 = c.currentTime, mix = c.createGain(); mix.gain.value = 1;
+    const out = c.createGain(); out.gain.value = 0.9; out.connect(c.destination);
+    for (const [f, q, v] of [[650, 4, 1], [1750, 7, 0.55], [2600, 9, 0.3]]) {   // the "eh / ay" sound of a mouth
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+      const g = c.createGain(); g.gain.value = v; mix.connect(bp).connect(g).connect(out);
+    }
+    for (let k = 0; k < 14; k++) {   // 14 people (men and women), each a little different
+      const t = t0 + Math.random() * 0.08, f0 = k % 3 === 0 ? 260 + Math.random() * 90 : 130 + Math.random() * 70, len = 0.75 + Math.random() * 0.35;
+      const o = c.createOscillator(), g = c.createGain(), vib = c.createOscillator(), vg = c.createGain();
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(f0 * 0.85, t); o.frequency.linearRampToValueAtTime(f0 * 1.15, t + 0.12); o.frequency.linearRampToValueAtTime(f0 * 0.95, t + len);
+      vib.frequency.value = 5 + Math.random() * 2; vg.gain.value = f0 * 0.025; vib.connect(vg).connect(o.frequency);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.06, t + 0.05); g.gain.setValueAtTime(0.06, t + len * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      o.connect(g).connect(mix); o.start(t); o.stop(t + len + 0.05); vib.start(t); vib.stop(t + len + 0.05);
+    }
+    // the breathy "H" at the start
+    const len = c.sampleRate * 0.25, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const n = c.createBufferSource(), hp = c.createBiquadFilter(), ng = c.createGain(); n.buffer = buf; hp.type = 'bandpass'; hp.frequency.value = 1800; hp.Q.value = 0.8; ng.gain.value = 0.35;
+    n.connect(hp).connect(ng).connect(out); n.start(t0);
+  }
 }
 
 /* ---------------------------------------------------------------- scene */
@@ -371,6 +394,17 @@ async function main() {
       players.forEach((pl, i) => {
         let a = 0;
         for (const k of pl.kicks) { const d = t - k; if (d > -0.3 && d < 0) a = -0.9 * Math.sin((d + 0.3) / 0.3 * Math.PI / 2); if (d >= 0 && d < 0.25) a = -0.9 * (1 - d / 0.25) + 1.1 * Math.sin(d / 0.25 * Math.PI); }
+        const since = t - play.touchT;
+        if (since > 0) {
+          // the cup was touched: everybody jumps and dances, arms up in the air
+          const go = Math.min(1, since / 0.25), ph = since * 9 + i * 1.3, hop = Math.abs(Math.sin(ph));
+          pl.p.position.y = hop * 0.55 * go;
+          pl.p.rotation.y = Math.sin(since * 5 + i) * 0.35 * go;
+          pl.armL.rotation.set(0, 0, -(2.5 + Math.sin(ph * 2) * 0.35) * go); pl.armR.rotation.set(0, 0, (2.5 + Math.sin(ph * 2 + 1) * 0.35) * go);
+          pl.legL.rotation.set(-(1 - hop) * 0.5 * go, 0, 0); pl.legR.rotation.set(-(1 - hop) * 0.5 * go, 0, 0);
+          return;
+        }
+        pl.p.rotation.y = 0; pl.armL.rotation.z = 0; pl.armR.rotation.z = 0;
         pl.legR.rotation.x = -a; pl.legL.rotation.x = a * 0.2; pl.armL.rotation.x = a * 0.5; pl.armR.rotation.x = -a * 0.5;
         pl.p.position.y = Math.abs(Math.sin(now / 330 + i)) * 0.04;
       });
@@ -380,7 +414,7 @@ async function main() {
         const f = play.fall, k = Math.min(1, since / 0.5), bounce = since > 0.5 && since < 0.75 ? Math.sin((since - 0.5) / 0.25 * Math.PI) * 0.12 : 0;
         cupPivot.position.set(CUP.x + f.dx * cupBase, 0.06, CUP.z + f.dz * cupBase); cup.position.set(-f.dx * cupBase, 0, -f.dz * cupBase);
         fallAxis.set(f.dz, 0, -f.dx); cupPivot.quaternion.setFromAxisAngle(fallAxis, k * k * (Math.PI / 2 - 0.12) - bounce);
-        if (since > 0.5 && !clanked) { clanked = true; snd.clank(); }
+        if (since > 0.5 && !clanked) { clanked = true; snd.clank(); snd.win(); }
       } else { cupPivot.position.set(CUP.x, 0.06, CUP.z); cup.position.set(0, 0, 0); cupPivot.quaternion.identity(); }
       ring.material.opacity = since > 0 && since < 0.6 ? 0.9 * (1 - since / 0.6) : 0; ring.scale.setScalar(since > 0 ? 1 + since * 3 : 1);
       const jump = since > 0 && since < 3 ? 0.25 : 0.06;
