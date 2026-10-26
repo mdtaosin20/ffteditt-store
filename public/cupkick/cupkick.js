@@ -379,12 +379,11 @@ async function main() {
   /* ---------- players (our own blocky style), made again for each set of countries ---------- */
   const skin = ['#f1c7a3', '#c68a5c', '#e8b48a', '#f3d1b5', '#8d5a3b', '#d9a77c'];
   const faceTex = (sk) => tex(256, 256, (g, w, h) => {
-    g.fillStyle = sk; g.fillRect(0, 0, w, h); g.fillStyle = '#1b1b1b';
-    g.beginPath(); g.ellipse(84, 110, 16, 22, 0, 0, 7); g.fill(); g.beginPath(); g.ellipse(172, 110, 16, 22, 0, 0, 7); g.fill();
-    g.fillStyle = '#fff'; g.beginPath(); g.arc(89, 102, 6, 0, 7); g.fill(); g.beginPath(); g.arc(177, 102, 6, 0, 7); g.fill();
+    g.fillStyle = sk; g.fillRect(0, 0, w, h);   // (the eyes are separate, so they can look around and blink)
     g.strokeStyle = '#1b1b1b'; g.lineWidth = 10; g.lineCap = 'round'; g.beginPath(); g.arc(128, 150, 34, 0.35, Math.PI - 0.35); g.stroke();
     g.fillStyle = 'rgba(255,90,90,.25)'; g.beginPath(); g.arc(60, 150, 18, 0, 7); g.fill(); g.beginPath(); g.arc(196, 150, 18, 0, 7); g.fill();
   });
+  const eyeGeo = new THREE.CircleGeometry(1, 24), eyeMat = new THREE.MeshBasicMaterial({ color: '#1b1b1b' }), shineMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
   const std = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });   // matt, so arms do not shine
   const box = (w, h, d, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.castShadow = true; m.receiveShadow = true; return m; };
   let players = [];
@@ -410,11 +409,18 @@ async function main() {
       const arm = (sx) => { const g = new THREE.Group(); g.position.set(sx, 2.2, 0); const a = box(0.3, 0.9, 0.32, shirt); a.position.y = -0.4; g.add(a); const hd = box(0.32, 0.24, 0.34, std(sk)); hd.position.y = -0.96; /* a hair bigger than the arm, so the two never flicker where they meet */ g.add(hd); p.add(g); return g; };
       const armL = arm(-0.64), armR = arm(0.64);
       const head = box(0.78, 0.78, 0.74, [std(sk), std(sk), std(sk), std(sk), new THREE.MeshStandardMaterial({ map: faceTex(sk) }), std(sk)]); head.position.y = 2.72; p.add(head);
+      // eyes: a black oval with a white shine; they move together (look at the ball), blink, and open wide when the cup is hit
+      const eyes = [-0.124, 0.124].map((ex) => {
+        const e = new THREE.Group(); e.position.set(ex, 2.775, 0.372);
+        const pupil = new THREE.Mesh(eyeGeo, eyeMat); pupil.scale.set(0.05, 0.068, 1); e.add(pupil);
+        const shine = new THREE.Mesh(eyeGeo, shineMat); shine.scale.set(0.019, 0.019, 1); shine.position.set(0.016, 0.026, 0.002); e.add(shine);
+        p.add(e); return e;
+      });
       const hair = box(0.82, 0.2, 0.78, std(['#2b1d14', '#111', '#5b3a1e', '#111', '#c9a26b', '#111'][i])); hair.position.y = 3.15; p.add(hair);
       const frame = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.0), new THREE.MeshBasicMaterial({ color: '#fff' })); frame.position.set(0, 4.05, -0.01); p.add(frame);
       const fl = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.9), new THREE.MeshBasicMaterial({ map: tex(240, 180, (g) => drawFlag(g, code, 0, 0, 240, 180)) })); fl.position.set(0, 4.05, 0); p.add(fl);
       team.add(p);
-      return { p, legL, legR, armL, armR, kicks: [] };
+      return { p, legL, legR, armL, armR, eyes, kicks: [], blinkAt: 1 + Math.random() * 3, look: new THREE.Vector2() };
     });
   };
   const ballGroup = new THREE.Group(); scene.add(ballGroup);
@@ -452,6 +458,27 @@ async function main() {
     play.balls.forEach((b, k) => { meshes[k].position.set(play.track[k][step * 3], play.track[k][step * 3 + 1], play.track[k][step * 3 + 2]); meshes[k].quaternion.copy(quats[k]); });
   };
 
+  // eyes: look at your newest ball (or the cup), blink now and then, open wide when the cup is hit
+  const tmpV = new THREE.Vector3(), headV = new THREE.Vector3();
+  const updateEyes = (now) => {
+    const t = simT, sec = now / 1000;
+    players.forEach((pl, i) => {
+      let tx = CUP.x, ty = 0.4, tz = CUP.z;
+      if (play) {
+        let best = -1, bt = -1; play.balls.forEach((b, k) => { if (b.team === i && b.t <= t && b.t > bt) { bt = b.t; best = k; } });
+        if (best >= 0 && meshes[best]) { tx = meshes[best].position.x; tz = meshes[best].position.z; }
+        else { tx = pl.p.position.x; tz = PZ + 0.75 * PS; ty = 0.2; }   // before kicking: looks down at his ball
+      }
+      pl.p.getWorldPosition(headV); headV.y += 2.75 * PS;
+      tmpV.set(tx - headV.x, ty - headV.y, tz - headV.z).normalize();
+      const gx = THREE.MathUtils.clamp(tmpV.x * 0.09, -0.05, 0.05), gy = THREE.MathUtils.clamp(tmpV.y * 0.07, -0.035, 0.02);
+      pl.look.x += (gx - pl.look.x) * 0.2; pl.look.y += (gy - pl.look.y) * 0.2;
+      if (sec > pl.blinkAt + 0.14) pl.blinkAt = sec + 1.5 + Math.random() * 3;
+      const blink = sec > pl.blinkAt && sec < pl.blinkAt + 0.14 ? 0.12 : 1;
+      const since = play ? t - play.touchT : -1, wow = since > 0 && since < 0.9 ? 1.35 - Math.max(0, since - 0.6) : 1;
+      pl.eyes.forEach((e, k) => { e.position.x = (k ? 0.124 : -0.124) + pl.look.x; e.position.y = 2.775 + pl.look.y; e.scale.set(wow, blink * wow, 1); });
+    });
+  };
   const frame = (now) => {
     requestAnimationFrame(frame);
     const real = Math.min(0.05, (now - (last || now)) / 1000); last = now;
@@ -484,6 +511,24 @@ async function main() {
         pl.p.rotation.y = 0; pl.armL.rotation.z = 0; pl.armR.rotation.z = 0;
         pl.legR.rotation.x = -a; pl.legL.rotation.x = a * 0.2; pl.armL.rotation.x = a * 0.5; pl.armR.rotation.x = -a * 0.5;
         pl.p.position.y = Math.abs(Math.sin(now / 330 + i)) * 0.04;
+        // after kicking, while the balls roll: each player does his own small thing (not too much, the balls stay the show)
+        const first = pl.kicks.length ? Math.min(...pl.kicks) : 99;
+        let w = 0;
+        if (t > first + 0.25) { w = 1; for (const k of pl.kicks) { const d = t - k; if (d > -0.45 && d < 0.55) w = Math.min(w, d < 0 ? Math.max(0, -d - 0.3) / 0.15 : Math.max(0, d - 0.25) / 0.3); } }
+        w = Math.min(w, Math.max(0, (t - first - 0.25) / 0.3));
+        if (w > 0) {
+          const kind = (i * 7 + 3) % 3, q = t * 6 + i;
+          if (kind === 0) {   // both hands on the head (nervous)
+            pl.armL.rotation.z = 2.7 * w; pl.armR.rotation.z = -2.7 * w; pl.armL.rotation.x = -0.35 * w; pl.armR.rotation.x = -0.35 * w;
+            pl.p.rotation.y = Math.sin(t * 3 + i) * 0.08 * w;
+          } else if (kind === 1) {   // fist pumping: "go, go!"
+            const pump = 0.5 + 0.5 * Math.sin(q * 1.6);
+            pl.armR.rotation.x = -(1.3 + pump * 0.8) * w; pl.armL.rotation.x = -(0.2 + 0.2 * Math.sin(q)) * w;
+            pl.p.position.y += pump * 0.05 * w;
+          } else {   // pointing at his ball
+            pl.armR.rotation.x = -1.45 * w; pl.armR.rotation.z = 0.12 * w + Math.sin(q * 0.8) * 0.06 * w; pl.armL.rotation.z = -0.15 * w;
+          }
+        }
       });
       const since = t - play.touchT;
       if (since > 0 && play.fall) {
@@ -502,6 +547,7 @@ async function main() {
     camera.position.set(Math.sin(now / 3300) * 0.25, 3.2 - k * 0.5, 9.5 - k * 2.2); camera.lookAt(0, 2.6 - k * 0.6, -10);
     if (CLOSE) { camera.position.set(0.2, 0.9, 1.4); camera.lookAt(0, 0.62, -1.5); }   // ?closeup=1: a close look at the trophy
     for (const o of extras.children) if (o.userData.fall) { const p = o.geometry.attributes.position; for (let i = 0; i < p.count; i++) { let y = p.getY(i) - 0.03; if (y < 0) y = 18; p.setY(i, y); p.setX(i, p.getX(i) + Math.sin(now / 900 + i) * 0.004); } p.needsUpdate = true; }
+    updateEyes(now);
     renderer.render(scene, camera);
   };
   requestAnimationFrame(frame);
