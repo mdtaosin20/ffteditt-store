@@ -10,7 +10,7 @@ const DT = 1 / 120;
 const CLOSE = new URLSearchParams(location.search).has('closeup');
 const R = 0.38, CUP = { x: 0, z: -1.5, r: 0.32 }, PZ = -19;
 let PS = 1;   // player size (menu → CONTROL): 1 = normal, 1.4 = bigger, 1.7 = biggest; bigger players stand further apart
-const PX = (i) => (i - 2.5) * 1.6 * Math.max(1, PS * 0.92);
+const PX = (i) => (i - 2.5) * (1.58 * PS + 0.2);   // a player is 1.58 wide (with arms): keep a small gap so they never touch
 const WALL = () => Math.max(6.2, PX(5) + 0.9);   // the side lines the balls bounce off
 const SLOW = 1;                         // speed of the moment the cup is touched (1 = no slow motion)
 const KITS = {   // known shirts; other countries get colours from their flag
