@@ -161,11 +161,11 @@ page_start('Title & thumbnail', 'youtube', $admin);
     <div class="form">
       <label class="field"><span>Title <b class="count" id="tc"></b></span>
         <input name="title" id="title" maxlength="140" required value="<?= e($vTitle) ?>"></label>
-      <?php $x = ytx_get($id); $xt = $x['titles'] ?: [$vTitle]; ?>
+      <?php $x = ytx_get($id); $gameTitles = $def['titles'] ?? []; $xt = $x['titles'] ?: ($gameTitles ?: [$vTitle]); $listOn = $x['tmode'] === 'list' || ($x['tmode'] === '' && $gameTitles); ?>
       <div class="field xbox"><span>Titles</span>
         <div class="radios">
-          <label><input type="radio" name="tmode" value="one" <?= $x['tmode'] !== 'list' ? 'checked' : '' ?>> Always the title above</label>
-          <label><input type="radio" name="tmode" value="list" <?= $x['tmode'] === 'list' ? 'checked' : '' ?>> 🎲 A different title from this list on every live</label>
+          <label><input type="radio" name="tmode" value="one" <?= !$listOn ? 'checked' : '' ?>> Always the title above</label>
+          <label><input type="radio" name="tmode" value="list" <?= $listOn ? 'checked' : '' ?>> 🎲 A different title from this list on every live</label>
         </div>
         <textarea name="titles" rows="5" placeholder="One title per line"><?= e(implode("\n", $xt)) ?></textarea>
         <small class="muted">One title per line (up to <?= YTX_MAX_TITLES ?>, 100 letters each). Each time the stream starts the panel picks one at random — never the same twice in a row.</small></div>

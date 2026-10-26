@@ -1,7 +1,8 @@
 <?php
 /**
  * More choice for each channel's lives (YouTube Manager → Title & thumbnail):
- *  - a list of titles: a different one, at random, on every live (never the same twice in a row)
+ *  - a list of titles: a different one, at random, on every live (never the same twice in a row);
+ *    until the owner chooses, a game with its own list of titles (Last Flag Standing) uses that
  *  - several thumbnails: a different one, at random, on every live
  *  - a message for pinning: sent in the live chat by itself when the live starts, and again every N minutes
  *    (YouTube does not let a program pin it: the owner taps it on the phone → Pin)
@@ -13,7 +14,7 @@ const YTX_MAX_TITLES = 20, YTX_MAX_THUMBS = 5;   // own extra pictures (+ the ma
 
 function ytx_get(int $id): array
 {
-    $d = ['tmode' => 'one', 'titles' => [], 'thmode' => 'one', 'thumbs' => [], 'pin_on' => false, 'pin_text' => '', 'pin_every' => 60];
+    $d = ['tmode' => '', 'titles' => [], 'thmode' => 'one', 'thumbs' => [], 'pin_on' => false, 'pin_text' => '', 'pin_every' => 60];
     $c = json_decode((string) (setting_get('ytx_' . $id) ?? ''), true);
     return is_array($c) ? array_merge($d, array_intersect_key($c, $d)) : $d;
 }
@@ -36,6 +37,14 @@ function ytx_thumb_path(int $id, string $name): string
     return yt_thumb_dir() . '/x_' . $id . '_' . preg_replace('/[^a-z0-9]/', '', $name) . '.jpg';
 }
 
+/** The game's own list of titles (used on every live when the stream has no title of its own). */
+function ytx_game_titles(array $s): array
+{
+    if ((string) ($s['yt_title'] ?? '') !== '') return [];
+    $d = yt_defaults(game_of_url((string) $s['page_url']));
+    return array_values(array_filter((array) ($d['titles'] ?? []), fn ($t) => mb_strlen($t) <= 100));
+}
+
 /** Pick at random, but not the one used last time (when there is a choice). */
 function ytx_random(int $n, int $last): int
 {
@@ -55,14 +64,15 @@ function ytx_pick(array $s): array
     $start = (int) ($s['started_at'] ?? 0);
     $p = json_decode((string) (setting_get('ytx_pick_' . $id) ?? ''), true) ?: [];
     if (($p['start'] ?? -1) !== $start || !array_key_exists('ti', $p)) {
-        $titles = $c['tmode'] === 'list' ? $c['titles'] : [];
+        $titles = $c['tmode'] === 'list' ? $c['titles'] : ($c['tmode'] === '' ? ytx_game_titles($s) : []);
         $thumbs = $c['thmode'] === 'list' ? array_merge(['main'], $c['thumbs']) : [];
         $p = ['start' => $start,
               'ti' => $titles ? ytx_random(count($titles), (int) ($p['ti'] ?? -1)) : -1,
               'th' => count($thumbs) > 1 ? ytx_random(count($thumbs), (int) ($p['th'] ?? -1)) : -1];
         setting_set('ytx_pick_' . $id, json_encode($p));
     }
-    $title = ($c['tmode'] === 'list' && isset($c['titles'][$p['ti']])) ? (string) $c['titles'][$p['ti']] : null;
+    $list = $c['tmode'] === 'list' ? $c['titles'] : ($c['tmode'] === '' ? ytx_game_titles($s) : []);
+    $title = isset($list[$p['ti']]) && $p['ti'] >= 0 ? (string) $list[$p['ti']] : null;
     $thumb = null;
     if ($c['thmode'] === 'list' && $p['th'] > 0 && isset($c['thumbs'][$p['th'] - 1])) {
         $f = ytx_thumb_path($id, (string) $c['thumbs'][$p['th'] - 1]);

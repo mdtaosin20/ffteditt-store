@@ -296,21 +296,52 @@ function yt_defaults(string $game): array
     }
     if ($game === 'lastflag') {
         $f = lastflag_config();
+        $n = (int) $f['count'];
+        // the owner's titles: when a stream has no title of its own, a different one of these is used on every live
+        $titles = [
+            "🔴 LIVE 🌍 {$n} Countries vs The Black Hole! 🕳️ Save Your Flag & Be The Last One Standing!",
+            "🌍 {$n} Countries, 1 Survivor! 🏆 Type Your Country to Save Your Flag | LIVE",
+            "🔴 LIVE LAST FLAG STANDING! 🛡️ {$n} Flags Battle the Black Hole — Who Will Survive?",
+            "🕳️ The Black Hole Is Coming! 🌍 Save Your Country | {$n} Flags LIVE",
+            "🏆 LAST FLAG STANDING! {$n} Countries Enter, Only One Wins! 🔴 LIVE",
+            "⚡ Your Country Needs You! 🌍 Save Your Flag in the {$n}-Country Battle Royale!",
+            "🌍 {$n} Country Flags in One Arena! 🛡️ Comment to Protect Your Country | LIVE",
+        ];
         return [
-            'title' => "🔴 LIVE Last Flag Standing 🌍 {$f['count']} Countries vs the Black Hole! Type Your Country to SAVE It 🛡️",
-            'desc'  => "🌍 LAST FLAG STANDING — {$f['count']} country flags in a neon arena… a turning bearing pushes them and the BLACK HOLE pulls them in one by one!\n"
-                . "Only ONE flag is left standing — the ROUND CHAMPION 🏆\n\n"
-                . "👇 YOU CAN SAVE YOUR COUNTRY:\n"
-                . "💬 {$f['shield']} chats with your country's name = 🛡️ SHIELD (survives the black hole)\n"
-                . "💬 {$f['revive']} chats when it is out = ♻️ REVIVE (it comes back!)\n"
-                . "🔔 Subscribe = FREE SHIELD · ⭐ Super Chat = SHIELD + REVIVE\n"
-                . "👍 Like goals stop the black hole · 👀 Viewer goals give free shields\n\n"
-                . "🎙️ LUNA, our live host, reads your comments and answers you live.\n"
-                . "🌍 Your country is not in the arena? Type it — it joins the next round!\n"
-                . "⏱️ Live 24/7\n\n"
+            'title'  => $titles[0],
+            'titles' => $titles,
+            'desc'   => "🌍 LAST FLAG STANDING — {$n} COUNTRIES, 1 SURVIVOR! 🏆\n"
+                . "🕳️ {$n} country flags enter the arena, but who will survive the BLACK HOLE? Type your country in chat and help your flag win!\n\n"
+                . "👋 WELCOME TO LAST FLAG STANDING!\n"
+                . "Represent your country, join the global battle, and fight to become the LAST FLAG STANDING! 🌎🔥\n\n"
+                . "🛡️ HOW TO SAVE YOUR COUNTRY\n"
+                . "💬 {$f['shield']} chats with your country's name = 🛡️ SHIELD — survive the black hole once!\n"
+                . "♻️ {$f['revive']} chats with your country's name after elimination = REVIVE — bring your country back into the battle!\n"
+                . "🔔 Subscribe = FREE SHIELD\n"
+                . "⭐ Super Chat = SHIELD + REVIVE\n"
+                . "👍 Like goals = the black hole stops for a while\n"
+                . "👀 Viewer goals = FREE SHIELDS for the top countries\n\n"
+                . "🎮 HOW TO PLAY\n"
+                . "🌍 {$n} country flags compete inside a neon arena.\n"
+                . "⚡ A spinning bearing pushes the flags around while the black hole pulls them in.\n"
+                . "🕳️ Avoid elimination, protect your flag, and fight to survive!\n"
+                . "🏆 The last surviving flag becomes the ROUND CHAMPION.\n"
+                . "🔄 After each round, a new battle begins!\n"
+                . "Can't find your country? Type its name in chat — it joins the next round!\n\n"
+                . "🎙️ MEET LUNA — YOUR LIVE HOST!\n"
+                . "LUNA follows the battle, reads your comments, and keeps the competition exciting.\n\n"
+                . "🎁 MYSTERY BOXES & SPECIAL EVENTS\n"
+                . "🕳️ Big Hole · 🛡️ Lucky Shields · ⚡ Speed Storm · ♻️ Lucky Comeback\n"
+                . "Stay in chat — you never know when the next surprise will arrive!\n\n"
+                . "🌎 REPRESENT YOUR COUNTRY!\n"
+                . "🇺🇸 USA | 🇬🇧 UK | 🇮🇳 India | 🇧🇷 Brazil | 🇧🇩 Bangladesh | 🇵🇰 Pakistan | 🇳🇵 Nepal — and many more!\n\n"
+                . "💬 Type your country's name in chat.\n"
+                . "👍 Like the stream if you see your flag!\n"
+                . "📢 Share this LIVE with friends from your country.\n"
+                . "🔔 Subscribe and turn on notifications so you don't miss the next battle!\n\n"
+                . "🏆 {$n} COUNTRIES. ONE ARENA. ONE LAST FLAG STANDING!\n\n"
                 . (!empty($f['music']) && ($f['music_src'] ?? '') === 'songs' && music_tracks() ? music_credit_text() . "\n" : '')
-                . "👍 LIKE IF YOU SEE YOUR COUNTRY FLAG and share with friends from your country!\n\n"
-                . "#lastflagstanding #countryballs #flags #countries #battleroyale #live #interactive #chatgame #geography #bangladesh #india #pakistan #brazil #usa #egypt",
+                . "#LastFlagStanding #{$n}Countries #CountryFlags #BlackHole #CountryBattle #LiveGaming #InteractiveLive #ChatGame #MarbleRace #Geography #WorldFlags #countryballs",
         ];
     }
     if ($game === 'flags') {
