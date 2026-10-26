@@ -85,12 +85,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$stream && $newKey === '') {
         $errors[] = 'Paste the YouTube stream key.';
     }
-    {   // one stream key = one live: two streams on the same key break each other on YouTube
+    {   // one stream key = one live: the same key may be saved on several streams, but only one of them may RUN
         $useKey = $newKey !== '' ? $newKey : (string) ($stream['stream_key'] ?? '');
-        $dup = db()->prepare('SELECT name FROM streams WHERE stream_key = ? AND id != ?');
+        $dup = db()->prepare("SELECT name FROM streams WHERE stream_key = ? AND id != ? AND desired = 'on'");
         $dup->execute([$useKey, (int) ($stream['id'] ?? 0)]);
-        if ($useKey !== '' && ($dn = $dup->fetchColumn()) !== false) {
-            $errors[] = 'This stream key is already used by the stream “' . $dn . '”. Each live needs its own key: make a new one in YouTube Studio (Go live → Stream → stream key list → Create new stream key), or use another channel.';
+        if ($useKey !== '' && ($stream['desired'] ?? 'off') === 'on' && ($dn = $dup->fetchColumn()) !== false) {
+            $errors[] = 'The stream “' . $dn . '” is running with this same stream key. Two lives cannot use one key at the same time — stop “' . $dn . '” first, or use a different key here.';
         }
     }
 

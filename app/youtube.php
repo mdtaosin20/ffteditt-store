@@ -754,7 +754,7 @@ function yt_start_now(array $s): array
 {
     if ($s['status'] !== 'live') return [false, 'This stream is not running. Start it in Live Stream Manager first.'];
     if ($s['yt_refresh'] === '') return [false, 'This channel is not connected to YouTube (press Connect YouTube).'];
-    $dup = db()->prepare('SELECT name FROM streams WHERE stream_key = ? AND id != ?');
+    $dup = db()->prepare("SELECT name FROM streams WHERE stream_key = ? AND id != ? AND desired = 'on'");
     $dup->execute([$s['stream_key'], (int) $s['id']]);
     if (($dn = $dup->fetchColumn()) !== false) return [false, "The stream “{$dn}” uses the same stream key. Two streams on one key break each other — stop one, or give it its own key."];
     if (yt_units_out()) return [false, 'YouTube\'s daily limit is used up — it works again after about 1–2 PM Bangladesh time.'];

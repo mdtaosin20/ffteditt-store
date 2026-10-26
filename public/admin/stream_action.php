@@ -32,6 +32,13 @@ switch ($do) {
                 flash('Add a stream key and choose a server first.', 'error');
                 break;
             }
+            // one stream key = one live at a time (two lives on one key break each other on YouTube)
+            $dup = db()->prepare("SELECT name FROM streams WHERE stream_key = ? AND id != ? AND desired = 'on'");
+            $dup->execute([$s['stream_key'], $id]);
+            if (($dn = $dup->fetchColumn()) !== false) {
+                flash("\"{$dn}\" is already running with the same stream key. Stop it first — or give \"{$s['name']}\" its own key — because two lives cannot share one key.", 'error');
+                break;
+            }
             db()->prepare($startSql . ' AND id = ?')->execute([$now, $now, $id]);
             log_activity("Start requested: {$s['name']}");
             flash("Starting \"{$s['name']}\"… the server will pick it up in a few seconds.");
@@ -57,6 +64,9 @@ switch ($do) {
     case 'start_all':
         $n = db()->prepare($startSql);
         $n->execute([$now, $now]);
+        // streams that share a key: only the first one runs
+        db()->exec("UPDATE streams SET desired = 'off' WHERE id IN (SELECT b.id FROM streams a JOIN streams b ON a.stream_key = b.stream_key AND a.id < b.id
+                    WHERE a.desired = 'on' AND b.desired = 'on' AND a.stream_key <> '')");
         log_activity('Start requested: all streams');
         flash('Starting all streams that have a key and a server.');
         break;
