@@ -1,5 +1,5 @@
 // FFTEdit · Cup Kick — a 3D scene for making Shorts (not for the 24/7 lives).
-// Six countries line up; each player kicks two (identical) balls toward the cup at random moments; exactly ONE ball
+// Six countries line up; each player kicks one ball toward the cup, one after another; exactly ONE ball
 // touches the cup, in a crowd of balls, shown a little slower; the viewers say in the comments whose ball it was.
 // The owner picks the countries in the menu, presses START and records the screen. Tap the screen = menu again.
 import * as THREE from 'three';
@@ -34,18 +34,18 @@ const G = 9.8, CUP_H = 1.35;   // the cup is this high
 const PLAY = { speed: 1, within: 2, mess: 1 };   // ball speed (1 = normal), all kicks within N seconds, how messy (0 = calm, 1 = normal, 2 = wild)
 function simulate(seed, n, o = PLAY) {
   const rnd = rng(seed), balls = [], kicks = [], mess = o.mess, W = WALL();
-  const order = []; for (let i = 0; i < n; i++) for (let k = 0; k < 2; k++) order.push([i, k]);
+  const order = []; for (let i = 0; i < n; i++) order.push(i);   // one ball for each player
   for (let a = order.length - 1; a > 0; a--) { const c = Math.floor(rnd() * (a + 1)); [order[a], order[c]] = [order[c], order[a]]; }
   let t = 0.8;
   const aimX = 2.4 - mess * 0.5, aimZ = 1.1 - mess * 0.2;   // messier = the balls are aimed closer together, so they crash more
-  for (const [i, k] of order) {
+  for (const i of order) {
     const tx = (rnd() * 2 - 1) * aimX, tz = CUP.z + (rnd() * 2 - 1) * aimZ;
-    const sx = PX(i) + (k ? -0.42 : 0.42) * PS, sz = PZ + 0.75 * PS;
+    const sx = PX(i) + 0.25 * PS, sz = PZ + 0.75 * PS;   // in front of his right (kicking) foot
     const d = Math.hypot(tx - sx, tz - sz), sp = (6.6 + rnd() * 2.0) * o.speed;
     const curl = (rnd() * 2 - 1) * 0.9 * mess * o.speed;   // the ball bends left or right a little while it rolls
     balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vz: (tz - sz) / d * sp, curl, on: false, id: balls.length });
     kicks.push({ team: i, t });
-    t += o.within / (n * 2 - 1) * (0.4 + rnd() * 0.9);
+    t += o.within / (n - 1) * (0.4 + rnd() * 0.9);
   }
   const steps = Math.ceil((t + 3 + 22 / (7.6 * o.speed)) / DT), track = balls.map(() => new Float32Array(steps * 3));
   const touches = [], near = [], bumps = [], lands = [];
@@ -119,7 +119,7 @@ function findPlay(n, want, o = PLAY) {
     const w = p.balls[p.touches[0].id];
     if (want >= 0 && w.team !== want) continue;
     const close = new Set(p.near.filter((x) => x.id !== w.id && Math.abs(x.t - T) < 1.0).map((x) => x.id));
-    if (close.size < 2) continue;
+    if (close.size < 1) continue;   // at least one other ball close by, so it is not easy
     return { ...p, touchT: T, winner: w.team };
   }
   return null;
