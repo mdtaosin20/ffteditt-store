@@ -216,11 +216,16 @@ async function main() {
   const R2 = rng(7);
 
   // the ground of each place: stripes in two colours, painted lines, and some speckles (sand, snow, concrete)
-  const groundTex = (a, b, line, dots) => tex(1024, 1024, (g, w, h) => {
+  let WM = '';   // the channel name (menu → CONTROL → Channel name): on the grass, on the LED board and floating; empty = none
+  const groundTex = (a, b, line, dots, wmc) => tex(1024, 1024, (g, w, h) => {
     for (let i = 0; i < 16; i++) { g.fillStyle = i % 2 ? a : b; g.fillRect(0, i * h / 16, w, h / 16); }
     if (dots) { const r = rng(3); for (let i = 0; i < 9000; i++) { g.fillStyle = dots[i % dots.length]; g.fillRect(r() * w, r() * h, 2 + r() * 3, 2 + r() * 3); } }
     g.strokeStyle = line; g.lineWidth = 8; g.beginPath(); g.moveTo(0, 300); g.lineTo(w, 300); g.stroke();
     g.beginPath(); g.ellipse(512, 700, 300, 300, 0, 0, 7); g.stroke();
+    if (WM) {   // the channel name painted big on the grass, where the balls roll over it
+      g.save(); g.translate(512, 520); g.scale(1, 2.2); g.font = 'bold 64px Arial'; const fit = Math.min(1, 210 / g.measureText(WM).width); g.font = `bold ${Math.round(64 * fit)}px Arial`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillStyle = wmc || 'rgba(255,255,255,.28)'; g.fillText(WM, 0, 0); g.restore();
+    }
   });
   const fieldTex = groundTex('#2f8f34', '#287d2d', 'rgba(255,255,255,.9)');
   const field = new THREE.Mesh(new THREE.PlaneGeometry(40, 46), new THREE.MeshStandardMaterial({ map: fieldTex, roughness: 1 }));
@@ -243,8 +248,10 @@ async function main() {
   const roof = new THREE.Mesh(new THREE.BoxGeometry(44, 0.8, 14), new THREE.MeshStandardMaterial({ color: '#141a2e' })); roof.position.set(0, 16.2, -32); stadium.add(roof);
   const lamps = new THREE.Group(); stadium.add(lamps);
   for (let k = 0; k < 9; k++) { const l = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 0.3), new THREE.MeshBasicMaterial({ color: '#fffbe6' })); l.position.set(-16 + k * 4, 15.6, -25.2); lamps.add(l); }
-  const ledTex = tex(2048, 128, (g, w, h) => { g.fillStyle = '#0b1230'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffd23a'; g.font = 'bold 74px Arial'; g.textBaseline = 'middle'; for (let x = 30; x < w; x += 520) g.fillText('★ FLAG CUP ★', x, h / 2); });
-  ledTex.wrapS = THREE.RepeatWrapping; ledTex.repeat.set(2, 1);
+  const makeLed = () => { const t = tex(2048, 128, (g, w, h) => { g.fillStyle = '#0b1230'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffd23a'; g.font = 'bold 74px Arial'; g.textBaseline = 'middle'; const lt = WM ? '★ ' + WM + ' ★' : '★ FLAG CUP ★', step = g.measureText(lt).width + 90; for (let x = 30; x < w; x += step) g.fillText(lt, x, h / 2); });
+
+  t.wrapS = THREE.RepeatWrapping; t.repeat.set(2, 1); return t; };
+  const ledTex = makeLed();
   const led = new THREE.Mesh(new THREE.BoxGeometry(40, 0.9, 0.2), new THREE.MeshStandardMaterial({ map: ledTex, emissive: '#fff', emissiveMap: ledTex, emissiveIntensity: 0.5 })); led.position.set(0, 0.45, -21); scene.add(led);
 
   /* ---------- places: night stadium, day stadium, sunset, beach, snow, street ---------- */
@@ -293,8 +300,8 @@ async function main() {
     night: { name: '🌙 Night stadium', bg: '#0b1024', fog: [30, 60], sun: ['#fff4e0', 2.0], hemi: ['#dfe8ff', '#2c5a2c', 0.7], exp: 0.9, ground: ['#2f8f34', '#287d2d', 'rgba(255,255,255,.9)'], stand: '#3a4050', roof: '#141a2e', stadium: true, lamps: true },
     day: { name: '☀️ Day stadium', sky: ['#3d8fe0', '#8cc4f5', '#d9eefc'], fog: [45, 120], fogC: '#cfe6fa', sun: ['#fffaf0', 2.6], hemi: ['#ffffff', '#3c7a3c', 1.0], exp: 1.0, ground: ['#46a83c', '#3d9634', 'rgba(255,255,255,.95)'], stand: '#9aa3b5', roof: '#cfd6e2', stadium: true, lamps: false },
     sunset: { name: '🌅 Sunset stadium', sky: ['#2b1d5c', '#e0567a', '#ffb067'], fog: [40, 110], fogC: '#e78a7a', sun: ['#ffb36b', 2.2], hemi: ['#ffd2b0', '#3a4a2a', 0.8], exp: 0.95, ground: ['#3f8d36', '#367d2e', 'rgba(255,240,220,.9)'], stand: '#5a4560', roof: '#2a1d3a', stadium: true, lamps: true, extra: 'sunset' },
-    beach: { name: '🏖 Beach', sky: ['#1f7fd6', '#7cc3f2', '#e6f6ff'], fog: [60, 160], fogC: '#cdeaf9', sun: ['#fffaf0', 2.7], hemi: ['#ffffff', '#c9a56a', 1.0], exp: 1.0, ground: ['#ecd29c', '#e4c88f', 'rgba(30,110,200,.85)', ['#d8bb80', '#f6e2b4']], stadium: false, extra: 'beach' },
-    snow: { name: '❄️ Snow', sky: ['#7d8fa8', '#b9c6d6', '#e8eef5'], fog: [30, 80], fogC: '#dfe7f0', sun: ['#f2f6ff', 1.8], hemi: ['#f4f8ff', '#b0bccb', 1.1], exp: 1.0, ground: ['#f3f7fb', '#e6edf5', 'rgba(220,40,60,.85)', ['#ffffff', '#d4dee9', '#c5d9c0']], stand: '#7d8796', roof: '#5d6675', stadium: true, lamps: true, extra: 'snow' },
+    beach: { name: '🏖 Beach', sky: ['#1f7fd6', '#7cc3f2', '#e6f6ff'], fog: [60, 160], fogC: '#cdeaf9', sun: ['#fffaf0', 2.7], hemi: ['#ffffff', '#c9a56a', 1.0], exp: 1.0, ground: ['#ecd29c', '#e4c88f', 'rgba(30,110,200,.85)', ['#d8bb80', '#f6e2b4']], stadium: false, extra: 'beach', wmc: 'rgba(90,60,20,.22)' },
+    snow: { name: '❄️ Snow', sky: ['#7d8fa8', '#b9c6d6', '#e8eef5'], fog: [30, 80], fogC: '#dfe7f0', sun: ['#f2f6ff', 1.8], hemi: ['#f4f8ff', '#b0bccb', 1.1], exp: 1.0, ground: ['#f3f7fb', '#e6edf5', 'rgba(220,40,60,.85)', ['#ffffff', '#d4dee9', '#c5d9c0']], stand: '#7d8796', roof: '#5d6675', stadium: true, lamps: true, extra: 'snow', wmc: 'rgba(40,60,90,.18)' },
     street: { name: '🏙 Street court', sky: ['#141a3a', '#3b3f75', '#c06a6a'], fog: [40, 90], fogC: '#3b3f75', sun: ['#ffe6c2', 1.7], hemi: ['#c8d2ff', '#3d3d48', 0.8], exp: 0.95, ground: ['#7c818c', '#747984', 'rgba(255,214,58,.95)', ['#6b707a', '#8a8f99']], stadium: false, extra: 'street' },
   };
   const applyTheme = (key) => {
@@ -306,7 +313,7 @@ async function main() {
     hemi.color.set(th.hemi[0]); hemi.groundColor.set(th.hemi[1]); hemi.intensity = th.hemi[2];
     renderer.toneMappingExposure = th.exp;
     if (field.material.map) field.material.map.dispose();
-    field.material.map = groundTex(...th.ground); field.material.needsUpdate = true;
+    field.material.map = groundTex(th.ground[0], th.ground[1], th.ground[2], th.ground[3], th.wmc); field.material.needsUpdate = true;
     stadium.visible = th.stadium; lamps.visible = !!th.lamps;
     if (th.stand) standMat.color.set(th.stand);
     if (th.roof) roof.material.color.set(th.roof);
@@ -589,6 +596,12 @@ async function main() {
     if (CLOSE) { camera.position.set(0.2, 0.9, 1.4); camera.lookAt(0, 0.62, -1.5); }   // ?closeup=1: a close look at the trophy
     for (const o of extras.children) if (o.userData.fall) { const p = o.geometry.attributes.position; for (let i = 0; i < p.count; i++) { let y = p.getY(i) - 0.03; if (y < 0) y = 18; p.setY(i, y); p.setX(i, p.getX(i) + Math.sin(now / 900 + i) * 0.004); } p.needsUpdate = true; }
     updateEyes(now);
+    if (WM) {   // the floating name drifts slowly around the middle of the picture (so it cannot just be cut off)
+      const el = $('wm'), W = stage.clientWidth, H = stage.clientHeight, u = now / 1000;
+      if (el.textContent !== WM) el.textContent = WM;
+      const x = (0.5 + 0.32 * Math.sin(u * 0.23)) * W - el.offsetWidth / 2, y = (0.52 + 0.3 * Math.sin(u * 0.17 + 1.3)) * H;
+      el.style.transform = `translate(${x}px, ${y}px) rotate(-8deg)`;
+    }
     renderer.render(scene, camera);
   };
   requestAnimationFrame(frame);
@@ -614,7 +627,7 @@ async function main() {
     const size = sharp ? 4096 : 2048;
     if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
   };
-  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, quality: $('quality').value });
+  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, quality: $('quality').value, chan: $('chan').value });
   const showCtl = () => {
     const sp = Number($('speed').value);
     $('speedV').textContent = (sp < 0.95 ? 'Slow' : sp > 1.05 ? 'Fast' : 'Normal') + ` (${sp.toFixed(1)}×)`;
@@ -622,15 +635,24 @@ async function main() {
   };
   try {
     const c = JSON.parse(localStorage.getItem('fft_cupkick_ctl') || 'null');
-    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && THEMES[c.place]) $('place').value = c.place; if (c.quality) $('quality').value = c.quality; }
+    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && THEMES[c.place]) $('place').value = c.place; if (c.quality) $('quality').value = c.quality; if (typeof c.chan === 'string') $('chan').value = c.chan; }
   } catch (e) { /* ignore */ }
   const setBall = (r) => { if (r === R) return; R = r; ballGeo.dispose(); ballGeo = new THREE.SphereGeometry(R, 40, 28); play = null; ballGroup.clear(); };
+  // the channel name: redraw the grass and the LED board with it
+  let themeNow = 'night';
+  const setChannel = (name) => {
+    name = name.trim().slice(0, 30); if (name === WM) return; WM = name;
+    applyTheme(themeNow);
+    const t = makeLed(); led.material.map.dispose(); led.material.map = t; led.material.emissiveMap = t; led.material.needsUpdate = true;
+    if (!WM) { $('wm').textContent = ''; }
+  };
   showCtl(); PS = ctl().size; setBall(ctl().ball);
-  $('ball').addEventListener('change', () => setBall(ctl().ball)); applyTheme(ctl().place); setQuality(ctl().quality);
-  $('place').addEventListener('change', () => applyTheme(ctl().place));
+  $('ball').addEventListener('change', () => setBall(ctl().ball)); themeNow = ctl().place; setChannel(ctl().chan); applyTheme(themeNow); setQuality(ctl().quality);
+  $('place').addEventListener('change', () => { themeNow = ctl().place; applyTheme(themeNow); });
+  $('chan').addEventListener('change', () => setChannel(ctl().chan));
   $('quality').addEventListener('change', () => setQuality(ctl().quality));
   $('size').addEventListener('change', () => { PS = ctl().size; play = null; ballGroup.clear(); buildTeams(selects.map((x) => x.value)); });   // see the new size at once
-  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality'].forEach((id) => $(id).addEventListener('input', () => {
+  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality', 'chan'].forEach((id) => $(id).addEventListener('input', () => {
     showCtl(); try { localStorage.setItem('fft_cupkick_ctl', JSON.stringify(ctl())); } catch (e) { /* ignore */ }
   }));
   const fillWin = () => { const v = winEl.value; winEl.innerHTML = '<option value="-1">🎲 Random</option>' + selects.map((s, i) => `<option value="${i}">${NAME(s.value)}</option>`).join(''); winEl.value = [...winEl.options].some((o) => o.value === v) ? v : '-1'; };

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Cup Kick · Which flag touches the cup?</title>
-<link rel="stylesheet" href="/cupkick/cupkick.css?v=2">
+<link rel="stylesheet" href="/cupkick/cupkick.css?v=3">
 </head>
 <body>
 <div id="stage">
@@ -13,6 +13,7 @@
     <div class="w1" id="w1">Watch closely! 👀</div>
     <div class="w2" id="w2">Which country touches the cup? 🏆</div>
   </div>
+  <div class="wm" id="wm"></div>
   <div class="tap" id="tap" hidden>tap the screen for the menu</div>
 </div>
 
@@ -36,6 +37,8 @@
         <select id="size"><option value="1">Now (normal)</option><option value="1.4">Bigger (1.4×)</option><option value="1.7">Biggest (1.7×)</option></select></label>
       <label class="row"><span>Ball size</span>
         <select id="ball"><option value="0.38">Small</option><option value="0.45" selected>A little bigger</option><option value="0.52">Big</option></select></label>
+      <label class="row"><span>Channel name (watermark — leave empty for none)</span>
+        <input id="chan" maxlength="30" placeholder="@YourChannel"></label>
       <label class="row"><span>Place</span>
         <select id="place"><option value="night">🌙 Night stadium</option><option value="day">☀️ Day stadium</option><option value="sunset">🌅 Sunset stadium</option><option value="beach">🏖 Beach</option><option value="snow">❄️ Snow</option><option value="street">🏙 Street court</option></select></label>
       <label class="row"><span>Picture quality</span>
@@ -50,6 +53,6 @@
   </div>
 </div>
 <script type="importmap">{ "imports": { "three": "/game/vendor/three.module.js" } }</script>
-<script type="module" src="/cupkick/cupkick.js?v=20"></script>
+<script type="module" src="/cupkick/cupkick.js?v=21"></script>
 </body>
 </html>
