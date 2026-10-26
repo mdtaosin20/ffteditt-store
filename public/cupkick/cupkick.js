@@ -187,6 +187,7 @@ async function main() {
   scene.add(new THREE.HemisphereLight('#dfe8ff', '#2c5a2c', 0.7));
   const sun = new THREE.DirectionalLight('#fff4e0', 2.0);
   sun.position.set(6, 14, 8); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.05;   // no flickering stripes of shadow on the players' arms and bodies
   Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 50 }); sun.target.position.set(0, 0, -8); scene.add(sun, sun.target);
   const tex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
   const R2 = rng(7);
@@ -311,7 +312,7 @@ async function main() {
     g.strokeStyle = '#1b1b1b'; g.lineWidth = 10; g.lineCap = 'round'; g.beginPath(); g.arc(128, 150, 34, 0.35, Math.PI - 0.35); g.stroke();
     g.fillStyle = 'rgba(255,90,90,.25)'; g.beginPath(); g.arc(60, 150, 18, 0, 7); g.fill(); g.beginPath(); g.arc(196, 150, 18, 0, 7); g.fill();
   });
-  const std = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 });
+  const std = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });   // matt, so arms do not shine
   const box = (w, h, d, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.castShadow = true; m.receiveShadow = true; return m; };
   let players = [];
   const team = new THREE.Group(); scene.add(team);
@@ -321,7 +322,7 @@ async function main() {
       const [sh, trim, shorts, socks] = flagKit(code), sk = skin[i % 6], p = new THREE.Group();
       p.position.set(PX(i), 0, PZ); p.scale.setScalar(PS);
       const shirt = std(sh === 'stripes' ? '#bae6fd' : sh);
-      const shirtM = new THREE.MeshStandardMaterial({ roughness: 0.7, map: tex(256, 256, (g, w, h) => {
+      const shirtM = new THREE.MeshStandardMaterial({ roughness: 0.85, map: tex(256, 256, (g, w, h) => {
         if (sh === 'stripes') { for (let k = 0; k < 8; k++) { g.fillStyle = k % 2 ? '#7dd3fc' : '#ffffff'; g.fillRect(k * 32, 0, 32, h); } } else { g.fillStyle = sh; g.fillRect(0, 0, w, h); }
         g.fillStyle = trim; g.fillRect(0, 0, w, 22);
         g.fillStyle = sh === 'stripes' ? '#111827' : trim; g.font = 'bold 120px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String([10, 7, 9, 11, 8, 5][i]), w / 2, h / 2 + 14);
@@ -333,7 +334,7 @@ async function main() {
       const legL = leg(-0.22), legR = leg(0.22);
       const sht = box(0.92, 0.42, 0.48, std(shorts)); sht.position.y = 1.15; p.add(sht);
       const body = box(0.96, 0.95, 0.5, [shirt, shirt, shirt, shirt, shirtM, shirt]); body.position.y = 1.82; p.add(body);
-      const arm = (sx) => { const g = new THREE.Group(); g.position.set(sx, 2.2, 0); const a = box(0.3, 0.9, 0.32, shirt); a.position.y = -0.4; g.add(a); const hd = box(0.3, 0.24, 0.32, std(sk)); hd.position.y = -0.95; g.add(hd); p.add(g); return g; };
+      const arm = (sx) => { const g = new THREE.Group(); g.position.set(sx, 2.2, 0); const a = box(0.3, 0.9, 0.32, shirt); a.position.y = -0.4; g.add(a); const hd = box(0.32, 0.24, 0.34, std(sk)); hd.position.y = -0.96; /* a hair bigger than the arm, so the two never flicker where they meet */ g.add(hd); p.add(g); return g; };
       const armL = arm(-0.64), armR = arm(0.64);
       const head = box(0.78, 0.78, 0.74, [std(sk), std(sk), std(sk), std(sk), new THREE.MeshStandardMaterial({ map: faceTex(sk) }), std(sk)]); head.position.y = 2.72; p.add(head);
       const hair = box(0.82, 0.2, 0.78, std(['#2b1d14', '#111', '#5b3a1e', '#111', '#c9a26b', '#111'][i])); hair.position.y = 3.15; p.add(hair);
