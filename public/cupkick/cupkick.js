@@ -437,7 +437,7 @@ async function main() {
     buildTeams(codes);
     play = findPlay(codes.length, want, ctl());
     if (!play) return false;
-    players.forEach((pl, i) => { pl.kicks = play.kicks.filter((k) => k.team === i).map((k) => k.t); });
+    players.forEach((pl, i) => { pl.kicks = play.kicks.filter((k) => k.team === i).map((k) => k.t); pl.gseed = Math.random() * 1000; });
     ballGroup.clear();
     meshes = play.balls.map(() => { const m = new THREE.Mesh(ballGeo, ballMat); m.castShadow = true; ballGroup.add(m); return m; });
     quats = play.balls.map(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 6, Math.random() * 6, 0)));
@@ -458,6 +458,27 @@ async function main() {
     play.balls.forEach((b, k) => { meshes[k].position.set(play.track[k][step * 3], play.track[k][step * 3 + 1], play.track[k][step * 3 + 2]); meshes[k].quaternion.copy(quats[k]); });
   };
 
+  // small moves while the balls roll (arm angles: x = forward/up, z = out to the side / in over the head)
+  const GESTURES = 7;
+  const pose = (kind, t, i) => {
+    const q = t * 6 + i, s1 = Math.sin(q), pump = 0.5 + 0.5 * Math.sin(q * 1.6);
+    switch (kind) {
+      case 0: return { lx: -0.35, lz: 2.7, rx: -0.35, rz: -2.7, y: 0, ry: Math.sin(t * 3 + i) * 0.08 };   // hands on the head (nervous)
+      case 1: return { lx: -0.2 - 0.2 * s1, lz: 0, rx: -1.3 - pump * 0.8, rz: 0, y: pump * 0.05, ry: 0 };   // right fist pumping "go go!"
+      case 2: return { lx: 0, lz: -0.15, rx: -1.45, rz: 0.12 + Math.sin(q * 0.8) * 0.06, y: 0, ry: 0 };   // pointing at his ball
+      case 3: { const c = 0.5 + 0.5 * Math.sin(q * 2.4); return { lx: -1.25, lz: -0.05 + c * 0.45, rx: -1.25, rz: 0.05 - c * 0.45, y: 0, ry: 0 }; }   // clapping
+      case 4: return { lx: -1.3 - pump * 0.8, lz: 0, rx: -0.2 - 0.2 * s1, rz: 0, y: pump * 0.05, ry: 0 };   // left fist pumping
+      case 5: return { lx: 0.35, lz: -0.55, rx: 0.35, rz: 0.55, y: -0.06 + Math.abs(Math.sin(q * 0.9)) * 0.04, ry: Math.sin(t * 2 + i) * 0.12 };   // hands on the hips, bouncing (waiting)
+      default: return { lx: -1.45, lz: 0.1, rx: -0.3, rz: 0.15 * s1, y: 0, ry: -0.1 };   // pointing with the other hand
+    }
+  };
+  // which move a player does in each second: random per play, never the same twice in a row
+  const gestureOf = (pl, seg) => {
+    const h = (n) => { const x = Math.sin(n * 12.9898 + pl.gseed * 78.233) * 43758.5453; return x - Math.floor(x); };
+    let k = Math.floor(h(seg) * GESTURES); const prev = Math.floor(h(seg - 1) * GESTURES);
+    if (k === prev) k = (k + 1 + Math.floor(h(seg + 0.5) * (GESTURES - 1))) % GESTURES;
+    return k;
+  };
   // eyes: look at your newest ball (or the cup), blink now and then, open wide when the cup is hit
   const tmpV = new THREE.Vector3(), headV = new THREE.Vector3();
   const updateEyes = (now) => {
@@ -517,17 +538,15 @@ async function main() {
         if (t > first + 0.25) { w = 1; for (const k of pl.kicks) { const d = t - k; if (d > -0.45 && d < 0.55) w = Math.min(w, d < 0 ? Math.max(0, -d - 0.3) / 0.15 : Math.max(0, d - 0.25) / 0.3); } }
         w = Math.min(w, Math.max(0, (t - first - 0.25) / 0.3));
         if (w > 0) {
-          const kind = (i * 7 + 3) % 3, q = t * 6 + i;
-          if (kind === 0) {   // both hands on the head (nervous)
-            pl.armL.rotation.z = 2.7 * w; pl.armR.rotation.z = -2.7 * w; pl.armL.rotation.x = -0.35 * w; pl.armR.rotation.x = -0.35 * w;
-            pl.p.rotation.y = Math.sin(t * 3 + i) * 0.08 * w;
-          } else if (kind === 1) {   // fist pumping: "go, go!"
-            const pump = 0.5 + 0.5 * Math.sin(q * 1.6);
-            pl.armR.rotation.x = -(1.3 + pump * 0.8) * w; pl.armL.rotation.x = -(0.2 + 0.2 * Math.sin(q)) * w;
-            pl.p.position.y += pump * 0.05 * w;
-          } else {   // pointing at his ball
-            pl.armR.rotation.x = -1.45 * w; pl.armR.rotation.z = 0.12 * w + Math.sin(q * 0.8) * 0.06 * w; pl.armL.rotation.z = -0.15 * w;
-          }
+          // the move changes every second or so, and is different in every play
+          const segLen = 1.1, u = (t - first - 0.25) / segLen + (pl.gseed % 1), seg = Math.floor(u), f = u - seg;
+          const A = pose(gestureOf(pl, seg), t, i), B = pose(gestureOf(pl, seg - 1), t, i);
+          const m = f < 0.25 ? f / 0.25 : 1, mm = m * m * (3 - 2 * m);   // a quick smooth change from the last move
+          const P = {}; for (const key in A) P[key] = B[key] + (A[key] - B[key]) * mm;
+          const mix = (v, to) => v + (to - v) * w;
+          pl.armL.rotation.x = mix(pl.armL.rotation.x, P.lx); pl.armL.rotation.z = mix(pl.armL.rotation.z, P.lz);
+          pl.armR.rotation.x = mix(pl.armR.rotation.x, P.rx); pl.armR.rotation.z = mix(pl.armR.rotation.z, P.rz);
+          pl.p.position.y += P.y * w; pl.p.rotation.y = mix(pl.p.rotation.y, P.ry);
         }
       });
       const since = t - play.touchT;
