@@ -168,7 +168,7 @@ function chat_feed(int $sid, int $after): array
         $last = $rows ? (int) end($rows)['id'] : $after;
     }
     foreach ($rows as $r) {
-        $out['events'][] = ['id' => (int) $r['id'], 'k' => $r['kind'], 'a' => $r['author'], 't' => $r['text'],
+        $out['events'][] = ['id' => (int) $r['id'], 'm' => (string) $r['msg_id'], 'k' => $r['kind'], 'a' => $r['author'], 't' => $r['text'],
                             'amt' => $r['amount'], 'old' => $old || (int) $r['ts'] < time() - 90];
     }
     $out['last'] = $last;

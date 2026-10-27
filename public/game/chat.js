@@ -431,6 +431,34 @@ export function liveChat(o) {
   };
 
   /* ---------- polling ---------- */
+  // The same message can come twice: at once from the worker on this computer, and later through the panel.
+  const seenMsg = new Set();
+  const fresh = (ev) => {
+    const m = String(ev.m || '').replace(/[^A-Za-z0-9_:.%=-]/g, '').slice(0, 120);
+    if (!m || ev.k === 'sub') return true;
+    if (seenMsg.has(m)) return false;
+    seenMsg.add(m);
+    if (seenMsg.size > 3000) seenMsg.delete(seenMsg.values().next().value);
+    return true;
+  };
+
+  // Fast path: the stream's Chrome runs on the VPS next to the worker, which serves new chat on 127.0.0.1.
+  let localOk = false, lAfter = 0, lFails = 0;
+  const LOCAL = 'http://127.0.0.1:47231/chat';
+  const pollLocal = async () => {
+    let wait = 250;
+    try {
+      const r = await fetch(`${LOCAL}?stream=${encodeURIComponent(stream)}&after=${lAfter}`, { cache: 'no-store' });
+      const j = await r.json();
+      if (j.ok) {
+        localOk = true; lFails = 0;
+        if (cfg.enabled) for (const ev of j.events || []) if (fresh(ev)) handle(ev);
+        lAfter = j.last || lAfter;
+      } else { localOk = false; wait = 3000; }
+    } catch (e) { localOk = false; lFails++; wait = lFails > 3 ? 30000 : 3000; }
+    setTimeout(pollLocal, wait);
+  };
+
   let after = 0, failures = 0;
   const poll = async () => {
     let wait = 500;
@@ -442,8 +470,9 @@ export function liveChat(o) {
         root.hidden = !cfg.enabled;
         if (!cfg.box) box.hidden = true;
         if (!cfg.enabled) wait = 20000;
+        else if (localOk) wait = 2500;   // chat already comes from the worker; the panel adds subscribers and stats
         if (j.stats) o.onStats?.(j.stats);
-        for (const ev of j.events || []) handle(ev);
+        for (const ev of j.events || []) if (fresh(ev)) handle(ev);
         after = j.last || after;
         failures = 0;
       } else wait = 15000;
@@ -463,7 +492,10 @@ export function liveChat(o) {
       setTimeout(fire, 2500 + Math.random() * 3000);
     };
     setTimeout(fire, 1200);
-  } else poll();
+  } else {
+    poll();
+    if (stream) setTimeout(pollLocal, 300);
+  }
 
   // tell the panel what a reward really did (Admin → Audience Insights shows it)
   const log = (kind, author, country, result) => {

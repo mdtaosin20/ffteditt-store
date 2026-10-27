@@ -27,8 +27,10 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.7.2"
+VERSION = "1.8.0"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
@@ -498,7 +500,7 @@ class Stream:
             self._spawn(
                 [
                     CHROME, "--no-sandbox", "--kiosk", "--no-first-run", "--no-default-browser-check",
-                    "--disable-infobars", "--disable-dev-shm-usage", "--disable-features=Translate",
+                    "--disable-infobars", "--disable-dev-shm-usage", "--disable-features=Translate,LocalNetworkAccessChecks,BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults",
                     "--disable-session-crashed-bubble", "--hide-scrollbars",
                     "--autoplay-policy=no-user-gesture-required", "--force-device-scale-factor=1",
                     # No graphics card on a VPS: plain software drawing is many times faster than
@@ -904,7 +906,15 @@ class ChatReader:
         self.wake = threading.Event()
         self.stopped = False
         self.count = 0
+        self.seq = int(time.time() * 1000)   # numbers the messages (a new reader always counts on from a higher number) for the game page on this computer
+        self.recent = []            # (seq, item): the last messages, read by the local chat server
         threading.Thread(target=self._loop, daemon=True).start()
+
+    def since(self, after):
+        with self.lock:
+            if after <= 0:
+                return self.seq, []
+            return self.seq, [it for it in self.recent if it[0] > after]
 
     def set_target(self, target):
         if target != self.target:
@@ -1006,6 +1016,10 @@ class ChatReader:
                         with self.lock:
                             self.items.extend(new)
                             self.items = self.items[-300:]
+                            for c in new:
+                                self.seq += 1
+                                self.recent.append((self.seq, c))
+                            self.recent = self.recent[-300:]
                         if self.notify:
                             self.notify()
                     self._set("Reading chat (%d new since start)" % self.count)
@@ -1022,6 +1036,74 @@ class ChatReader:
                 log("[stream %d] live chat: %s" % (self.sid, ex))
                 self.wake.wait(20)
                 self.wake.clear()
+
+
+LOCAL_CHAT_PORT = 47231
+_CTRL = re.compile(r"[\x00-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069]")
+
+
+def _clean(s, n):
+    return re.sub(r"\s+", " ", _CTRL.sub(" ", str(s or ""))).strip()[:n]
+
+
+def start_local_chat(readers):
+    """The game page runs in Chrome on this same computer: it reads new chat here at once,
+    without the trip to the panel and back (the panel still gets every message for Insights)."""
+
+    class H(BaseHTTPRequestHandler):
+        def _head(self, code):
+            self.send_response(code)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
+            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "*")
+            self.send_header("Cache-Control", "no-store")
+
+        def do_OPTIONS(self):
+            self._head(204)
+            self.end_headers()
+
+        def do_GET(self):
+            u = urllib.parse.urlparse(self.path)
+            q = urllib.parse.parse_qs(u.query)
+            try:
+                sid = int((q.get("stream") or ["0"])[0])
+                after = int((q.get("after") or ["0"])[0])
+            except ValueError:
+                sid, after = 0, 0
+            r = readers.get(sid) if u.path == "/chat" else None
+            if r is None:
+                body = json.dumps({"ok": False, "last": after, "events": []})
+            else:
+                last, rows = r.since(after)
+                now = time.time()
+                ev = []
+                for seq, c in rows[:60]:
+                    a = _clean(c.get("a"), 40).lstrip("@")
+                    if not a:
+                        continue
+                    ev.append({"id": seq, "m": re.sub(r"[^A-Za-z0-9_:.%=-]", "", c.get("id") or "")[:120],
+                               "k": c.get("k") if c.get("k") in ("chat", "super", "member") else "chat",
+                               "a": a, "t": _clean(c.get("t"), 200), "amt": _clean(c.get("amt"), 20),
+                               "old": (c.get("ts") or now) < now - 90})
+                body = json.dumps({"ok": True, "last": rows[min(len(rows), 60) - 1][0] if rows else last, "events": ev})
+            data = body.encode("utf-8")
+            self._head(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *a):
+            pass
+
+    try:
+        srv = ThreadingHTTPServer(("127.0.0.1", LOCAL_CHAT_PORT), H)
+        srv.daemon_threads = True
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        log("Local chat for the game page on 127.0.0.1:%d" % LOCAL_CHAT_PORT)
+    except OSError as ex:
+        log("Local chat server not started (%s) - the game reads chat from the panel" % ex)
 
 
 def call_panel(panel, token, reports, cmd_results=None, voice_results=None, voice_error=None, chat=None, robot=None):
@@ -1055,6 +1137,7 @@ def main():
     voices = VoiceMaker()
     readers = {}        # id -> ChatReader
     robot = RobotVoice(voices)
+    start_local_chat(readers)
 
     def shutdown(*_):
         running["on"] = False
