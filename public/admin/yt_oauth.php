@@ -19,6 +19,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['go'])) {
     exit;
 }
 
+// Back from Google after a channel owner link (the friend has no admin login)
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && str_starts_with((string) ($_GET['state'] ?? ''), 'inv')) {
+    $inv = inv_state_take((string) $_GET['state']);
+    $again = $inv ? '<br><br><a style="color:#9fc0ff" href="/connect.php?t=' . e($inv['t']) . '">Try again</a>' : '';
+    if (!$inv || !inv_stream((string) $inv['t'])) {
+        inv_page('Link not valid', '<h1>This link does not work any more</h1><div class="p">Ask for a new link.</div>', 'bad');
+    }
+    if (isset($_GET['error'])) {
+        inv_page('Cancelled', '<h1>Nothing was connected</h1><div class="p">' . ($_GET['error'] === 'access_denied'
+            ? 'Cancel was pressed on Google — or Google blocked the login (then the owner must add your Gmail as a test user).' : 'Google said: ' . e(substr((string) $_GET['error'], 0, 80))) . $again . '</div>', 'bad');
+    }
+    try {
+        $tok = yt_exchange((string) ($_GET['code'] ?? ''));
+        $refresh = (string) ($tok['refresh_token'] ?? '');
+        if ($refresh === '') throw new RuntimeException('Google did not give a long-term key. Remove this app at myaccount.google.com/permissions and open the link again.');
+        if (!str_contains((string) ($tok['scope'] ?? YT_SCOPE), 'youtube')) throw new RuntimeException('Please tick the YouTube permission box on the Google page.');
+        try { $channel = yt_channel_title((string) $tok['access_token']); } catch (Throwable $e) { $channel = 'YouTube channel'; }
+        $sid = (int) $inv['sid'];
+        db()->prepare("UPDATE streams SET yt_refresh = ?, yt_channel = ?, yt_msg = '', yt_done_start = 0, yt_fails = 0 WHERE id = ?")->execute([$refresh, $channel, $sid]);
+        setting_set('yt_at_' . $sid, json_encode(['t' => $tok['access_token'], 'exp' => time() + (int) ($tok['expires_in'] ?? 3600), 'rh' => md5($refresh)]));
+        inv_cancel($sid);   // a link works once
+        $nm = (string) db()->query('SELECT name FROM streams WHERE id = ' . $sid)->fetchColumn();
+        log_activity("Channel owner link used: “{$channel}” connected to {$nm}", 'ok');
+        inv_page('Connected', '<h1>Connected!</h1><div class="p">Your channel <b>“' . e($channel) . '”</b> is now connected.<br>You can close this page.</div>'
+            . '<div class="okb">' . e(site_config()['name']) . ' can now set the title, thumbnail and pinned message of your lives.</div>', 'ok');
+    } catch (Throwable $e) {
+        inv_page('Not connected', '<h1>Not connected</h1><div class="p">' . e($e->getMessage()) . $again . '</div>', 'bad');
+    }
+}
+
 $admin = require_login();
 start_session();
 

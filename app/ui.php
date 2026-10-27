@@ -90,6 +90,7 @@ function nav_items(): array
         'streams'   => ['Live Stream Manager', 'streams.php',   'live'],
         'schedule'  => ['Schedule Manager',    'schedule.php',  'calendar'],
         'youtube'   => ['YouTube Manager',     'youtube.php',   'youtube'],
+        'owners'    => ['Channel Owner Links', 'owners.php',    'youtube'],
         'golive'    => ['Join Live (camera)',  'golive.php',    'mic'],
         'poll'      => ['Live Poll & Message', 'yt_poll.php',   'pie'],
         'promo'     => ['Screen Notification', 'promo.php',     'bell'],
