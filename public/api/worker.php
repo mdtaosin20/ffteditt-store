@@ -241,9 +241,20 @@ if (function_exists('fastcgi_finish_request')) {
     litespeed_finish_request();
 }
 ignore_user_abort(true);
-try {
-    yt_tick($sid);
-    try { ytx_pin_tick($sid); } catch (Throwable $e) { /* never stops the worker check-in */ }
-} catch (Throwable $e) {
-    // never break the worker check-in
+// The worker checks in up to a few times a second (fast live chat): run the YouTube work only once
+// at a time and at most every 5 seconds, so check-ins do not pile up and lock the database.
+$lk = @fopen(DATA_DIR . '/yt_tick_' . (int) $sid . '.lock', 'c');
+if ($lk && flock($lk, LOCK_EX | LOCK_NB)) {
+    $mark = DATA_DIR . '/yt_tick_' . (int) $sid . '.at';
+    if (time() - (int) @filemtime($mark) >= 5) {
+        @touch($mark);
+        try {
+            yt_tick($sid);
+            try { ytx_pin_tick($sid); } catch (Throwable $e) { /* never stops the worker check-in */ }
+        } catch (Throwable $e) {
+            // never break the worker check-in
+        }
+    }
+    flock($lk, LOCK_UN);
 }
+if ($lk) fclose($lk);
