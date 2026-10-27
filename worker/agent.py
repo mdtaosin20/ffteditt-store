@@ -28,7 +28,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.7.1"
+VERSION = "1.7.2"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
@@ -1015,7 +1015,7 @@ class ChatReader:
                         raise RuntimeError("live chat ended")
                     cont = info["continuation"]
                     wait = int(info.get("timeoutMs", 2000)) / 1000.0
-                    self.wake.wait(max(0.8, min(1.5, wait)))   # ask often: chat on screen fast
+                    self.wake.wait(max(0.5, min(1.0, wait)))   # ask often: chat on screen within 1-2 s
                     self.wake.clear()
             except Exception as ex:
                 self._set("Chat not readable: %s - retrying" % str(ex)[:90])
@@ -1069,10 +1069,10 @@ def main():
         wake.set()
 
     while running["on"]:
-        # new chat wakes us early; still at most one check-in per 0.7 s
+        # new chat wakes us early; still at most one check-in per 0.4 s
         gap = time.time() - last_call[0]
-        if gap < 0.7:
-            time.sleep(0.7 - gap)
+        if gap < 0.4:
+            time.sleep(0.4 - gap)
         last_call[0] = time.time()
         wake.clear()
         reports = [s.report() for s in streams.values()]
