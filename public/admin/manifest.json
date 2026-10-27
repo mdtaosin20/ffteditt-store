@@ -1,0 +1,17 @@
+{
+  "name": "FFT Admin — GameStream Admin Panel",
+  "short_name": "FFT Admin",
+  "description": "Your games, VPS and YouTube lives in one place",
+  "id": "/admin/",
+  "start_url": "/admin/index.php?app=1",
+  "scope": "/admin/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#08111f",
+  "theme_color": "#0a1528",
+  "icons": [
+    { "src": "/admin/app/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/admin/app/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/admin/app/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

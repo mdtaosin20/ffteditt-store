@@ -126,7 +126,13 @@ function page_start(string $title, string $active = '', ?array $admin = null): v
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/admin.css?v=14">
+<link rel="stylesheet" href="/assets/admin.css?v=15">
+<link rel="manifest" href="/admin/manifest.json">
+<meta name="theme-color" content="#0a1528">
+<link rel="icon" type="image/png" sizes="192x192" href="/admin/app/icon-192.png">
+<link rel="apple-touch-icon" href="/admin/app/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FFT Admin">
 </head>
 <body class="<?= $admin ? 'with-side' : 'no-side' ?>">
 <?php if ($admin): ?>
@@ -187,6 +193,7 @@ function page_end(string $script = ''): void
 </main>
 <script src="/assets/admin.js?v=3"></script>
 <script src="/assets/passkey.js?v=4"></script>
+<script src="/assets/app.js?v=1"></script>
 <?php if ($script && $script !== 'admin.js'): ?><script src="/assets/<?= e($script) ?>?v=<?= (int) @filemtime(rtrim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), '/') . '/assets/' . basename($script)) ?>"></script><?php endif; ?>
 </body>
 </html>
