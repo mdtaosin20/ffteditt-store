@@ -96,6 +96,7 @@ function nav_items(): array
         'insights'  => ['Audience Insights',   'insights.php',  'chart'],
         'activity'  => ['Logs & Alerts',       'activity.php',  'bell'],
         'site'      => ['Website',             'site.php',      'grid'],
+        'devices'   => ['Device Access',       'devices.php',   'user'],
         'voice'     => ['Commentator Voice',   'voice.php',     'mic'],
         'terminal'  => ['Web Terminal',        'terminal.php',  'terminal'],
         'settings'  => ['Settings',            'settings.php',  'gear'],

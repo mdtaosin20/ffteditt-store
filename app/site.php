@@ -71,20 +71,14 @@ function owner_cookie_ok(): bool
 /** May this visitor see the website / a game page? */
 function site_may_view(): bool
 {
-    if (!site_private() || owner_cookie_ok()) return true;
+    if (!site_private() || owner_cookie_ok() || dev_approved()) return true;
     $id = (int) ($_GET['stream'] ?? 0);
     return $id > 0 && hash_equals(stream_sig($id), (string) ($_GET['sig'] ?? ''));
 }
 
 function site_closed_page(): void
 {
-    http_response_code(404);
-    header('Cache-Control: no-store');
-    header('X-Robots-Tag: noindex, nofollow');
-    header('Content-Type: text/html; charset=utf-8');
-    echo '<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not Found</title></head>'
-       . '<body style="margin:0;background:#0b1020;color:#9aa4b8;font:16px system-ui,sans-serif;display:grid;place-items:center;min-height:100vh"><p>Not Found</p></body></html>';
-    exit;
+    access_page();   // app/access.php: the "Request access" page
 }
 
 /* ---------------------------------------------------------------- stream signing */

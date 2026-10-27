@@ -68,7 +68,7 @@ page_start('Website', 'site', $admin);
   <?= csrf_field() ?>
   <h2 style="margin-top:0">Who can open the website?</h2>
   <?php if ($priv): ?>
-    <p><strong class="ok-text">🔒 Private</strong> — visitors see “Not Found”. Only you (logged in to this admin on this browser) and your live streams can open the website and the games.</p>
+    <p><strong class="ok-text">🔒 Private</strong> — visitors see a “Members only” page where they can ask for access. Only you (logged in here), the devices you approve in <a href="devices.php">Device Access</a> and your live streams can open the website and the games.</p>
     <input type="hidden" name="private" value="0">
     <div class="form-actions"><button class="btn btn-ghost" type="submit">Open the website to everyone</button></div>
   <?php else: ?>

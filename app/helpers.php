@@ -126,7 +126,7 @@ function page_start(string $title, string $active = '', ?array $admin = null): v
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/admin.css?v=12">
+<link rel="stylesheet" href="/assets/admin.css?v=13">
 </head>
 <body class="<?= $admin ? 'with-side' : 'no-side' ?>">
 <?php if ($admin): ?>
@@ -159,7 +159,7 @@ function page_start(string $title, string $active = '', ?array $admin = null): v
 <aside class="side" id="side">
   <nav class="side-nav">
     <?php foreach (nav_items() as $key => [$label, $href, $ic]): ?>
-      <a href="<?= e($href) ?>" class="<?= $active === $key ? 'on' : '' ?>"><?= icon($ic) ?><span><?= e($label) ?></span></a>
+      <a href="<?= e($href) ?>" class="<?= $active === $key ? 'on' : '' ?>"><?= icon($ic) ?><span><?= e($label) ?></span><?php if ($key === 'devices' && ($dn = dev_pending_count()) > 0): ?><span class="nav-new"><?= $dn ?> new</span><?php endif; ?></a>
     <?php endforeach; ?>
   </nav>
   <?= sidebar_vps() ?>

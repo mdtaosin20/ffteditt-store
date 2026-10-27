@@ -233,6 +233,20 @@ function migrate(PDO $pdo): void
         );
         CREATE INDEX IF NOT EXISTS idx_gifts ON gifts(stream_id, ts);
 
+        CREATE TABLE IF NOT EXISTS devices (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            token_hash TEXT NOT NULL UNIQUE,
+            code       TEXT NOT NULL,
+            name       TEXT NOT NULL DEFAULT '',
+            ua         TEXT NOT NULL DEFAULT '',
+            ip         TEXT NOT NULL DEFAULT '',
+            status     TEXT NOT NULL DEFAULT 'pending',
+            created_at INTEGER NOT NULL,
+            asked_at   INTEGER NOT NULL DEFAULT 0,
+            last_seen  INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices(ip, asked_at);
+
         CREATE TABLE IF NOT EXISTS country_chat (
             game  TEXT NOT NULL,
             day   TEXT NOT NULL,
