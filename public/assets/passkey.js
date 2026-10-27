@@ -81,12 +81,16 @@
       const m = offer.querySelector('.pk-m');
       offer.querySelector('[data-no]').onclick = () => { ls.set('fft_pk_no', String(Date.now())); offer.hidden = true; };
       offer.querySelector('[data-yes]').onclick = async (ev) => {
+        if (!document.hasFocus()) { m.textContent = 'Close the floating window (the small window on top) first, then tap again.'; return; }
         ev.target.disabled = true;
+        m.textContent = 'Wait — the phone opens its fingerprint box…';
+        const hint = setTimeout(() => { m.textContent = 'Nothing showed up? Close every floating / small window, then tap again.'; ev.target.disabled = false; }, 12000);
         try {
           const n = await register(offer.dataset.csrf);
           m.textContent = '✓ Done! Next time just touch the sensor (' + n + ').';
           setTimeout(() => { offer.hidden = true; }, 2200);
         } catch (e) { m.textContent = errText(e); ev.target.disabled = false; }
+        clearTimeout(hint);
       };
     }).catch(() => {});
   }
@@ -97,7 +101,9 @@
     const m = document.getElementById('pk-add-msg');
     if (!supported()) { add.disabled = true; m.textContent = 'This browser cannot use fingerprint login.'; }
     add.addEventListener('click', async () => {
-      add.disabled = true; m.textContent = 'Touch the sensor…';
+      if (!document.hasFocus()) { m.textContent = 'Close the floating window (the small window on top) first, then tap again.'; return; }
+      add.disabled = true; m.textContent = 'Wait — the phone opens its fingerprint box…';
+      setTimeout(() => { if (add.disabled) { m.textContent = 'Nothing showed up? Close every floating / small window, then tap again.'; add.disabled = false; } }, 12000);
       try { const n = await register(add.dataset.csrf); m.textContent = '✓ Added: ' + n; setTimeout(() => location.reload(), 900); }
       catch (e) { m.textContent = errText(e); add.disabled = false; }
     });
