@@ -494,7 +494,8 @@ export function liveChat(o) {
     setTimeout(fire, 1200);
   } else {
     poll();
-    if (stream) setTimeout(pollLocal, 300);
+    // fast path off: Chrome asked for permission on the stream ("wants to access other apps and services")
+    if (stream && QS.has('localchat')) setTimeout(pollLocal, 300);
   }
 
   // tell the panel what a reward really did (Admin → Audience Insights shows it)
