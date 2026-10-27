@@ -40,8 +40,11 @@
     ls.set('fft_pk', '1');
     return j.name;
   };
+  // show the browser's own reason too, so a problem on one phone can be found
+  const why = (e) => (e && e.name && e.name !== 'Error' ? ' [' + e.name + (e.message ? ': ' + String(e.message).slice(0, 120) : '') + ']' : '');
   const errText = (e) => e && e.name === 'InvalidStateError' ? 'Fingerprint login is already on for this device.'
-    : e && e.name === 'NotAllowedError' ? 'Cancelled — nothing changed.' : (e && e.message) || 'Something went wrong.';
+    : e && e.name === 'NotAllowedError' ? 'Not done — it was cancelled or the phone did not allow it. Close other floating windows, use Chrome and try again.' + why(e)
+    : ((e && e.message) || 'Something went wrong.') + why(e);
 
   /* ---------- login page ---------- */
   const btn = document.getElementById('pk-login');
