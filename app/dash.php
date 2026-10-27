@@ -35,7 +35,10 @@ function dash_cards(?array $srv): string
     $disk = pct($i['disk_used_gb'] ?? null, $i['disk_total_gb'] ?? null);
     $up = $online ? ($i['up_kbps'] ?? null) : null;
     $down = $online ? ($i['down_kbps'] ?? null) : null;
-    $live = (int) db()->query("SELECT COUNT(*) FROM streams WHERE status = 'live'")->fetchColumn();
+    // lives on THIS server (it used to count every server's lives)
+    $lq = db()->prepare("SELECT COUNT(*) FROM streams WHERE status = 'live' AND server_id = ?");
+    $lq->execute([(int) ($srv['id'] ?? 0)]);
+    $live = (int) $lq->fetchColumn();
     $gb = fn ($mb) => number_format($mb / 1024, 2);
     ob_start(); ?>
     <div class="kcard k-green">
@@ -43,7 +46,7 @@ function dash_cards(?array $srv): string
       <div class="kbody"><div class="klabel">VPS Status</div>
         <div class="kval"><?= $srv ? ($online ? 'Online' : 'Offline') : 'Not added' ?></div>
         <div class="ksub"><?= $online && !empty($i['uptime_s']) ? 'Running for ' . e(fmt_uptime((int) $i['uptime_s'])) : ($srv ? 'Last seen ' . e(ago((int) $srv['last_seen'])) : '<a href="servers.php">Add a server</a>') ?></div>
-        <div class="ktiny"><?= $live ? $live . ' Live' : ($online ? 'Ready' : '') ?></div></div>
+        <div class="ktiny"><?= $live ? $live . ' Live on this VPS' : ($online ? 'Ready · no live here' : '') ?></div></div>
     </div>
     <div class="kcard k-blue">
       <span class="kicon"><?= icon('cpu') ?></span>
