@@ -30,11 +30,12 @@ import urllib.request
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
-X264_PRESET = os.environ.get("FFT_X264_PRESET", "veryfast")
+X264_PRESET = os.environ.get("FFT_X264_PRESET", "superfast")   # less CPU per live
+X264_THREADS = os.environ.get("FFT_X264_THREADS", "2")          # more threads only add overhead on a VPS
 
 
 PULSE_DIR = "/run/fft-pulse"
@@ -508,8 +509,12 @@ class Stream:
                     "--disable-gpu", "--disable-gpu-compositing",
                     "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
                     "--disable-backgrounding-occluded-windows",
+                    # nothing in the background that costs CPU
+                    "--disable-extensions", "--disable-sync", "--disable-background-networking",
+                    "--disable-component-update", "--disable-default-apps", "--disable-smooth-scrolling",
                     "--user-data-dir=" + profile, "--window-position=0,0", "--window-size=%d,%d" % (w, h),
-                    c["page_url"],
+                    # the page draws only as many frames as we send (public/game/fpscap.js)
+                    c["page_url"] + ("&" if "?" in c["page_url"] else "?") + "fps=%d" % fps,
                 ] + ([] if self.sink else ["--mute-audio"]),
                 env=chrome_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
@@ -529,7 +534,7 @@ class Stream:
                 "-f", "x11grab", "-draw_mouse", "0", "-video_size", "%dx%d" % (w, h),
                 "-framerate", str(fps), "-i", self.display + ".0",
             ] + audio_in + [
-                "-c:v", "libx264", "-preset", X264_PRESET, "-tune", "zerolatency", "-pix_fmt", "yuv420p",
+                "-c:v", "libx264", "-preset", X264_PRESET, "-tune", "zerolatency", "-threads", X264_THREADS, "-pix_fmt", "yuv420p",
                 "-b:v", "%dk" % kbps, "-maxrate", "%dk" % kbps, "-bufsize", "%dk" % (kbps * 2),
                 "-g", gop, "-keyint_min", gop, "-sc_threshold", "0",
                 "-af", "aresample=async=1000", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
