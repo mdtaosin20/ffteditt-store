@@ -28,7 +28,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
@@ -894,8 +894,9 @@ def chat_item(item):
 class ChatReader:
     """Reads one live chat with YouTube's own web-page requests (no API key, no daily limit)."""
 
-    def __init__(self, sid):
+    def __init__(self, sid, notify=None):
         self.sid = sid
+        self.notify = notify        # wakes the main loop, so new messages reach the panel at once
         self.lock = threading.Lock()
         self.items = []
         self.status = "Starting..."
@@ -1005,6 +1006,8 @@ class ChatReader:
                         with self.lock:
                             self.items.extend(new)
                             self.items = self.items[-300:]
+                        if self.notify:
+                            self.notify()
                     self._set("Reading chat (%d new since start)" % self.count)
                     nxt = (lcc.get("continuations") or [{}])[0]
                     info = next((v for v in nxt.values() if isinstance(v, dict) and v.get("continuation")), None)
@@ -1012,7 +1015,7 @@ class ChatReader:
                         raise RuntimeError("live chat ended")
                     cont = info["continuation"]
                     wait = int(info.get("timeoutMs", 2000)) / 1000.0
-                    self.wake.wait(max(1.5, min(5.0, wait)))
+                    self.wake.wait(max(0.8, min(1.5, wait)))   # ask often: chat on screen fast
                     self.wake.clear()
             except Exception as ex:
                 self._set("Chat not readable: %s - retrying" % str(ex)[:90])
@@ -1060,7 +1063,17 @@ def main():
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
 
+    last_call = [0.0]
+
+    def chat_arrived():
+        wake.set()
+
     while running["on"]:
+        # new chat wakes us early; still at most one check-in per 0.7 s
+        gap = time.time() - last_call[0]
+        if gap < 0.7:
+            time.sleep(0.7 - gap)
+        last_call[0] = time.time()
         wake.clear()
         reports = [s.report() for s in streams.values()]
         results = runner.take_results()
@@ -1103,7 +1116,7 @@ def main():
             for sid, cfg in wanted.items():
                 if cfg.get("chat"):
                     if sid not in readers:
-                        readers[sid] = ChatReader(sid)
+                        readers[sid] = ChatReader(sid, chat_arrived)
                     readers[sid].set_target(cfg["chat"])
 
             # stop streams that should not run (or whose settings changed)

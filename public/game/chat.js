@@ -433,7 +433,7 @@ export function liveChat(o) {
   /* ---------- polling ---------- */
   let after = 0, failures = 0;
   const poll = async () => {
-    let wait = 2000;
+    let wait = 900;
     try {
       const r = await fetch(`/api/chat.php?stream=${encodeURIComponent(stream)}&sig=${encodeURIComponent(sig)}&after=${after}`, { cache: 'no-store' });
       if (r.ok) {
