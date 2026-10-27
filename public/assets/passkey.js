@@ -26,23 +26,30 @@
   };
 
   /* ---------- add this device ---------- */
+  let pending = null;   // a fingerprint box still waiting: cancel it before asking again
   const register = async (csrf) => {
+    if (pending) { try { pending.abort(); } catch (e) { /* ignore */ } }
+    pending = new AbortController();
+    const signal = pending.signal;
     const o = await api('reg_opts', null, csrf);
-    const cred = await navigator.credentials.create({ publicKey: {
+    const cred = await navigator.credentials.create({ signal, publicKey: {
       challenge: u2b(o.challenge), rp: { id: o.rpId, name: o.rpName },
       user: { id: u2b(o.userId), name: o.userName, displayName: o.userName + ' (GameStream Admin)' },
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
       authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'required', requireResidentKey: true, userVerification: 'required' },
       excludeCredentials: (o.exclude || []).map((id) => ({ type: 'public-key', id: u2b(id) })),
-      timeout: 120000, attestation: 'none',
+      timeout: 60000, attestation: 'none',
     } });
+    pending = null;
     const j = await api('reg', { id: cred.id, clientDataJSON: b2u(cred.response.clientDataJSON), attestationObject: b2u(cred.response.attestationObject), name: await guessName() }, csrf);
     ls.set('fft_pk', '1');
     return j.name;
   };
   // show the browser's own reason too, so a problem on one phone can be found
   const why = (e) => (e && e.name && e.name !== 'Error' ? ' [' + e.name + (e.message ? ': ' + String(e.message).slice(0, 120) : '') + ']' : '');
-  const errText = (e) => e && e.name === 'InvalidStateError' ? 'Fingerprint login is already on for this device.'
+  const errText = (e) => e && e.name === 'AbortError' ? 'Stopped — tap the button again.'
+    : e && e.name === 'OperationError' && /pending/i.test(e.message || '') ? 'The phone is still busy with the last try — refresh the page (pull down) and tap once.'
+    : e && e.name === 'InvalidStateError' ? 'Fingerprint login is already on for this device.'
     : e && e.name === 'NotAllowedError' ? 'Not done — it was cancelled or the phone did not allow it. Close other floating windows, use Chrome and try again.' + why(e)
     : ((e && e.message) || 'Something went wrong.') + why(e);
 
