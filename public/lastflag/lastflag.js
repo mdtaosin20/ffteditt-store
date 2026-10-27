@@ -571,9 +571,42 @@ async function main() {
   let irisO = 0, irisRot = 0, flashT = 0;
   const resize = () => { const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 1.5); cv.width = Math.round(r.width * dpr) || W; cv.height = Math.round(r.height * dpr) || H; k = cv.width / W; };
   resize(); addEventListener('resize', resize);
+  // Pictures that look the same every frame are drawn once and then copied (a copy costs a fraction of
+  // drawing a glow or a clipped flag again) — the live server has no graphics card, so this saves a lot of CPU.
+  const sprites = new Map(); let spriteK = 0;
+  const sprite = (key, half, paint, halfH = half) => {
+    if (spriteK !== k) { sprites.clear(); spriteK = k; }
+    let sp = sprites.get(key);
+    if (!sp) {
+      sp = document.createElement('canvas'); sp.width = Math.ceil(half * 2 * k); sp.height = Math.ceil(halfH * 2 * k);
+      const x = sp.getContext('2d'); x.setTransform(k, 0, 0, k, half * k, halfH * k); paint(x);
+      if (sprites.size > 600) sprites.clear();
+      sprites.set(key, sp);
+    }
+    return sp;
+  };
+  const paintFlag = (x, code, r, stroke) => {
+    const plain = PLAIN[code], i = byCode.get(code);
+    x.beginPath(); x.arc(0, 0, r, 0, 7); x.closePath(); x.fillStyle = plain ? plain[0] : '#fff'; x.fill();
+    x.save(); x.clip();
+    if (plain) { x.fillStyle = '#fff'; x.font = `700 ${Math.round(r * 0.7)}px Oswald, Rajdhani, sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(plain[1], 0, 1); }
+    else x.drawImage(atlas, (i % COLS_A) * FW, Math.floor(i / COLS_A) * FH, FW, FH, -r * 1.36, -r, r * 2.72, r * 2);
+    x.restore();
+    x.lineWidth = 4; x.strokeStyle = stroke; x.beginPath(); x.arc(0, 0, r, 0, 7); x.stroke();
+  };
   const drawBall = (b) => {
     const s = b.scale ?? 1, r = R * s;
     const plain = PLAIN[b.code], i = byCode.get(b.code);
+    if (s === 1) {   // the usual case: copy the ready flag picture
+      const stroke = shield.has(b.code) ? '#33f0ff' : b.hot > 0 ? '#ffd23a' : '#fff';
+      c.save(); c.translate(b.x, b.y); if (b.spin) c.rotate(b.spin);
+      if (shield.has(b.code)) { c.globalAlpha = 0.45 + 0.2 * Math.sin(simT * 6); c.fillStyle = '#33f0ff'; c.beginPath(); c.arc(0, 0, r + 12, 0, 7); c.fill(); c.globalAlpha = 1; }
+      if (b.hot > 0) { c.globalAlpha = Math.min(1, b.hot) * 0.7; c.fillStyle = '#ffc93a'; c.beginPath(); c.arc(0, 0, r + 9, 0, 7); c.fill(); c.globalAlpha = 1; }
+      const half = r + 3;
+      c.drawImage(sprite('f' + b.code + stroke, half, (x) => paintFlag(x, b.code, r, stroke)), -half, -half, half * 2, half * 2);
+      c.restore();
+      return;
+    }
     c.save(); c.translate(b.x, b.y); if (b.spin) c.rotate(b.spin);
     if (shield.has(b.code)) { c.globalAlpha = 0.45 + 0.2 * Math.sin(simT * 6); c.fillStyle = '#33f0ff'; c.beginPath(); c.arc(0, 0, r + 12, 0, 7); c.fill(); c.globalAlpha = 1; }
     if (b.hot > 0) { c.globalAlpha = Math.min(1, b.hot) * 0.7; c.fillStyle = '#ffc93a'; c.beginPath(); c.arc(0, 0, r + 9, 0, 7); c.fill(); c.globalAlpha = 1; }
@@ -595,10 +628,14 @@ async function main() {
     c.setTransform(k, 0, 0, k, 0, 0);
     c.clearRect(0, 0, W, H);
     // arena floor + neon wall (pink → cyan)
-    const g = c.createRadialGradient(CX, CY, 40, CX, CY, HX); g.addColorStop(0, '#1d1040'); g.addColorStop(1, '#0a0620');
-    hexPath(6); c.fillStyle = g; c.fill();
-    const lg = c.createLinearGradient(CX - HX, CY - HY, CX + HX, CY + HY); lg.addColorStop(0, '#ff2bd6'); lg.addColorStop(1, '#33f0ff');
-    c.lineJoin = 'round'; c.lineWidth = 12; c.strokeStyle = lg; c.shadowColor = '#b14dff'; c.shadowBlur = 34; hexPath(6); c.stroke(); c.shadowBlur = 0;
+    const FH2 = Math.max(HX, HY) + 6 + 6 + 50;   // floor + neon wall, drawn once
+    c.drawImage(sprite('floor', FH2, (x) => {
+      const hp = () => { x.beginPath(); HEX.forEach(([hx, hy], i) => { const gx = hx - CX + (hx - CX) / HX * 6, gy = hy - CY + (hy - CY) / HY * 6; if (i) x.lineTo(gx, gy); else x.moveTo(gx, gy); }); x.closePath(); };
+      const g = x.createRadialGradient(0, 0, 40, 0, 0, HX); g.addColorStop(0, '#1d1040'); g.addColorStop(1, '#0a0620');
+      hp(); x.fillStyle = g; x.fill();
+      const lg = x.createLinearGradient(-HX, -HY, HX, HY); lg.addColorStop(0, '#ff2bd6'); lg.addColorStop(1, '#33f0ff');
+      x.lineJoin = 'round'; x.lineWidth = 12; x.strokeStyle = lg; x.shadowColor = '#b14dff'; x.shadowBlur = 34; hp(); x.stroke(); x.shadowBlur = 0;
+    }), CX - FH2, CY - FH2, FH2 * 2, FH2 * 2);
     // the hole: iris blades inside the bearing ring; when it opens the blades turn open and it glows pink
     const open = openLeft > 0 && phase === 'play', lock = simT < holdUntil && phase === 'play';
     irisO = open ? (openLeft > OPEN ? 1 : openness(openLeft)) : 0;
@@ -616,14 +653,21 @@ async function main() {
     }
     // the bearing: three neon bars and the ring with its little balls, all turning together
     c.lineCap = 'round';
-    for (let i = 0; i < BARS; i++) {
+    for (let i = 0; i < BARS; i++) {   // each bar is one ready picture, turned to its place
       const [x1, y1, x2, y2] = barSeg(i);
-      const bg = c.createLinearGradient(x1, y1, x2, y2); bg.addColorStop(0, '#33f0ff'); bg.addColorStop(1, '#b14dff');
-      c.lineWidth = BAR_W * 2; c.strokeStyle = bg; c.shadowColor = '#33f0ff'; c.shadowBlur = 22; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); c.shadowBlur = 0;
-      c.lineWidth = 5; c.strokeStyle = 'rgba(255,255,255,.6)'; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      const len = Math.hypot(x2 - x1, y2 - y1), bh = len / 2 + BAR_W + 50, bv = BAR_W + 50;
+      c.save(); c.translate((x1 + x2) / 2, (y1 + y2) / 2); c.rotate(Math.atan2(y2 - y1, x2 - x1));
+      c.drawImage(sprite('bar' + Math.round(len), bh, (x) => {
+        const bg = x.createLinearGradient(-len / 2, 0, len / 2, 0); bg.addColorStop(0, '#33f0ff'); bg.addColorStop(1, '#b14dff');
+        x.lineCap = 'round'; x.lineWidth = BAR_W * 2; x.strokeStyle = bg; x.shadowColor = '#33f0ff'; x.shadowBlur = 22; x.beginPath(); x.moveTo(-len / 2, 0); x.lineTo(len / 2, 0); x.stroke(); x.shadowBlur = 0;
+        x.lineWidth = 5; x.strokeStyle = 'rgba(255,255,255,.6)'; x.beginPath(); x.moveTo(-len / 2, 0); x.lineTo(len / 2, 0); x.stroke();
+      }, bv), -bh, -bv, bh * 2, bv * 2);
+      c.restore();
     }
-    const rc = lock ? '#7dff8a' : open ? '#ff2bd6' : '#33f0ff';
-    c.lineWidth = 10; c.strokeStyle = rc; c.shadowColor = rc; c.shadowBlur = open ? 30 : 18; c.beginPath(); c.arc(CX, CY, RING, 0, 7); c.stroke(); c.shadowBlur = 0;
+    const rc = lock ? '#7dff8a' : open ? '#ff2bd6' : '#33f0ff', rb = open ? 30 : 18, RH = RING + 5 + rb * 2;
+    c.drawImage(sprite('ring' + rc + rb, RH, (x) => {
+      x.lineWidth = 10; x.strokeStyle = rc; x.shadowColor = rc; x.shadowBlur = rb; x.beginPath(); x.arc(0, 0, RING, 0, 7); x.stroke(); x.shadowBlur = 0;
+    }), CX - RH, CY - RH, RH * 2, RH * 2);
     c.lineWidth = 3; c.strokeStyle = 'rgba(255,255,255,.8)'; c.fillStyle = 'rgba(10,5,30,.9)';
     for (let q = 0; q < 12; q++) { const a = barA + q * Math.PI / 6; c.beginPath(); c.arc(CX + Math.cos(a) * RING, CY + Math.sin(a) * RING, 6, 0, 7); c.fill(); c.stroke(); }
     if (lock) { c.fillStyle = '#c4ffca'; c.font = '700 24px Rajdhani, Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🔒 ' + Math.ceil(holdUntil - simT) + 's', CX, CY + RING + 26); }

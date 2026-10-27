@@ -556,9 +556,42 @@ async function main() {
   let irisO = 0, irisRot = 0, flashT = 0;
   const resize = () => { const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 1.5); cv.width = Math.round(r.width * dpr) || W; cv.height = Math.round(r.height * dpr) || H; k = cv.width / W; };
   resize(); addEventListener('resize', resize);
+  // Pictures that look the same every frame are drawn once and then copied (a copy costs a fraction of
+  // drawing a glow or a clipped flag again) — the live server has no graphics card, so this saves a lot of CPU.
+  const sprites = new Map(); let spriteK = 0;
+  const sprite = (key, half, paint) => {
+    if (spriteK !== k) { sprites.clear(); spriteK = k; }
+    let sp = sprites.get(key);
+    if (!sp) {
+      sp = document.createElement('canvas'); sp.width = sp.height = Math.ceil(half * 2 * k);
+      const x = sp.getContext('2d'); x.setTransform(k, 0, 0, k, half * k, half * k); paint(x);
+      if (sprites.size > 600) sprites.clear();
+      sprites.set(key, sp);
+    }
+    return sp;
+  };
+  const paintFlag = (x, code, r, stroke) => {
+    const plain = PLAIN[code], i = byCode.get(code);
+    x.beginPath(); x.arc(0, 0, r, 0, 7); x.closePath(); x.fillStyle = plain ? plain[0] : '#fff'; x.fill();
+    x.save(); x.clip();
+    if (plain) { x.fillStyle = '#fff'; x.font = `700 ${Math.round(r * 0.7)}px Oswald, Rajdhani, sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(plain[1], 0, 1); }
+    else x.drawImage(atlas, (i % COLS_A) * FW, Math.floor(i / COLS_A) * FH, FW, FH, -r * 1.36, -r, r * 2.72, r * 2);
+    x.restore();
+    x.lineWidth = 4; x.strokeStyle = stroke; x.beginPath(); x.arc(0, 0, r, 0, 7); x.stroke();
+  };
   const drawBall = (b) => {
     const s = b.scale ?? 1, r = R * s;
     const plain = PLAIN[b.code], i = byCode.get(b.code);
+    if (s === 1) {   // the usual case: copy the ready flag picture
+      const stroke = shield.has(b.code) ? '#7dd3fc' : b.hot > 0 ? '#ffc93a' : '#fff';
+      c.save(); c.translate(b.x, b.y); if (b.spin) c.rotate(b.spin);
+      if (shield.has(b.code)) { c.globalAlpha = 0.45 + 0.2 * Math.sin(simT * 6); c.fillStyle = '#7dd3fc'; c.beginPath(); c.arc(0, 0, r + 12, 0, 7); c.fill(); c.globalAlpha = 1; }
+      if (b.hot > 0) { c.globalAlpha = Math.min(1, b.hot) * 0.7; c.fillStyle = '#ffc93a'; c.beginPath(); c.arc(0, 0, r + 9, 0, 7); c.fill(); c.globalAlpha = 1; }
+      const half = r + 3;
+      c.drawImage(sprite('f' + b.code + stroke, half, (x) => paintFlag(x, b.code, r, stroke)), -half, -half, half * 2, half * 2);
+      c.restore();
+      return;
+    }
     c.save(); c.translate(b.x, b.y); if (b.spin) c.rotate(b.spin);
     if (shield.has(b.code)) { c.globalAlpha = 0.45 + 0.2 * Math.sin(simT * 6); c.fillStyle = '#7dd3fc'; c.beginPath(); c.arc(0, 0, r + 12, 0, 7); c.fill(); c.globalAlpha = 1; }
     if (b.hot > 0) { c.globalAlpha = Math.min(1, b.hot) * 0.7; c.fillStyle = '#ffc93a'; c.beginPath(); c.arc(0, 0, r + 9, 0, 7); c.fill(); c.globalAlpha = 1; }
@@ -579,9 +612,12 @@ async function main() {
     c.setTransform(k, 0, 0, k, 0, 0);
     c.clearRect(0, 0, W, H);
     // arena floor + wall
-    const g = c.createRadialGradient(CX, CY, 40, CX, CY, RW); g.addColorStop(0, '#1d2747'); g.addColorStop(1, '#0b1026');
-    c.fillStyle = g; c.beginPath(); c.arc(CX, CY, RW + 6, 0, 7); c.fill();
-    c.lineWidth = 12; c.strokeStyle = '#22d3ee'; c.shadowColor = '#22d3ee'; c.shadowBlur = 30; c.beginPath(); c.arc(CX, CY, RW + 6, 0, 7); c.stroke(); c.shadowBlur = 0;
+    const FH2 = RW + 6 + 6 + 40;   // floor + glowing wall, drawn once
+    c.drawImage(sprite('floor', FH2, (x) => {
+      const g = x.createRadialGradient(0, 0, 40, 0, 0, RW); g.addColorStop(0, '#1d2747'); g.addColorStop(1, '#0b1026');
+      x.fillStyle = g; x.beginPath(); x.arc(0, 0, RW + 6, 0, 7); x.fill();
+      x.lineWidth = 12; x.strokeStyle = '#22d3ee'; x.shadowColor = '#22d3ee'; x.shadowBlur = 30; x.beginPath(); x.arc(0, 0, RW + 6, 0, 7); x.stroke(); x.shadowBlur = 0;
+    }), CX - FH2, CY - FH2, FH2 * 2, FH2 * 2);
     // bars
     c.lineCap = 'round'; c.lineWidth = BAR_W * 2; c.strokeStyle = '#8b7cf6';
     for (let i = 0; i < BARS; i++) { const [x1, y1, x2, y2] = barSeg(i); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
@@ -601,8 +637,10 @@ async function main() {
       c.fillStyle = '#000'; c.beginPath(); c.arc(CX, CY, inner, 0, 7); c.fill();
       c.lineWidth = 3; c.strokeStyle = `rgba(255,79,216,${Math.min(1, irisO) * 0.9})`; c.beginPath(); c.arc(CX, CY, inner, 0, 7); c.stroke();
     }
-    c.lineWidth = 6; c.strokeStyle = lock ? '#22d3ee' : open ? '#ff4fd8' : '#f5c33b';
-    c.shadowColor = c.strokeStyle; c.shadowBlur = open ? 26 : 10; c.beginPath(); c.arc(CX, CY, RING, 0, 7); c.stroke(); c.shadowBlur = 0;
+    const rc = lock ? '#22d3ee' : open ? '#ff4fd8' : '#f5c33b', rb = open ? 26 : 10, RH = RING + 3 + rb * 2;   // glowing ring, drawn once per colour
+    c.drawImage(sprite('ring' + rc + rb, RH, (x) => {
+      x.lineWidth = 6; x.strokeStyle = rc; x.shadowColor = rc; x.shadowBlur = rb; x.beginPath(); x.arc(0, 0, RING, 0, 7); x.stroke(); x.shadowBlur = 0;
+    }), CX - RH, CY - RH, RH * 2, RH * 2);
     if (lock) { c.fillStyle = '#7dd3fc'; c.font = '700 20px Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🔒 ' + Math.ceil(holdUntil - simT) + 's', CX, CY + RING + 18); }
     // flags (falling ones on top)
     for (const b of balls) if (!b.gone) drawBall(b);
