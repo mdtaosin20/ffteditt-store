@@ -8,7 +8,9 @@
   if (!q.get('stream') || !q.get('sig')) return;
   const fps = Math.max(10, Math.min(60, Number(q.get('fps')) || 30));
   if (fps >= 60) return;
-  const gap = 1000 / fps;
+  // draw twice as often as the stream takes pictures: drawing exactly at the stream's rate, out of step
+  // with the capture, makes the picture judder (a frame shown twice, the next one skipped)
+  const gap = 1000 / Math.min(60, fps * 2);
   const diag = q.get('diag');
   if (diag) addEventListener('DOMContentLoaded', () => { const st = document.createElement('style');
     st.textContent = diag === 'hidecanvas' ? 'canvas{visibility:hidden!important}' : diag === 'hideall' ? 'html{visibility:hidden!important}' : diag === 'onlycanvas' ? 'body *:not(canvas){visibility:hidden!important} canvas{visibility:visible!important}' : '';

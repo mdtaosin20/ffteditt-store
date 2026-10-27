@@ -498,7 +498,7 @@ function yt_create_broadcast(array $s, string $tok, string $streamId): string
         'snippet' => ['title' => $t['title'], 'description' => $t['desc'], 'scheduledStartTime' => gmdate('Y-m-d\TH:i:s\Z')],
         'status' => ['privacyStatus' => 'public', 'selfDeclaredMadeForKids' => false],
         'contentDetails' => ['enableAutoStart' => true, 'enableAutoStop' => true, 'enableDvr' => true,
-                             'latencyPreference' => 'ultraLow', 'monitorStream' => ['enableMonitorStream' => false]],
+                             'latencyPreference' => 'low', 'monitorStream' => ['enableMonitorStream' => false]],
     ];
     $r = yt_http('POST', YT_API . 'liveBroadcasts?part=snippet,status,contentDetails',
         ['Authorization: Bearer ' . $tok, 'Content-Type: application/json'], json_encode($body, JSON_UNESCAPED_UNICODE));
