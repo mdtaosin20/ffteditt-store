@@ -35,6 +35,7 @@ require APP_DIR . '/voice.php';
 require APP_DIR . '/panel.php';
 require APP_DIR . '/site.php';
 require APP_DIR . '/access.php';
+require APP_DIR . '/passkey.php';
 require APP_DIR . '/ui.php';
 require APP_DIR . '/youtube.php';
 require APP_DIR . '/chat.php';

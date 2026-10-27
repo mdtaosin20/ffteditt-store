@@ -34,8 +34,13 @@ page_start('Log in');
     </div>
     <?php if ($error): ?><div class="flash flash-error" role="alert"><?= e($error) ?></div><?php endif; ?>
     <?= csrf_field() ?>
+    <div id="pk-box" class="pk-box">
+      <div id="pk-msg" class="flash" role="status" hidden></div>
+      <button class="btn btn-blue btn-block pk-btn" id="pk-login" type="button">🔐 Log in with fingerprint</button>
+      <div class="pk-or">or use password</div>
+    </div>
     <label class="field"><span>Username</span>
-      <input name="username" autocomplete="username" required autofocus>
+      <input name="username" autocomplete="username webauthn" required>
     </label>
     <label class="field"><span>Password</span>
       <input name="password" type="password" autocomplete="current-password" required>

@@ -3,6 +3,21 @@ require __DIR__ . '/../_boot.php';
 $admin = require_login();
 
 $errors = [];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['do'] ?? '', ['pk_remove', 'pk_rename'], true)) {
+    check_csrf();
+    pk_table();
+    $pid = (int) ($_POST['pk'] ?? 0);
+    if ($_POST['do'] === 'pk_remove') {
+        db()->prepare('DELETE FROM passkeys WHERE id = ? AND admin_id = ?')->execute([$pid, (int) $admin['id']]);
+        log_activity('Fingerprint login removed from a device', 'info');
+        flash('Removed — that device needs the password again.');
+    } else {
+        $nm = mb_substr(trim((string) ($_POST['name'] ?? '')), 0, 60);
+        if ($nm !== '') db()->prepare('UPDATE passkeys SET name = ? WHERE id = ? AND admin_id = ?')->execute([$nm, $pid, (int) $admin['id']]);
+        flash('Name saved ✓');
+    }
+    redirect('settings.php#fingerprint');
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['do'] ?? '') === 'vps') {
     check_csrf();
     $o = [
@@ -72,6 +87,26 @@ page_start('Settings', 'settings', $admin);
   <label class="field"><span>“Upgrade Plan” button link</span><input name="upgrade_url" type="url" value="<?= e($o['upgrade_url']) ?>"></label>
   <div class="form-actions"><button class="btn btn-blue" type="submit">Save VPS info</button></div>
 </form>
+<?php pk_table(); $pks = db()->prepare('SELECT * FROM passkeys WHERE admin_id = ? ORDER BY last_used DESC, id DESC'); $pks->execute([(int) $admin['id']]); $pks = $pks->fetchAll(); ?>
+<h2 class="sec-h" id="fingerprint">🔐 Fingerprint / Face login</h2>
+<div class="card" style="max-width:none">
+  <p class="muted" style="margin-top:0">Log in with the fingerprint, face or screen lock of your phone or PC — no password typing. The fingerprint never leaves your device.</p>
+  <?php foreach ($pks as $k): $ph = preg_match('/phone|android|iphone|samsung|sm-|pixel/i', $k['name']); ?>
+    <div class="dv-row">
+      <div class="dv-ic <?= $ph ? 'dv-ph' : 'dv-pc' ?>"><?= $ph ? '📱' : '💻' ?></div>
+      <div class="dv-txt"><div class="dv-nm"><?= e($k['name']) ?></div>
+        <div class="dv-sm">Added <?= e(date('j M Y', (int) $k['created_at'])) ?> · last used <?= $k['last_used'] ? e(date('j M, g:i A', (int) $k['last_used'])) : 'never' ?></div></div>
+      <div class="dv-act">
+        <details class="dv-ren"><summary class="btn btn-ghost btn-sm" title="Rename">✏️</summary>
+          <form method="post" class="dv-renf"><?= csrf_field() ?><input type="hidden" name="pk" value="<?= (int) $k['id'] ?>"><input name="name" maxlength="60" value="<?= e($k['name']) ?>"><button class="btn btn-blue btn-sm" name="do" value="pk_rename">Save</button></form></details>
+        <form method="post" onsubmit="return confirm('Remove fingerprint login from this device?')"><?= csrf_field() ?><input type="hidden" name="pk" value="<?= (int) $k['id'] ?>"><button class="btn btn-ghost btn-sm dv-no" name="do" value="pk_remove">Remove</button></form>
+      </div>
+    </div>
+  <?php endforeach; ?>
+  <?php if (!$pks): ?><p class="muted small">No device yet.</p><?php endif; ?>
+  <div class="form-actions" style="align-items:center;gap:12px"><button class="btn btn-green" type="button" id="pk-add" data-csrf="<?= e(csrf_token()) ?>">+ Add this device</button><span class="muted small" id="pk-add-msg"></span></div>
+</div>
+
 <h2 class="sec-h">Login</h2>
 
 <?php foreach ($errors as $err): ?>

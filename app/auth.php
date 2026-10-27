@@ -78,6 +78,7 @@ function attempt_login(string $username, string $password): bool
         start_session();
         session_regenerate_id(true);
         $_SESSION['admin_id'] = (int) $row['id'];
+        $_SESSION['pk_offer'] = 1;   // ask once: "Use fingerprint next time?"
         log_activity('Admin logged in');
         return true;
     }

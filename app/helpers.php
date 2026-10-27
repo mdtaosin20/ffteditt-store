@@ -126,7 +126,7 @@ function page_start(string $title, string $active = '', ?array $admin = null): v
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/admin.css?v=13">
+<link rel="stylesheet" href="/assets/admin.css?v=14">
 </head>
 <body class="<?= $admin ? 'with-side' : 'no-side' ?>">
 <?php if ($admin): ?>
@@ -170,6 +170,14 @@ function page_start(string $title, string $active = '', ?array $admin = null): v
 <?php if ($f): ?>
   <div class="flash flash-<?= e($f['type']) ?>" role="status"><?= e($f['msg']) ?></div>
 <?php endif; ?>
+<?php if ($admin && !empty($_SESSION['pk_offer'])): unset($_SESSION['pk_offer']); ?>
+  <div class="pk-offer" id="pk-offer" data-csrf="<?= e(csrf_token()) ?>" hidden><div class="pk-card" role="dialog" aria-modal="true" aria-labelledby="pk-t">
+    <div class="pk-fp">☝️</div><h3 id="pk-t">Use fingerprint next time?</h3>
+    <p class="pk-m">Log in to the admin with your fingerprint or face — no password typing on this device.</p>
+    <button class="btn btn-blue btn-block pk-yes" type="button" data-yes>🔐 Yes, turn it on</button>
+    <button class="link-btn pk-no" type="button" data-no>Not now</button>
+  </div></div>
+<?php endif; ?>
 <?php
 }
 
@@ -178,6 +186,7 @@ function page_end(string $script = ''): void
     ?>
 </main>
 <script src="/assets/admin.js?v=3"></script>
+<script src="/assets/passkey.js?v=1"></script>
 <?php if ($script && $script !== 'admin.js'): ?><script src="/assets/<?= e($script) ?>?v=<?= (int) @filemtime(rtrim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), '/') . '/assets/' . basename($script)) ?>"></script><?php endif; ?>
 </body>
 </html>
