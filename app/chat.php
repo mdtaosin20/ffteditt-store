@@ -96,12 +96,15 @@ function chat_ingest(array $mine, array $batches): void
             db()->prepare('UPDATE streams SET chat_seen = ? WHERE id = ?')->execute([time(), $sid]);
         }
     }
-    // keep the table small: last 5000 events per stream, nothing older than 3 days (Audience Insights reads them)
-    if (random_int(1, 20) === 1) {
+    // keep the table small: last 5000 events per stream, nothing older than 3 days (Audience Insights reads them).
+    // At most every 10 minutes, and with a quick query (the old one could hold the database for seconds).
+    $mark = DATA_DIR . '/chat_trim.at';
+    if (time() - (int) @filemtime($mark) >= 600) {
+        @touch($mark);
         db()->exec('DELETE FROM chat_events WHERE ts < ' . (time() - 3 * 86400));
         foreach (db()->query('SELECT DISTINCT stream_id FROM chat_events')->fetchAll(PDO::FETCH_COLUMN) as $sid) {
-            db()->exec('DELETE FROM chat_events WHERE stream_id = ' . (int) $sid . ' AND id NOT IN
-                        (SELECT id FROM chat_events WHERE stream_id = ' . (int) $sid . ' ORDER BY id DESC LIMIT 5000)');
+            $cut = db()->query('SELECT id FROM chat_events WHERE stream_id = ' . (int) $sid . ' ORDER BY id DESC LIMIT 1 OFFSET 5000')->fetchColumn();
+            if ($cut !== false) db()->exec('DELETE FROM chat_events WHERE stream_id = ' . (int) $sid . ' AND id <= ' . (int) $cut);
         }
     }
 }
