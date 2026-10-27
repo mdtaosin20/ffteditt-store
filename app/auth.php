@@ -33,6 +33,7 @@ function current_admin(): ?array
     $st = db()->prepare('SELECT id, username FROM admins WHERE id = ?');
     $st->execute([$_SESSION['admin_id']]);
     $row = $st->fetch();
+    if ($row) owner_cookie_set((int) $row['id']);
     return $row ?: null;
 }
 

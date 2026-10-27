@@ -14,6 +14,15 @@ $fields = [
     'contact'   => ['Contact (e-mail or link, optional)', 120, ''],
 ];
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['private'])) {
+    check_csrf();
+    $on = $_POST['private'] === '1';
+    setting_set('site_private', $on ? '1' : '0');
+    log_activity($on ? 'Website set to private (only you and the live streams)' : 'Website set to public', 'info');
+    flash($on ? 'The website and games are private now. Only you (logged in here) and the live streams can open them.' : 'The website and games are open to everyone now.');
+    redirect('site.php');
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     check_csrf();
     $new = [];
@@ -53,6 +62,21 @@ page_start('Website', 'site', $admin);
   <div class="head-actions"><a class="btn btn-ghost" href="/" target="_blank" rel="noopener"><?= icon('external') ?>Open website</a></div>
 </div>
 <?php foreach ($errors as $err): ?><div class="flash flash-error" role="alert"><?= e($err) ?></div><?php endforeach; ?>
+
+<?php $priv = site_private(); ?>
+<form method="post" class="panel form">
+  <?= csrf_field() ?>
+  <h2 style="margin-top:0">Who can open the website?</h2>
+  <?php if ($priv): ?>
+    <p><strong class="ok-text">🔒 Private</strong> — visitors see “Not Found”. Only you (logged in to this admin on this browser) and your live streams can open the website and the games.</p>
+    <input type="hidden" name="private" value="0">
+    <div class="form-actions"><button class="btn btn-ghost" type="submit">Open the website to everyone</button></div>
+  <?php else: ?>
+    <p><strong class="warn-text">🌍 Public</strong> — everyone can open the website and play the games.</p>
+    <input type="hidden" name="private" value="1">
+    <div class="form-actions"><button class="btn btn-blue" type="submit">Make it private</button></div>
+  <?php endif; ?>
+</form>
 
 <form method="post" class="panel form">
   <?= csrf_field() ?>

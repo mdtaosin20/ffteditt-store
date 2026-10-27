@@ -8,6 +8,9 @@ RewriteCond %{HTTPS} !=on
 RewriteCond %{HTTP:X-Forwarded-Proto} !=https
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
+# Game pages: checked by gate.php (the website can be private: Admin → Website)
+RewriteRule ^(ball|cupkick|flags|game|keeper|lastflag|race|reactor|tug|war)/(index\.html)?$ gate.php?g=$1 [L,QSA]
+
 # Internal helper file is not a page
 <Files "_boot.php">
   Require all denied

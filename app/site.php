@@ -37,6 +37,56 @@ function site_name_parts(string $name): array
     return $p === false ? [$name, ''] : [substr($name, 0, $p), substr($name, $p + 1)];
 }
 
+/* ---------------------------------------------------------------- private website */
+
+/** On (default): only the owner (logged in to the admin on this browser) and the stream browsers may open the website and games. */
+function site_private(): bool
+{
+    return (setting_get('site_private') ?? '1') === '1';
+}
+
+function owner_token(int $adminId): string
+{
+    $st = db()->prepare('SELECT pass_hash FROM admins WHERE id = ?');
+    $st->execute([$adminId]);
+    return $adminId . '.' . substr(hash_hmac('sha256', 'owner:' . $adminId . ':' . (string) $st->fetchColumn(), app_secret()), 0, 40);
+}
+
+/** Called for a logged-in admin: remembers this browser as the owner's for the games (cookie for the whole site). */
+function owner_cookie_set(int $adminId): void
+{
+    $tok = owner_token($adminId);
+    if (($_COOKIE['fft_owner'] ?? '') === $tok || headers_sent()) return;
+    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    setcookie('fft_owner', $tok, ['expires' => time() + 365 * 86400, 'path' => '/', 'secure' => $secure, 'httponly' => true, 'samesite' => 'Lax']);
+}
+
+function owner_cookie_ok(): bool
+{
+    $c = (string) ($_COOKIE['fft_owner'] ?? '');
+    if (!preg_match('/^(\d+)\.[0-9a-f]{40}$/', $c, $m)) return false;
+    try { return hash_equals(owner_token((int) $m[1]), $c); } catch (Throwable $e) { return false; }
+}
+
+/** May this visitor see the website / a game page? */
+function site_may_view(): bool
+{
+    if (!site_private() || owner_cookie_ok()) return true;
+    $id = (int) ($_GET['stream'] ?? 0);
+    return $id > 0 && hash_equals(stream_sig($id), (string) ($_GET['sig'] ?? ''));
+}
+
+function site_closed_page(): void
+{
+    http_response_code(404);
+    header('Cache-Control: no-store');
+    header('X-Robots-Tag: noindex, nofollow');
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not Found</title></head>'
+       . '<body style="margin:0;background:#0b1020;color:#9aa4b8;font:16px system-ui,sans-serif;display:grid;place-items:center;min-height:100vh"><p>Not Found</p></body></html>';
+    exit;
+}
+
 /* ---------------------------------------------------------------- stream signing */
 
 function app_secret(): string

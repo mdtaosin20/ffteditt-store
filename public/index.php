@@ -1,6 +1,7 @@
 <?php
 // Home page: the games website.
 require __DIR__ . '/_boot.php';
+if (!site_may_view()) site_closed_page();
 
 $site  = site_config();
 [$n1, $n2] = site_name_parts($site['name']);
