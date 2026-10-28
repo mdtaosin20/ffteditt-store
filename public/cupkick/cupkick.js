@@ -154,10 +154,15 @@ function findPlay(n, want, o = PLAY) {
 
 /* ---------------------------------------------------------------- sound (made in the browser) */
 class Sound {
-  constructor() { this.ctx = null; this.on = true; }
+  constructor() { this.ctx = null; this.on = true; this.kv = 1; }   // kv = kick sound loudness (0 … 3)
   start() {
     if (!this.on) return;
-    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      // a soft limiter at the end, so a very loud kick setting does not crackle
+      this.out = this.ctx.createDynamicsCompressor(); this.out.threshold.value = -6; this.out.knee.value = 6; this.out.ratio.value = 12; this.out.attack.value = 0.002; this.out.release.value = 0.12;
+      this.out.connect(this.ctx.destination);
+    }
     this.ctx.resume();   // (no crowd noise in the background any more: only kicks, bumps and the cup sounds)
   }
   swell(v, secs) { if (!this.crowd) return; const g = this.crowd.gain, t = this.ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(v, t + 0.15); g.linearRampToValueAtTime(0.08, t + secs); }
@@ -166,18 +171,18 @@ class Sound {
     const c = this.ctx, o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
     o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
+    o.connect(g).connect(this.out || c.destination); o.start(t); o.stop(t + dur + 0.02);
   }
-  kick() { this.tone(140, 50, 0.18, 0.6); this.tone(900, 300, 0.05, 0.08, 'triangle'); }
+  kick() { if (this.kv <= 0) return; this.tone(140, 50, 0.18, 0.6 * this.kv); this.tone(900, 300, 0.05, 0.08 * this.kv, 'triangle'); }
   clank() { this.tone(520, 300, 0.25, 0.25, 'triangle'); this.tone(1650, 900, 0.3, 0.1, 'square'); this.tone(80, 40, 0.2, 0.4); }
-  land(v) { this.tone(90, 40, 0.14, Math.min(0.5, v * 0.07)); }
-  bump() { this.tone(320, 200, 0.07, 0.12, 'triangle'); }
+  land(v) { if (this.kv > 0) this.tone(90, 40, 0.14, Math.min(0.5, v * 0.07) * this.kv); }
+  bump() { if (this.kv > 0) this.tone(320, 200, 0.07, 0.12 * this.kv, 'triangle'); }
   ding() { this.tone(1320, 0, 1.4, 0.25); this.tone(1980, 0, 1.0, 0.12); this.tone(2640, 0, 0.7, 0.06); this.swell(0.32, 2.5); }
   // everybody shouts together "HEYYY!": many voices (buzzing tones through mouth-like filters)
   win() {
     if (!this.ctx || !this.on) return;
     const c = this.ctx, t0 = c.currentTime, mix = c.createGain(); mix.gain.value = 1;
-    const out = c.createGain(); out.gain.value = 0.9; out.connect(c.destination);
+    const out = c.createGain(); out.gain.value = 0.9; out.connect(this.out || c.destination);
     for (const [f, q, v] of [[650, 4, 1], [1750, 7, 0.55], [2600, 9, 0.3]]) {   // the "eh / ay" sound of a mouth
       const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
       const g = c.createGain(); g.gain.value = v; mix.connect(bp).connect(g).connect(out);
@@ -661,15 +666,16 @@ async function main() {
     const size = sharp ? 4096 : 2048;
     if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
   };
-  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, quality: $('quality').value, chan: $('chan').value, tstyle: $('tstyle').value });
+  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, quality: $('quality').value, chan: $('chan').value, kvol: Number($('kvol').value), tstyle: $('tstyle').value });
   const showCtl = () => {
     const sp = Number($('speed').value);
     $('speedV').textContent = (sp < 0.95 ? 'Slow' : sp > 1.05 ? 'Fast' : 'Normal') + ` (${sp.toFixed(1)}×)`;
     const w = Number($('within').value); $('withinV').textContent = `${w} second${w === 1 ? '' : 's'}`;
+    const kv = Number($('kvol').value); $('kvolV').textContent = kv === 0 ? 'Off' : Math.round(kv * 100) + '%'; snd.kv = kv;
   };
   try {
     const c = JSON.parse(localStorage.getItem('fft_cupkick_ctl') || 'null');
-    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && THEMES[c.place]) $('place').value = c.place; if (c.quality) $('quality').value = c.quality; if (typeof c.chan === 'string') $('chan').value = c.chan; if (c.tstyle && [...$('tstyle').options].some((o) => o.value === c.tstyle)) $('tstyle').value = c.tstyle; }
+    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && THEMES[c.place]) $('place').value = c.place; if (c.quality) $('quality').value = c.quality; if (typeof c.chan === 'string') $('chan').value = c.chan; if (typeof c.kvol === 'number' && c.kvol >= 0 && c.kvol <= 3) $('kvol').value = String(c.kvol); if (c.tstyle && [...$('tstyle').options].some((o) => o.value === c.tstyle)) $('tstyle').value = c.tstyle; }
   } catch (e) { /* ignore */ }
   const setBall = (r) => { if (r === R) return; R = r; ballGeo.dispose(); ballGeo = new THREE.SphereGeometry(R, 40, 28); play = null; ballGroup.clear(); };
   // the channel name: redraw the grass and the LED board with it
@@ -688,7 +694,8 @@ async function main() {
   $('size').addEventListener('change', () => { PS = ctl().size; play = null; ballGroup.clear(); buildTeams(selects.map((x) => x.value)); });   // see the new size at once
   setStyle(ctl().tstyle); setWords($('t1').value, $('t2').value, false);
   $('tstyle').addEventListener('change', () => { setStyle(ctl().tstyle); setWords($('t1').value, $('t2').value, false); });
-  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality', 'chan', 'tstyle'].forEach((id) => $(id).addEventListener('input', () => {
+  $('kvol').addEventListener('change', () => { if (!$('snd').checked) return; snd.on = true; snd.start(); snd.kick(); });   // hear the new loudness at once
+  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality', 'chan', 'kvol', 'tstyle'].forEach((id) => $(id).addEventListener('input', () => {
     showCtl(); try { localStorage.setItem('fft_cupkick_ctl', JSON.stringify(ctl())); } catch (e) { /* ignore */ }
   }));
   const fillWin = () => { const v = winEl.value; winEl.innerHTML = '<option value="-1">🎲 Random</option>' + selects.map((s, i) => `<option value="${i}">${NAME(s.value)}</option>`).join(''); winEl.value = [...winEl.options].some((o) => o.value === v) ? v : '-1'; };
