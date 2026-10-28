@@ -16,7 +16,7 @@ if (!isset($games[$key])) {
     redirect($back);
 }
 $name = $games[$key]['name'];
-if (in_array($key, ['cupkick', 'reactor'], true)) {   // these have no live settings to switch
+if (in_array($key, ['cupkick', 'actionkick', 'reactor'], true)) {   // these have no live settings to switch
     flash("{$name} has no live settings here — open the game to use it.", 'error');
     redirect($back);
 }

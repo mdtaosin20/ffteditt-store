@@ -60,7 +60,7 @@ function game_badge(string $key): string
     if ($key === 'keeper') {
         return '<span class="gicon gi-keeper" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="3" fill="#7f8cf2"/><rect x="14" y="6" width="7" height="14" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="11" y="9" width="2" height="6" fill="#111"/><circle cx="6" cy="16" r="3.2" fill="#f4c430" stroke="#fff" stroke-width="1"/></svg></span>';
     }
-    if ($key === 'cupkick') {
+    if ($key === 'cupkick' || $key === 'actionkick') {
         return '<span class="gicon gi-cupkick" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h10v4a5 5 0 0 1-10 0z" fill="#f5c542"/><rect x="11" y="11" width="2" height="5" fill="#f5c542"/><rect x="8" y="16" width="8" height="3" rx="1" fill="#111"/><circle cx="19.5" cy="18.5" r="3" fill="#fff" stroke="#111"/></svg></span>';
     }
     if ($key === 'race') {
