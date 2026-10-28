@@ -303,18 +303,22 @@ async function main() {
       S.bank[code] = list;
       if (!teams.includes(code)) continue;
       const g = list[0];
-      const used = alive.has(code) ? !shield.has(code) && giveShield(code, g.by, `SAVED GIFT · ${g.why}`) : revive(code, g.by);
+      const wasIn = alive.has(code);
+      const used = wasIn ? !shield.has(code) && giveShield(code, g.by, `SAVED GIFT · ${g.why}`) : revive(code, g.by);
       if (!used) continue;
+      glog(g.why, g.by, code, wasIn ? 'saved-shield' : 'saved-revive');
       list.shift(); if (!list.length) delete S.bank[code];
       save(); return;   // one at a time: each gets its own pop and thanks
     }
   };
   // true = used now, 'bank' = saved for later (never false any more)
+  const glog = (why, by, code, result) => { try { chat.log && chat.log(String(why).toLowerCase().replace(/[^a-z]/g, '').slice(0, 16), by, code, result); } catch (e) { /* chat not ready */ } };
   const gift = (code, by, why) => {
     if (teams.includes(code) && phase === 'play') {
-      if (alive.has(code) ? giveShield(code, by, `FREE SHIELD · ${why}`) : revive(code, by)) return true;
+      const wasIn = alive.has(code);
+      if (wasIn ? giveShield(code, by, `FREE SHIELD · ${why}`) : revive(code, by)) { glog(why, by, code, wasIn ? 'shield' : 'revive'); return true; }
     }
-    bankAdd(code, by, why);
+    bankAdd(code, by, why); glog(why, by, code, 'saved');
     return 'bank';
   };
   const statusLine = (code) => {

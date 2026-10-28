@@ -189,7 +189,10 @@ function insights_report(array $in): string
         $L[] = "Chat: {$r['msgs']} messages from {$r['chatters']} people ({$r['repeat']} wrote 3+ times) · new subscribers seen {$r['subs']} · Super Chats {$r['supers']} · new likes {$r['likes']}";
         if ($r['ask_share'] || $r['ask_sub'] || $r['gift_list']) {
             $o = implode(', ', array_map(fn ($k, $n) => "{$k} {$n}", array_keys($r['gifts']['other']), $r['gifts']['other']));
-            $L[] = "Share/subscribe in chat: {$r['ask_share']} share messages, {$r['ask_sub']} subscribed messages → game gave {$r['gifts']['revive']} revives + {$r['gifts']['flag']} extra flags" . ($o ? " (no gift: {$o})" : '');
+            $gv = array_filter(['revives' => $r['gifts']['revive'], 'extra flags' => $r['gifts']['flag'], 'shields' => $r['gifts']['other']['shield'] ?? 0,
+                'saved for later' => $r['gifts']['other']['saved'] ?? 0, 'saved gifts used' => ($r['gifts']['other']['saved-shield'] ?? 0) + ($r['gifts']['other']['saved-revive'] ?? 0)]);
+            $L[] = "Share/subscribe in chat: {$r['ask_share']} share messages, {$r['ask_sub']} subscribed messages → game gave "
+                . ($gv ? implode(' + ', array_map(fn ($k, $n) => "{$n} {$k}", array_keys($gv), $gv)) : 'nothing recorded (games report gifts from this update on)');
             foreach (array_slice($r['gift_list'], 0, 10) as $g) $L[] = '  - ' . date('H:i', (int) $g['ts']) . " {$g['author']} · {$g['kind']} · " . strtoupper($g['country']) . " → {$g['result']}";
         }
         if ($r['countries']) $L[] = 'Countries typed: ' . implode(', ', array_map(fn ($c, $n) => strtoupper($c) . " {$n}", array_keys($r['countries']), $r['countries']));
