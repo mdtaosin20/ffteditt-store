@@ -849,7 +849,9 @@ function yt_health_tick(int $serverId): void
         $h = json_decode((string) (setting_get($hk) ?? ''), true) ?: [];
         $h += ['at' => 0, 'bad' => 0, 'state' => '', 'msg' => '', 'fix' => 0, 'fixes' => 0];
         if (($h['start'] ?? 0) !== (int) $s['started_at']) { $h['start'] = (int) $s['started_at']; $h['bad'] = 0; }
-        if ($now - (int) $h['at'] < ($h['bad'] ? 60 : 300) || yt_units_out()) continue;
+        // every minute while something is wrong — also while the chat is not being read (this finds the right video for it)
+        $chatBad = chat_cfg()['enabled'] && !str_starts_with((string) $s['chat_status'], 'Reading');
+        if ($now - (int) $h['at'] < ($h['bad'] || $chatBad ? 60 : 300) || yt_units_out()) continue;
         $h['at'] = $now;
         setting_set($hk, json_encode($h));   // claim it (two check-ins never do the same job)
         try {

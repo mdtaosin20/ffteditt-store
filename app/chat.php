@@ -137,6 +137,9 @@ function chat_target(array $row): ?array
         if ((int) $st->fetchColumn() > 0) return null;
     }
     $t = ['video' => $video, 'channel' => $channel, 'start' => $started];
+    // Auto Fix asked to open the chat again (it was not being read): a changed target makes the worker start over
+    $nudge = (int) (setting_get('chat_nudge_' . (int) ($row['id'] ?? 0)) ?? 0);
+    if ($nudge > 0 && $nudge > $started) $t['n'] = $nudge;
     // The chat has been quiet for 3+ minutes while the stream is live: ask the worker to open the chat again
     // (after a reconnect it can be left reading the old live video's chat, where nobody writes any more).
     // A changed target makes the worker look again; with no video known it reads the channel's /live page anew.

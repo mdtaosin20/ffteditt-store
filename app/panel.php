@@ -270,7 +270,7 @@ function auto_fix_tick(): void
         $servers = [];
         foreach (db()->query('SELECT id, name, last_seen, info_json FROM servers ORDER BY id') as $r) $servers[(int) $r['id']] = $r;
         $online = array_filter($servers, fn ($r) => $now - (int) $r['last_seen'] <= SERVER_OFFLINE_AFTER);
-        $rows = db()->query("SELECT id, name, server_id, status, stream_key, updated_at, started_at, speed_now FROM streams WHERE desired = 'on' AND stream_key <> '' ORDER BY id")->fetchAll();
+        $rows = db()->query("SELECT id, name, server_id, status, stream_key, updated_at, started_at, speed_now, chat_status FROM streams WHERE desired = 'on' AND stream_key <> '' ORDER BY id")->fetchAll();
         if (!$rows) return;
         $load = [];   // streams per online server
         foreach ($rows as $r) if (isset($online[(int) $r['server_id']])) $load[(int) $r['server_id']] = ($load[(int) $r['server_id']] ?? 0) + 1;
@@ -305,6 +305,20 @@ function auto_fix_tick(): void
             }
             // on a working VPS: is it really live?
             if ($r['status'] === 'live') {
+                // the live chat is not being read (the chat counts stop): open it again — every 2 minutes until it reads
+                $cs = (string) $r['chat_status'];
+                if (chat_cfg()['enabled'] && $now - (int) $r['started_at'] > 120 && !str_starts_with($cs, 'Reading')) {
+                    $f['chat'] = ($f['chat'] ?? 0) ?: $now;
+                    if ($now - $f['chat'] >= 90 && $now - (int) ($f['chat_fix'] ?? 0) >= 120) {
+                        $f['chat_fix'] = $now;
+                        setting_set('chat_nudge_' . $id, (string) $now);
+                        db()->prepare('UPDATE streams SET yt_find_at = 0 WHERE id = ?')->execute([$id]);   // and ask YouTube for the video again
+                        if ($now - (int) ($f['chat_said'] ?? 0) > 1800) { $f['chat_said'] = $now; log_activity("Auto Fix: live chat of '{$r['name']}' was not being read (" . ($cs ?: 'waiting') . ') — opening it again', 'warn'); }
+                    }
+                } else {
+                    if (!empty($f['chat']) && !empty($f['chat_fix'])) log_activity("Auto Fix: live chat of '{$r['name']}' is being read again", 'ok');
+                    $f['chat'] = 0; $f['chat_fix'] = 0;
+                }
                 // the VPS makes the video slower than real time: YouTube then buffers and may end the live
                 $sp = (float) $r['speed_now'];
                 $f['slow'] = $sp > 0 && $sp < 0.92 ? ($f['slow'] ?? 0) + 1 : 0;
@@ -312,7 +326,7 @@ function auto_fix_tick(): void
                     $f['slow_said'] = $now;
                     log_activity("Auto Fix: '{$r['name']}' runs at {$r['speed_now']} on " . ($srv['name'] ?? 'its VPS') . ' — the VPS is too busy, YouTube will buffer. Stop one live there or lower the quality.', 'error');
                 }
-                if ($f['tries'] && $now - (int) $r['started_at'] > 300) $f = ['bad' => 0, 'tries' => 0, 'next' => 0];   // stable again
+                if ($f['tries'] && $now - (int) $r['started_at'] > 300) $f = array_merge($f, ['bad' => 0, 'tries' => 0, 'next' => 0]);   // stable again
                 else $f['bad'] = 0;
                 $keep[$id] = $f;
                 continue;
