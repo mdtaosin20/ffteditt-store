@@ -816,11 +816,17 @@ function yt_health(array $s, string $tok): array
     }
     if (!$mine) return ['ended', 'the live on YouTube was ended (our video goes nowhere)'];
     $b = $mine[0];
-    if ((string) $b['id'] !== $s['yt_video']) {
-        db()->prepare('UPDATE streams SET yt_video = ? WHERE id = ?')->execute([(string) $b['id'], $s['id']]);
-    }
     $life = (string) ($b['status']['lifeCycleStatus'] ?? '');
-    if (in_array($life, ['live', 'liveStarting'], true)) return ['ok', 'live on YouTube'];
+    $vid = (string) $b['id'];
+    // remember the live video that really runs now, for this live session: the chat reader follows it at once
+    if ($vid !== $s['yt_video'] || (int) $s['yt_video_start'] !== (int) $s['started_at']) {
+        db()->prepare('UPDATE streams SET yt_video = ?, yt_video_start = COALESCE(started_at, 0) WHERE id = ?')->execute([$vid, $s['id']]);
+    }
+    if (in_array($life, ['live', 'liveStarting'], true)) {
+        // YouTube says this video is live: if the chat reader had marked it "ended", that was wrong — read it again
+        if ((string) (setting_get('chat_dead_' . (int) $s['id']) ?? '') === $vid) setting_set('chat_dead_' . (int) $s['id'], '');
+        return ['ok', 'live on YouTube'];
+    }
     return ['waiting', 'the live on YouTube is waiting (“' . $life . '”), not started'];
 }
 

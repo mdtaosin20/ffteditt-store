@@ -116,6 +116,13 @@ function chat_target(array $row): ?array
     $started = (int) ($row['started_at'] ?? 0);
     $video = ($row['yt_video'] ?? '') !== '' && $started > 0 && (int) ($row['yt_video_start'] ?? 0) === $started ? $row['yt_video'] : '';
     if ($video !== '' && $video === (string) (setting_get('chat_dead_' . (int) ($row['id'] ?? 0)) ?? '')) $video = '';   // that live already ended
+    // Just restarted (new live session) and YouTube has not told us the video yet: most of the time YouTube keeps
+    // the same live video after a quick restart, so read the last one at once instead of waiting with no chat.
+    // If it really ended, the reader says "not live" and the panel looks up the new one (see chat_ingest).
+    if ($video === '' && ($row['yt_video'] ?? '') !== '' && $started > 0 && time() - $started < 900
+        && $row['yt_video'] !== (string) (setting_get('chat_dead_' . (int) ($row['id'] ?? 0)) ?? '')) {
+        $video = (string) $row['yt_video'];
+    }
     $channel = (string) ($row['channel_url'] ?? '');
     // the channel link written in the "channel name" box by mistake still works
     if ($channel === '' && preg_match('#^https?://(www\.|m\.)?youtube\.com/(@[\w.-]+|channel/[\w-]+|c/[\w.-]+)#i', trim((string) ($row['channel_name'] ?? '')), $m)) $channel = 'https://www.youtube.com/' . $m[2];
