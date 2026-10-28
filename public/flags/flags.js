@@ -5,7 +5,7 @@
 // subscriber (or a viewer who shares and types "shared" + country) gives a shield — or brings the country back if it is out; a Super Chat gives both. Likes and viewers unlock goals for everyone.
 // The last flag left is the round champion, then a new round starts (about an hour a round).
 import { Sfx, holdScreen, PACE, reporter, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=27';
+import { liveChat, countryMatcher } from '/game/chat.js?v=28';
 import { goLive } from '/game/golive.js?v=2';
 import { Music, SongPlayer } from '/game/music.js?v=2';
 import { autoUpdate } from '/game/update.js?v=1';
@@ -319,7 +319,9 @@ async function main() {
     onFan,
     onSub: (name, code) => {   // a new subscriber (seen by YouTube): their country gets a shield — or comes back if it is out
       if (code && gift(code, name, 'SUBSCRIBER')) return;
-      const c = [...power.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).find((k) => alive.has(k) && !shield.has(k));
+      // their country is not known: the most-supported country without a shield gets it (or any country, so the gift is never lost)
+      const c = [...power.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).find((k) => alive.has(k) && !shield.has(k))
+        || [...alive].find((k) => !shield.has(k));
       if (c) giveShield(c, name.toUpperCase().slice(0, 14), 'FREE SHIELD · SUBSCRIBER');
     },
     // "subscribed" / "shared" + country in chat: YouTube does not tell us about shares (and a subscribe only by name),

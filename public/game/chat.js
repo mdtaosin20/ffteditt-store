@@ -475,7 +475,7 @@ export function liveChat(o) {
         else if (localOk) wait = 2500;   // chat already comes from the worker; the panel adds subscribers and stats
         if (j.stats) o.onStats?.(j.stats);
         for (const ev of j.events || []) if (fresh(ev)) handle(ev);
-        after = j.last || after;
+        after = j.last || after || -1;   // -1: the first look is done (an empty chat: the next message is new, not old)
         failures = 0;
       } else wait = 15000;
     } catch (e) { failures++; wait = Math.min(30000, 2000 * failures); }

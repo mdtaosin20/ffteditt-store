@@ -167,7 +167,7 @@ function chat_feed(int $sid, int $after): array
         'box' => $cfg['box'], 'subs' => $cfg['subs'], 'idle' => $cfg['idle'], 'ai' => ai_ready(),
     ], 'events' => [], 'last' => $after];
     if (!$cfg['enabled']) return $out;
-    if ($after <= 0) {
+    if ($after === 0) {   // the page's first look: the last few messages, shown as old (no welcome / no gifts for them)
         $st = db()->prepare('SELECT * FROM chat_events WHERE stream_id = ? AND kind = \'chat\' ORDER BY id DESC LIMIT 4');
         $st->execute([$sid]);
         $rows = array_reverse($st->fetchAll());
@@ -175,7 +175,7 @@ function chat_feed(int $sid, int $after): array
         $last = (int) db()->query('SELECT COALESCE(MAX(id), 0) FROM chat_events WHERE stream_id = ' . $sid)->fetchColumn();
     } else {
         $st = db()->prepare('SELECT * FROM chat_events WHERE stream_id = ? AND id > ? ORDER BY id LIMIT 40');
-        $st->execute([$sid, $after]);
+        $st->execute([$sid, max(0, $after)]);   // -1 = the chat was empty at the first look: everything is new
         $rows = $st->fetchAll();
         $old = false;
         $last = $rows ? (int) end($rows)['id'] : $after;

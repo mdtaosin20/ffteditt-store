@@ -11,4 +11,4 @@ if ($id <= 0 || !hash_equals(stream_sig($id), (string) ($_GET['sig'] ?? ''))) {
     echo json_encode(['error' => 'not allowed']);
     exit;
 }
-echo json_encode(chat_feed($id, max(0, (int) ($_GET['after'] ?? 0))), JSON_UNESCAPED_UNICODE);
+echo json_encode(chat_feed($id, max(-1, (int) ($_GET['after'] ?? 0))), JSON_UNESCAPED_UNICODE);
