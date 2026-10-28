@@ -45,3 +45,14 @@ button.ghost { flex: 0 0 auto; background: #1f2b5c; font-size: 15px; }
 /* install as app */
 .app { margin-top: 10px; }
 .app button { width: 100%; margin-bottom: 4px; }
+
+/* wide screens: menu in two columns like a desktop site */
+@media (min-width: 760px) {
+  .card { max-width: 1180px; width: 96%; padding: 24px 28px; display: grid; grid-template-columns: 1.15fr 1fr; column-gap: 28px; align-items: start; }
+  .card > * { grid-column: 1; }
+  .card > .ctl { grid-column: 2; grid-row: 1 / span 30; margin-top: 0; padding: 16px 18px; }
+  .card h1 { font-size: 34px; }
+  .teams { grid-template-columns: 1fr 1fr 1fr; }
+  .ctl .row { margin-top: 14px; }
+  .ctl-h { font-size: 18px; }
+}
