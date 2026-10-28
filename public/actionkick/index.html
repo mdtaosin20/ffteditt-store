@@ -13,15 +13,15 @@
 <link rel="manifest" href="/actionkick/manifest.json">
 <link rel="icon" href="/actionkick/icon-192.png">
 <link rel="apple-touch-icon" href="/actionkick/icon-180.png">
-<link rel="stylesheet" href="/actionkick/actionkick.css?v=1">
+<link rel="stylesheet" href="/actionkick/actionkick.css?v=4">
 </head>
 <body>
 <div id="stage">
   <canvas id="c"></canvas>
-  <div class="words" id="words">
+  <div class="words st-classic" id="words"><div class="wbox">
     <div class="w1" id="w1">Watch closely! 👀</div>
     <div class="w2" id="w2">Which one touches the cup? 🏆</div>
-  </div>
+  </div></div>
   <div class="wm" id="wm"></div>
   <div class="tap" id="tap" hidden>tap the screen for the menu</div>
 </div>
@@ -53,6 +53,24 @@
       <label class="row"><span>Picture quality</span>
         <select id="quality"><option value="normal">Normal (smooth on every phone)</option><option value="sharp">Sharp ✨ (full phone resolution, for HD/4K recording)</option></select></label>
     </div>
+    <label class="row"><span>Text style (the two lines at the top)</span>
+      <select id="tstyle">
+        <option value="classic">Classic (as before)</option>
+        <option value="A">A · Gold 3D + red ribbon</option>
+        <option value="B">B · Glossy bubble + yellow capsule</option>
+        <option value="C">C · E-sports neon</option>
+        <option value="D">D · Comic burst</option>
+        <option value="E">E · Stickers</option>
+        <option value="F">F · Fire 🔥</option>
+        <option value="G">G · Glass card</option>
+        <option value="H">H · Trophy gold ✨</option>
+        <option value="I">I · Red button</option>
+        <option value="J">J · Rainbow shadow 🌈</option>
+        <option value="K">K · Scoreboard</option>
+        <option value="L">L · Pink-purple bubble</option>
+        <option value="off">Off — no text on the video</option>
+      </select></label>
+    <p class="small muted">Leave a text box empty to hide just that line.</p>
     <label class="row"><span>Top text</span><input id="t1" maxlength="40" value="Watch closely! 👀"></label>
     <label class="row"><span>Question</span><input id="t2" maxlength="44" value="Which one touches the cup? 🏆"></label>
     <label class="row"><span>Text at the end</span><input id="t3" maxlength="44" value="Do what it says! 👇"></label>
@@ -66,6 +84,6 @@
   </div>
 </div>
 <script type="importmap">{ "imports": { "three": "/game/vendor/three.module.js" } }</script>
-<script type="module" src="/actionkick/actionkick.js?v=1"></script>
+<script type="module" src="/actionkick/actionkick.js?v=6"></script>
 </body>
 </html>
