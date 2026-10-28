@@ -3,6 +3,7 @@
 // The owner picks the six signs in the menu, presses START and records the screen. Tap the screen = menu again.
 import * as THREE from 'three';
 import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
+import { setupRecorder } from '/game/recorder.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
@@ -178,7 +179,7 @@ class Sound {
   swell(v, secs) { if (!this.crowd) return; const g = this.crowd.gain, t = this.ctx.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(v, t + 0.15); g.linearRampToValueAtTime(0.08, t + secs); }
   tone(f, f2, dur, vol, type = 'sine') {
     if (!this.ctx || !this.on) return;
-    const c = this.ctx, o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain(), t = this.at ?? c.currentTime;   // at: a set time (used when the recorder makes the sounds again)
     o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g).connect(this.out || c.destination); o.start(t); o.stop(t + dur + 0.02);
@@ -191,7 +192,7 @@ class Sound {
   // everybody shouts together "HEYYY!": many voices (buzzing tones through mouth-like filters)
   win() {
     if (!this.ctx || !this.on) return;
-    const c = this.ctx, t0 = c.currentTime, mix = c.createGain(); mix.gain.value = 1;
+    const c = this.ctx, t0 = this.at ?? c.currentTime, mix = c.createGain(); mix.gain.value = 1;
     const out = c.createGain(); out.gain.value = 0.9; out.connect(this.out || c.destination);
     for (const [f, q, v] of [[650, 4, 1], [1750, 7, 0.55], [2600, 9, 0.3]]) {   // the "eh / ay" sound of a mouth
       const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
@@ -517,7 +518,10 @@ async function main() {
       if (w > room) el.style.zoom = String(Math.max(0.45, room / w));
     }
   };
-  const setWords = (a, b, end) => { fillLine(w1, a); fillLine(w2, b); requestAnimationFrame(fitLines); if (document.fonts) document.fonts.ready.then(() => requestAnimationFrame(fitLines)); words.classList.toggle('end', end); w1.classList.remove('pop'); w2.classList.remove('pop'); void w1.offsetWidth; w1.classList.add('pop'); w2.classList.add('pop'); };
+  // the recorder (menu → 🎥 Auto record); a stand-in until the menu is ready
+  let rec = { busy: false, on: () => false, active: () => false, words() {}, frame() {}, ended() {} };
+  let wmX = 0, wmY = 0;
+  const setWords = (a, b, end) => { fillLine(w1, a); fillLine(w2, b); requestAnimationFrame(fitLines); if (document.fonts) document.fonts.ready.then(() => requestAnimationFrame(fitLines)); words.classList.toggle('end', end); w1.classList.remove('pop'); w2.classList.remove('pop'); void w1.offsetWidth; w1.classList.add('pop'); w2.classList.add('pop'); rec.words(); };
 
   const prepare = (codes, want) => {
     play = findPlay(codes.length, -1, ctl());
@@ -590,11 +594,15 @@ async function main() {
   };
   const frame = (now) => {
     requestAnimationFrame(frame);
+    if (rec.busy) { last = 0; return; }   // ⚡ Perfect recording moves the game itself, picture by picture
     const real = Math.min(0.05, (now - (last || now)) / 1000); last = now;
+    tick(now, real);
+  };
+  const tick = (now, real) => {
     if (play && playing) {
       const near = simT > play.touchT - 0.6 && simT < play.touchT + 0.4;
       simT += real * (near ? SLOW : 1);
-      if (simT >= endT) { simT = endT; playing = false; }
+      if (simT >= endT) { simT = endT; playing = false; rec.ended(); }
       // sounds at the right moments
       play.kicks.forEach((k, i) => { if (simT >= k.t && !doneKick.has(i)) { doneKick.add(i); snd.kick(); } });
       while (doneBump < play.bumps.length && play.bumps[doneBump] <= simT) { if (doneBump % 2 === 0) snd.bump(); doneBump++; }
@@ -659,9 +667,10 @@ async function main() {
       const el = $('wm'), W = stage.clientWidth, H = stage.clientHeight, u = now / 1000;
       if (el.textContent !== WM) el.textContent = WM;
       const x = (0.5 + 0.32 * Math.sin(u * 0.23)) * W - el.offsetWidth / 2, y = (0.52 + 0.3 * Math.sin(u * 0.17 + 1.3)) * H;
-      el.style.transform = `translate(${x}px, ${y}px) rotate(-8deg)`;
+      el.style.transform = `translate(${x}px, ${y}px) rotate(-8deg)`; wmX = x; wmY = y;
     }
     renderer.render(scene, camera);
+    rec.frame();
   };
   requestAnimationFrame(frame);
 
@@ -725,6 +734,13 @@ async function main() {
     for (const c of pool) { if (pick.length >= 6) break; if (!pick.includes(c)) pick.push(c); }
     selects.forEach((s, i) => { s.value = pick[i]; s.dispatchEvent(new Event('change')); });
   });
+  rec = setupRecorder({
+    game: 'actionkick', renderer, canvas, stage, words, Sound, snd, fit, after: $('snd').closest('label'),
+    cssUrl: document.querySelector('link[href*="actionkick.css"]').href,
+    setSize: (w, h) => { renderer.setPixelRatio(1); renderer.setSize(w, h, false); },
+    wm: () => { const el = $('wm'); return WM ? { text: WM, x: wmX, y: wmY, w: el.offsetWidth, h: el.offsetHeight, fs: parseFloat(getComputedStyle(el).fontSize) } : null; },
+    onOpenMenu: () => { menu.hidden = false; },
+  });
   $('go').addEventListener('click', () => {
     const codes = selects.map((s) => s.value);
     if (new Set(codes).size !== codes.length) { $('answer').textContent = '⚠️ Pick 6 different signs.'; return; }
@@ -735,9 +751,19 @@ async function main() {
     setWords($('t1').value, $('t2').value, false);
     menu.hidden = true; $('tap').hidden = true;
     simT = 0; playing = false;
-    setTimeout(() => { playing = true; }, 1200);   // a moment to start the screen recording
+    if (rec.on()) {   // 🎥 Auto record: starts now, stops by itself at the end
+      let went = false;
+      rec.start({
+        go: () => { went = true; playing = true; },
+        tick: (now, dt) => tick(now, dt),
+        redraw: () => renderer.render(scene, camera),
+        done: () => went && !playing,
+        progress: () => (play ? Math.min(1, simT / endT) : 0),
+        finish: () => { last = 0; },
+      });
+    } else setTimeout(() => { playing = true; }, 1200);   // a moment to start the screen recording
   });
-  stage.addEventListener('click', () => { if (!playing) menu.hidden = false; });
+  stage.addEventListener('click', () => { if (!playing && !rec.active()) menu.hidden = false; });
   // a still picture behind the menu
   buildTeams(saved);
 }
