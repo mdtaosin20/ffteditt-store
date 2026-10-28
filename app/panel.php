@@ -270,7 +270,7 @@ function auto_fix_tick(): void
         $servers = [];
         foreach (db()->query('SELECT id, name, last_seen, info_json FROM servers ORDER BY id') as $r) $servers[(int) $r['id']] = $r;
         $online = array_filter($servers, fn ($r) => $now - (int) $r['last_seen'] <= SERVER_OFFLINE_AFTER);
-        $rows = db()->query("SELECT id, name, server_id, status, stream_key, updated_at, started_at FROM streams WHERE desired = 'on' AND stream_key <> '' ORDER BY id")->fetchAll();
+        $rows = db()->query("SELECT id, name, server_id, status, stream_key, updated_at, started_at, speed_now FROM streams WHERE desired = 'on' AND stream_key <> '' ORDER BY id")->fetchAll();
         if (!$rows) return;
         $load = [];   // streams per online server
         foreach ($rows as $r) if (isset($online[(int) $r['server_id']])) $load[(int) $r['server_id']] = ($load[(int) $r['server_id']] ?? 0) + 1;
@@ -305,6 +305,13 @@ function auto_fix_tick(): void
             }
             // on a working VPS: is it really live?
             if ($r['status'] === 'live') {
+                // the VPS makes the video slower than real time: YouTube then buffers and may end the live
+                $sp = (float) $r['speed_now'];
+                $f['slow'] = $sp > 0 && $sp < 0.92 ? ($f['slow'] ?? 0) + 1 : 0;
+                if ($f['slow'] >= 8 && $now - (int) ($f['slow_said'] ?? 0) > 1800) {
+                    $f['slow_said'] = $now;
+                    log_activity("Auto Fix: '{$r['name']}' runs at {$r['speed_now']} on " . ($srv['name'] ?? 'its VPS') . ' — the VPS is too busy, YouTube will buffer. Stop one live there or lower the quality.', 'error');
+                }
                 if ($f['tries'] && $now - (int) $r['started_at'] > 300) $f = ['bad' => 0, 'tries' => 0, 'next' => 0];   // stable again
                 else $f['bad'] = 0;
                 $keep[$id] = $f;

@@ -111,7 +111,11 @@ function dash_overview(string $back = 'dashboard.php'): string
         <td><span class="cell-game"><?= game_badge($g) ?><span><?= e($games[$g]['name']) ?><small><?= e($s['name']) ?></small></span></span></td>
         <td><span class="cell-ch"><span class="yt"><?= icon('play') ?></span><span><?= e($s['channel_name'] ?: $s['name']) ?>
           <?php if ($s['channel_url'] !== ''): ?><small><?= e(channel_short($s['channel_url'])) ?></small><?php endif; ?></span></span></td>
-        <td><span class="tag <?= $tag ?>"><?= e($live ? 'LIVE' : ($label === 'Stopped' ? 'Offline' : $label)) ?></span></td>
+        <td><span class="tag <?= $tag ?>"><?= e($live ? 'LIVE' : ($label === 'Stopped' ? 'Offline' : $label)) ?></span>
+          <?php if ($live): $yh = yt_health_state((int) $s['id']);
+            if ($s['yt_refresh'] === ''): ?><small class="yth yth-q" title="Connect YouTube for this stream so the panel can check it on YouTube">YouTube: not checked</small>
+            <?php elseif ($yh && $yh[2] < 900): ?><small class="yth <?= $yh[0] === 'ok' ? 'yth-ok' : 'yth-bad' ?>" title="<?= e($yh[1]) ?>"><?= $yh[0] === 'ok' ? '✓ On YouTube' : '✗ Not on YouTube' ?></small>
+          <?php endif; endif; ?></td>
         <td class="mono"><?= $live && $s['started_at'] ? e(hms((int) $s['started_at'])) : '--' ?></td>
         <td><div class="acts">
           <?php if ($s['desired'] === 'on'): ?>

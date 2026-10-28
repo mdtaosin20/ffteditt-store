@@ -252,6 +252,7 @@ if ($lk && flock($lk, LOCK_EX | LOCK_NB)) {
         try {
             yt_tick($sid);
             try { ytx_pin_tick($sid); } catch (Throwable $e) { /* never stops the worker check-in */ }
+            try { yt_health_tick($sid); } catch (Throwable $e) { /* never stops the worker check-in */ }
         } catch (Throwable $e) {
             // never break the worker check-in
         }

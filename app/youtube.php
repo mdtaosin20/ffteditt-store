@@ -784,6 +784,103 @@ function yt_start_now(array $s): array
     }
 }
 
+/**
+ * Is this stream really live on YouTube? (The panel only knows that the VPS is sending video.)
+ * @return array{0:string,1:string} [state, words]  state: ok | waiting | noinput | ended | nokey
+ * About 2 units (the stream key + the live video).
+ */
+function yt_health(array $s, string $tok): array
+{
+    $r = yt_get($tok, 'liveStreams', ['part' => 'id,cdn,status', 'mine' => 'true', 'maxResults' => 50]);
+    if ($r[0] !== 200) throw new RuntimeException(yt_err($r));
+    $ls = null;
+    foreach ($r[1]['items'] ?? [] as $x) if (($x['cdn']['ingestionInfo']['streamName'] ?? '') === $s['stream_key']) $ls = $x;
+    if (!$ls) return ['nokey', 'this stream key is not on the connected YouTube channel'];
+    $in = ($ls['status']['streamStatus'] ?? '') === 'active' && ($ls['status']['healthStatus']['status'] ?? '') !== 'noData';
+    if (!$in) return ['noinput', 'YouTube is not receiving our video'];
+    $bound = (string) $ls['id'];
+    // the live video we know first (1 unit), else look through the channel's lives
+    $cands = [];
+    if ($s['yt_video'] !== '') {
+        $r = yt_get($tok, 'liveBroadcasts', ['part' => 'id,status,contentDetails', 'id' => $s['yt_video']]);
+        if ($r[0] === 200) $cands = $r[1]['items'] ?? [];
+    }
+    $mine = array_values(array_filter($cands, fn ($b) => ($b['contentDetails']['boundStreamId'] ?? '') === $bound
+        && !in_array($b['status']['lifeCycleStatus'] ?? '', ['complete', 'revoked'], true)));
+    if (!$mine) {
+        foreach (['active', 'upcoming'] as $bs) {
+            $r = yt_get($tok, 'liveBroadcasts', ['part' => 'id,status,contentDetails', 'broadcastStatus' => $bs, 'broadcastType' => 'all', 'maxResults' => 25]);
+            if ($r[0] !== 200) throw new RuntimeException(yt_err($r));
+            foreach ($r[1]['items'] ?? [] as $b) if (($b['contentDetails']['boundStreamId'] ?? '') === $bound) { $mine[] = $b; break 2; }
+        }
+    }
+    if (!$mine) return ['ended', 'the live on YouTube was ended (our video goes nowhere)'];
+    $b = $mine[0];
+    if ((string) $b['id'] !== $s['yt_video']) {
+        db()->prepare('UPDATE streams SET yt_video = ? WHERE id = ?')->execute([(string) $b['id'], $s['id']]);
+    }
+    $life = (string) ($b['status']['lifeCycleStatus'] ?? '');
+    if (in_array($life, ['live', 'liveStarting'], true)) return ['ok', 'live on YouTube'];
+    return ['waiting', 'the live on YouTube is waiting (“' . $life . '”), not started'];
+}
+
+/**
+ * Auto Fix for YouTube: every live stream of a connected channel is checked on YouTube itself
+ * (every 5 minutes; every minute while something is wrong). When it is not really live on YouTube
+ * two times in a row, the stream is started again from fresh: a new connection, and the panel finds
+ * or opens a new live video for it and presses "Go live" (the usual start steps).
+ * State per stream in setting yth_<id>: shown on the dashboard ("On YouTube ✓" / "Not on YouTube").
+ */
+function yt_health_tick(int $serverId): void
+{
+    if (!yt_ready() || !panel_opts()['auto_fix']) return;
+    $now = time();
+    $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND desired = 'on' AND yt_refresh != ''
+                         AND COALESCE(started_at, 0) > 0 AND started_at < ?");
+    $st->execute([$serverId, $now - 150]);   // the usual start steps get 2½ minutes first
+    foreach ($st->fetchAll() as $s) {
+        $hk = 'yth_' . (int) $s['id'];
+        $h = json_decode((string) (setting_get($hk) ?? ''), true) ?: [];
+        $h += ['at' => 0, 'bad' => 0, 'state' => '', 'msg' => '', 'fix' => 0, 'fixes' => 0];
+        if (($h['start'] ?? 0) !== (int) $s['started_at']) { $h['start'] = (int) $s['started_at']; $h['bad'] = 0; }
+        if ($now - (int) $h['at'] < ($h['bad'] ? 60 : 300) || yt_units_out()) continue;
+        $h['at'] = $now;
+        setting_set($hk, json_encode($h));   // claim it (two check-ins never do the same job)
+        try {
+            [$state, $msg] = yt_health($s, yt_token($s));
+        } catch (Throwable $e) {
+            continue;
+        }
+        $was = $h['state'];
+        $h['state'] = $state; $h['msg'] = $msg; $h['seen'] = $now;
+        if ($state === 'ok') {
+            if ($was !== '' && $was !== 'ok') log_activity("YouTube: '{$s['name']}' is live on YouTube again", 'ok');
+            $h['bad'] = 0;
+        } elseif ($state === 'nokey') {
+            if ($was !== 'nokey') log_activity("YouTube: '{$s['name']}' — {$msg}. Check the stream key in its settings.", 'error');
+        } else {
+            $h['bad']++;
+            if ($h['bad'] >= 2 && $now - (int) $h['fix'] > 240) {
+                // 3 fresh starts in a row did not help: wait longer (30 min) so the daily YouTube limit is not used up
+                if ($h['fixes'] >= 3 && $now - (int) $h['fix'] < 1800) { setting_set($hk, json_encode($h)); continue; }
+                $h['fixes'] = $now - (int) $h['fix'] > 3600 ? 1 : $h['fixes'] + 1;
+                $h['fix'] = $now; $h['bad'] = 0;
+                db()->prepare('UPDATE streams SET rev = rev + 1, run_id = ?, updated_at = ? WHERE id = ?')->execute([$now, $now, $s['id']]);
+                log_activity("Auto Fix: '{$s['name']}' shows LIVE here but not on YouTube ({$msg}) — started again", 'warn');
+            }
+        }
+        setting_set($hk, json_encode($h));
+    }
+}
+
+/** What YouTube itself said about this stream last time: [state, words, seconds ago] or null. */
+function yt_health_state(int $id): ?array
+{
+    $h = json_decode((string) (setting_get('yth_' . $id) ?? ''), true);
+    if (!is_array($h) || empty($h['state'])) return null;
+    return [(string) $h['state'], (string) $h['msg'], time() - (int) ($h['seen'] ?? 0)];
+}
+
 function yt_kick(array $s, string $tok): bool
 {
     $video = (string) $s['yt_video'];

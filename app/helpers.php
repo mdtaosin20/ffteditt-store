@@ -126,7 +126,7 @@ function page_start(string $title, string $active = '', ?array $admin = null): v
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/admin.css?v=17">
+<link rel="stylesheet" href="/assets/admin.css?v=18">
 <link rel="manifest" href="/admin/manifest.json">
 <meta name="theme-color" content="#0a1528">
 <link rel="icon" type="image/png" sizes="192x192" href="/admin/app/icon-192.png">
