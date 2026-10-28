@@ -49,14 +49,16 @@ function robot_file(string $h): string
 }
 
 /** Ask for a line. Returns ['h' => hash, 'url' => '' while it is being made]. */
-function robot_request(string $text, ?string $voice = null): array
+/** keep = an announcer line used again every round (never cleaned away). */
+function robot_request(string $text, ?string $voice = null, bool $keep = false): array
 {
     $voice = $voice !== null && isset(robot_voices()[$voice]) ? $voice : robot_voice();
     $t = robot_text($text);
     if (mb_strlen($t) < 2) return ['h' => '', 'url' => ''];
     $h = robot_hash($t, $voice);
+    if ($keep) db()->prepare('UPDATE robot_tts SET keep = 1 WHERE h = ? AND keep = 0')->execute([$h]);
     if (is_file(upload_dir() . '/' . robot_file($h))) return ['h' => $h, 'url' => upload_url(robot_file($h))];
-    db()->prepare("INSERT OR IGNORE INTO robot_tts (h, text, voice, status, created) VALUES (?, ?, ?, 'wait', ?)")->execute([$h, $t, $voice, time()]);
+    db()->prepare("INSERT OR IGNORE INTO robot_tts (h, text, voice, status, created, keep) VALUES (?, ?, ?, 'wait', ?, ?)")->execute([$h, $t, $voice, time(), $keep ? 1 : 0]);
     // a line that failed earlier may be asked again
     db()->prepare("UPDATE robot_tts SET status = 'wait', created = ? WHERE h = ? AND status = 'fail'")->execute([time(), $h]);
     return ['h' => $h, 'url' => ''];
@@ -97,10 +99,10 @@ function robot_save(string $h, string $mp3): void
 
     // keep the newest 600 lines
     if (random_int(1, 25) === 1) {
-        $old = db()->query("SELECT h FROM robot_tts ORDER BY created DESC LIMIT -1 OFFSET 600")->fetchAll(PDO::FETCH_COLUMN);
+        $old = db()->query("SELECT h FROM robot_tts WHERE keep = 0 ORDER BY created DESC LIMIT -1 OFFSET 600")->fetchAll(PDO::FETCH_COLUMN);
         foreach ($old as $o) {
             @unlink(upload_dir() . '/' . robot_file($o));
         }
-        db()->exec("DELETE FROM robot_tts WHERE h NOT IN (SELECT h FROM robot_tts ORDER BY created DESC LIMIT 600)");
+        db()->exec("DELETE FROM robot_tts WHERE keep = 0 AND h NOT IN (SELECT h FROM robot_tts WHERE keep = 0 ORDER BY created DESC LIMIT 600)");
     }
 }

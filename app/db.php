@@ -135,6 +135,7 @@ function migrate(PDO $pdo): void
     $add('streams', 'yt_badges', "TEXT NOT NULL DEFAULT ''");
     if ($pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='robot_tts'")->fetchColumn()) {
         $add('robot_tts', 'voice', "TEXT NOT NULL DEFAULT 'ryan'");
+        $add('robot_tts', 'keep', 'INTEGER NOT NULL DEFAULT 0');   // announcer lines ("Spain is out!") are kept for every round
     }
 
     // The Ball Drop game moved from the home page to /ball/ (the home page is now the games website).
@@ -185,7 +186,8 @@ function migrate(PDO $pdo): void
             voice   TEXT NOT NULL DEFAULT 'ryan',
             status  TEXT NOT NULL DEFAULT 'wait',
             created INTEGER NOT NULL,
-            sent_at INTEGER NOT NULL DEFAULT 0
+            sent_at INTEGER NOT NULL DEFAULT 0,
+            keep    INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS audience (

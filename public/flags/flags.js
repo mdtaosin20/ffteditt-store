@@ -5,7 +5,7 @@
 // subscriber (or a viewer who shares and types "shared" + country) gives a shield — or brings the country back if it is out; a Super Chat gives both. Likes and viewers unlock goals for everyone.
 // The last flag left is the round champion, then a new round starts (about an hour a round).
 import { Sfx, holdScreen, PACE, reporter, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=26';
+import { liveChat, countryMatcher } from '/game/chat.js?v=27';
 import { goLive } from '/game/golive.js?v=2';
 import { Music, SongPlayer } from '/game/music.js?v=2';
 import { autoUpdate } from '/game/update.js?v=1';
@@ -308,6 +308,12 @@ async function main() {
       + `Rules: type your country in chat to boost it; ${cfg.shield} chats = a SHIELD (it stays on until the hole would take the flag; then the shield breaks and the flag stays in); ${cfg.revive} chats bring an OUT country back${NOLIMIT ? ' (no limit)' : ''}; subscribe, or share the live and type "shared" + your country = a SHIELD (or it comes back if it is OUT); Super Chat = shield and revive; countries not in this round join the next round.`,
     match: countryMatcher(C),
     badge: (code) => flagNode(code, 32),
+    // next to a chat line: how far that country is (🛡 3/10 to a shield, ♻ 4/20 to come back)
+    rowTag: (code) => {
+      if (!teams.includes(code) || phase !== 'play') return '';
+      const isOut = !alive.has(code), need = isOut ? cfg.revive : cfg.shield, have = Math.min(need, prog.get(code) || 0);
+      return isOut ? `♻ ${have}/${need}` : shield.has(code) && !got.has(code) ? '🛡 ON' : `🛡 ${have}/${need}`;
+    },
     duck: duckAll,
     sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
     onFan,
@@ -367,6 +373,36 @@ async function main() {
     demoTexts: ['Bangladesh 🇧🇩', 'India!', 'Brasil 🔥', 'Pakistan', 'hello', 'USA USA', 'who will win?', 'Nepal', 'Egypt', 'বাংলাদেশ', 'Indonesia', 'Mexico', 'nice game', 'Morocco'],
   });
   const host = (parts, prio = 2) => { if (chat.active) chat.say(parts, prio); };
+
+  /* ---------- the stadium announcer: "SPAIN IS OUT!" the moment a flag falls ----------
+     Its own voice (Ryan), separate from LUNA, so it never waits behind her. The line of every country in the
+     round is made before it is needed (kept on the panel for every round), so it plays at once. */
+  const outAudio = new Map(), outAsked = new Set();
+  let annBusy = 0, outT = 0;
+  const annText = (code) => String(C[byCode.get(code)].name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z .'-]/g, ' ').replace(/\s+/g, ' ').trim() + ' is out!';
+  const annTick = () => {
+    if (!chat.active || !chat.annOn || !chat.annOn()) return;
+    const want = [...alive, ...out].filter((c) => !outAsked.has(c));
+    while (annBusy < 2 && want.length) {   // two at a time: the VPS also makes LUNA's lines
+      const code = want.shift(); outAsked.add(code); annBusy++;
+      chat.annVoice(annText(code)).then((u) => {
+        annBusy--;
+        if (u) { const a = new Audio(u); a.preload = 'auto'; outAudio.set(code, a); } else setTimeout(() => outAsked.delete(code), 60000);
+      });
+    }
+  };
+  setInterval(annTick, 3000);
+  const showOut = (code, canRev) => {
+    const box = $('outal'), name = NAME(code);
+    $('outal-f').innerHTML = flagHTML(code, 120);
+    $('outal-t').textContent = `❌ ${name} IS OUT!`;
+    $('outal-t').className = name.length > 14 ? 'long' : name.length > 9 ? 'mid' : '';
+    $('outal-s').textContent = canRev ? `${alive.size} LEFT · ${cfg.revive} CHATS BRING IT BACK` : `${alive.size} LEFT`;
+    box.hidden = false; box.classList.remove('in'); void box.offsetWidth; box.classList.add('in');
+    clearTimeout(outT); outT = setTimeout(() => { box.hidden = true; }, 3600);
+    const a = outAudio.get(code);
+    if (a && sfx.running) { try { a.currentTime = 0; a.volume = 1; chat.hush && chat.hush(2600); a.play().catch(() => {}); } catch (e) { /* no voice this time */ } }
+  };
   { // LUNA's box is small here: make a long line smaller until it fits
     const rbt = document.querySelector('.lc-flags .lc-rb-text');
     if (rbt) new MutationObserver(() => {
@@ -413,8 +449,7 @@ async function main() {
     alive.delete(b.code); out.push(b.code); prog.set(b.code, 0);
     const canRev = (NOLIMIT || revLeft > 0) && alive.size > 2;
     popAt('out', b.code, 'ELIMINATED', NAME(b.code), CX - 150, CY + 120);
-    if (canRev) host([{ node: flagNode(b.code) }, NAME(b.code) + ` IS OUT! ${NAME(b.code)} FANS — ${cfg.revive} CHATS AND IT COMES BACK!`], 2);
-    else host([{ node: flagNode(b.code) }, NAME(b.code) + ` IS OUT! ${alive.size} COUNTRIES LEFT!`], 1);
+    showOut(b.code, canRev);   // at once, with the announcer's voice (LUNA does not wait to say it any more)
     if (alive.size === 10 && !final10) { final10 = true; banner('FINAL 10', 'TYPE YOUR COUNTRY — SHIELDS DECIDE IT NOW!', 'red'); host(['ONLY 10 COUNTRIES LEFT! EVERY SHIELD COUNTS NOW — TYPE YOUR COUNTRY!'], 3); }
     if (alive.size === 2 && !finalSaid) {
       finalSaid = true;
@@ -691,7 +726,16 @@ async function main() {
       }).join('')
       : `<div class="prow empty">Type your country in chat — the top 3 show here!</div>`;
     $('rev-left').textContent = NOLIMIT ? '♾️ REVIVE: NO LIMIT' : `REVIVES LEFT ${revLeft}/${cfg.revives}`;
-    $('grave').innerHTML = out.slice(-18).reverse().map((code) => `<span class="gf">${flagHTML(code, 52)}</span>`).join('');
+    // ♻ COMEBACK: the OUT countries that can still come back, the closest first, with how many chats they have
+    const canBack = (NOLIMIT || revLeft > 0) && alive.size > 2 && phase === 'play';
+    $('grave-k').textContent = canBack ? '♻ COMEBACK' : 'OUT:';
+    $('grave-row').classList.toggle('cb', canBack);
+    $('grave').innerHTML = canBack
+      ? out.slice().reverse().sort((a, b) => (prog.get(b) || 0) - (prog.get(a) || 0)).slice(0, 8).map((code) => {
+        const have = Math.min(cfg.revive, prog.get(code) || 0);
+        return `<span class="cbi">${flagHTML(code, 44)}<span><b>${have}/${cfg.revive}</b><u><s style="width:${have / cfg.revive * 100}%"></s></u></span></span>`;
+      }).join('')
+      : out.slice(-18).reverse().map((code) => `<span class="gf">${flagHTML(code, 52)}</span>`).join('');
     $('prog').style.width = (out.length / Math.max(1, COUNT - 1) * 100) + '%';
     $('out-count').textContent = `${out.length} / ${COUNT} ELIMINATED`;
   };

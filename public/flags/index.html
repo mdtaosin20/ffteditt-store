@@ -5,8 +5,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flag Arena · Type Your Country to Save It</title>
-<link rel="stylesheet" href="/flags/flags.css?v=26">
-<link rel="stylesheet" href="/game/chat.css?v=3">
+<link rel="stylesheet" href="/flags/flags.css?v=27">
+<link rel="stylesheet" href="/game/chat.css?v=4">
 </head>
 <body>
 <div id="stage">
@@ -36,7 +36,8 @@
   <canvas id="arena" aria-label="Flags bouncing in the arena"></canvas>
   <div class="pops" id="pops"></div>
 
-  <div class="grave"><span>OUT:</span><div id="grave"></div></div>
+  <div class="outal" id="outal" hidden><span class="outal-f" id="outal-f"></span><div><b id="outal-t"></b><small id="outal-s"></small></div></div>
+  <div class="grave" id="grave-row"><span id="grave-k">OUT:</span><div id="grave"></div></div>
   <div class="prog"><i id="prog"></i></div>
 
   <div class="below">
@@ -63,7 +64,7 @@
     TAP FOR SOUND
   </button>
 </div>
-<script type="module" src="/flags/flags.js?v=62"></script>
+<script type="module" src="/flags/flags.js?v=63"></script>
 <script src="/game/switcher.js?v=3"></script>
 </body>
 </html>

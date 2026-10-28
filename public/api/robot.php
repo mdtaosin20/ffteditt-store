@@ -14,4 +14,8 @@ if ($id <= 0 || !hash_equals(stream_sig($id), (string) ($in['sig'] ?? ''))) {
     echo json_encode(['error' => 'not allowed']);
     exit;
 }
-echo json_encode($_SERVER['REQUEST_METHOD'] === 'POST' ? robot_request((string) ($in['text'] ?? '')) : robot_status((string) ($in['h'] ?? '')));
+// ann = the stadium announcer ("Spain is out!"): always Ryan's voice, made once and kept for every round
+$ann = !empty($in['ann']) && preg_match("/^[A-Za-z .'-]{2,40} is out!$/", (string) ($in['text'] ?? ''));
+echo json_encode($_SERVER['REQUEST_METHOD'] === 'POST'
+    ? ($ann ? robot_request((string) $in['text'], 'ryan', true) : robot_request((string) ($in['text'] ?? '')))
+    : robot_status((string) ($in['h'] ?? '')));

@@ -178,10 +178,12 @@ export function liveChat(o) {
   let lastMsg = performance.now();
 
   /* ---------- chat box ---------- */
-  const addRow = (name, text, key) => {
+  const addRow = (name, text, key, isNew) => {
     const r = el('div', 'lc-row');
+    if (isNew) r.append(el('span', 'lc-new', 'NEW'));   // first comment of this viewer
     r.append(el('b', '', cleanName(name) + ':'), el('span', 'lc-t', text.slice(0, 60)));
     if (key && o.badge) { const b = o.badge(key); if (b) r.append(b); }
+    if (key && o.rowTag) { const t = o.rowTag(key); if (t) r.append(el('span', 'lc-tag', t)); }   // e.g. 🛡 3/10: how far their country is
     rows.append(r);
     while (rows.children.length > (o.rows || 4)) rows.firstChild.remove();
     rows.querySelector('.lc-empty')?.remove();
@@ -394,15 +396,15 @@ export function liveChat(o) {
     const text = ev.t || '';
     if (!ev.old) lastMsg = performance.now();
     const key = o.match ? o.match(text) : null;
-    if (cfg.box) { addRow(name, text || (ev.k === 'member' ? 'joined as a member!' : ''), key); box.hidden = false; }
-    if (ev.old) return;
-
-    if (key) {
+    const isNew = !ev.old && ev.k === 'chat' && !seen.has(name.toLowerCase());
+    if (!ev.old && key) {   // count it first, so the row below already shows the new number
       counts.set(key, (counts.get(key) || 0) + 1); saveFans(); renderFans();
       const firstTime = !authorKey.has(name.toLowerCase());   // never named a country here before
       authorKey.delete(name.toLowerCase()); authorKey.set(name.toLowerCase(), key); saveWho();
       o.onFan && o.onFan(key, cleanName(name), name.toLowerCase(), firstTime);
     }
+    if (cfg.box) { addRow(name, text || (ev.k === 'member' ? 'joined as a member!' : ''), key, isNew); box.hidden = false; }
+    if (ev.old) return;
     if (ev.k === 'super') o.onSuper?.(key || authorKey.get(name.toLowerCase()) || null, cleanName(name));
     const author = name.toLowerCase();
     const special = ev.k === 'chat' && o.onText ? o.onText(cleanName(name), text, key || authorKey.get(author) || null, author) : null;
@@ -506,5 +508,23 @@ export function liveChat(o) {
   };
   // the game can show the subscriber banner for a viewer who wrote "subscribed"
   const subBanner = (name) => { if (cfg.subs) { subQ.push(name); nextSub(); } };
-  return { active: true, say, counts, voiceOn, log, subBanner };
+  /* ---------- the stadium announcer (separate from the host): short lines made once and kept, played at once ---------- */
+  const annOn = () => !!(cfg.voice && stream && sig);
+  const annVoice = async (text) => {
+    if (!annOn()) return '';
+    try {
+      let j = await api('', { stream: Number(stream), sig, text, ann: 1 });
+      const t0 = performance.now();
+      while (j && !j.url && !j.failed && j.h && performance.now() - t0 < 80000) {
+        await new Promise((r) => setTimeout(r, 1500));
+        j = await api(`?stream=${encodeURIComponent(stream)}&sig=${encodeURIComponent(sig)}&h=${j.h}`);
+      }
+      return (j && j.url) || '';
+    } catch (e) { return ''; }
+  };
+  // the host talks more quietly for a moment while the announcer speaks
+  let hushT = 0;
+  const hush = (ms) => { if (audio) audio.volume = 0.3; clearTimeout(hushT); hushT = setTimeout(() => { if (audio) audio.volume = 1; }, ms); };
+
+  return { active: true, say, counts, voiceOn, log, subBanner, annOn, annVoice, hush };
 }
