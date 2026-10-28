@@ -607,7 +607,7 @@ async function main() {
       play.kicks.forEach((k, i) => { if (simT >= k.t && !doneKick.has(i)) { doneKick.add(i); snd.kick(); } });
       while (doneBump < play.bumps.length && play.bumps[doneBump] <= simT) { if (doneBump % 2 === 0) snd.bump(); doneBump++; }
       while (doneLand < play.lands.length && play.lands[doneLand].t <= simT) { snd.land(play.lands[doneLand].v); doneLand++; }
-      if (!dinged && simT >= play.touchT) { dinged = true; snd.ding(); setWords($('t2').value.replace(/touches/i, 'touched').replace(/will touch/i, 'touched'), $('t3').value, true); }
+      if (!dinged && simT >= play.touchT) { dinged = true; snd.ding(); setWords($('t2').value.replace(/touches/i, 'touched').replace(/will touch/i, 'touched').replace(/\bhits\b/i, 'hit'), $('t3').value, true); }
     }
     const t = simT;
     if (play) {
