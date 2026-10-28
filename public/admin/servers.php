@@ -66,6 +66,7 @@ $panelUrl = 'https://' . preg_replace('/[^A-Za-z0-9.:-]/', '', (string) ($_SERVE
 $srv  = dash_server();
 $live = dash_live_data($srv);
 
+$tab = tab_now('servers', $newToken ? 'list' : null);
 page_start('VPS Monitor', 'servers', $admin);
 ?>
 <div class="page-head">
@@ -73,18 +74,21 @@ page_start('VPS Monitor', 'servers', $admin);
     <h1>VPS Monitor</h1>
     <p class="muted">Live numbers from your VPS (updated every 5 seconds), and the servers connected to this panel.</p>
   </div>
-  <?php if (count($servers) > 1): ?>
+  <?php if ($tab === 'monitor' && count($servers) > 1): ?>
   <form class="srv-pick" method="get"><label><span class="muted small">Showing server</span>
     <select name="server" data-autosubmit>
       <?php foreach ($servers as $sid => $s): ?><option value="<?= (int) $sid ?>" <?= $srv && (int) $srv['id'] === $sid ? 'selected' : '' ?>><?= e($s['name']) ?></option><?php endforeach; ?>
     </select></label></form>
   <?php endif; ?>
 </div>
+<?= tab_bar('servers') ?>
+<?php if ($tab === 'monitor'): ?>
 <div class="dash" id="dash" data-server="<?= $srv ? (int) $srv['id'] : 0 ?>">
   <section class="kcards" data-live="cards"><?= dash_cards($srv) ?></section>
   <?= dash_monitor($srv, $live) ?>
 </div>
 <script type="application/json" id="dash-data"><?= json_encode($live) ?></script>
+<?php else: ?>
 
 <h2 class="sec-h">Servers</h2>
 
@@ -154,5 +158,6 @@ page_start('VPS Monitor', 'servers', $admin);
   </section>
   <?php endforeach; ?>
 </div>
+<?php endif; ?>
 <?php endif; ?>
 <?php page_end();

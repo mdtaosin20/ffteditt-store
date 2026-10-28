@@ -20,6 +20,7 @@ function spark(array $v): string
         . '<div class="muted small">last ' . count($v) . ' min · top ' . max($v) . ' viewers</div>';
 }
 
+$tab = tab_now('insights');
 page_start('Audience Insights', 'insights', $admin);
 ?>
 <style>
@@ -45,11 +46,16 @@ page_start('Audience Insights', 'insights', $admin);
   </div>
 </div>
 
+<?= tab_bar('insights') ?>
+<?php if ($tab === 'why'): ?>
 <section class="card">
   <h2>Why it is (not) growing</h2>
   <?php foreach ($in['tips'] as [$k, $t]): ?><div class="tip <?= e($k) ?>"><?= e($t) ?></div><?php endforeach; ?>
 </section>
+<?php endif; ?>
 
+<?php if ($tab === 'lives'): ?>
+<?php if (!$in['streams']): ?><section class="card"><p class="muted">No streams yet.</p></section><?php endif; ?>
 <?php foreach ($in['streams'] as $r): ?>
 <section class="card">
   <h2><?= game_badge($r['game']) ?> <?= e($r['name']) ?> <?= $r['live'] ? '<span class="tag tag-green">LIVE ' . (int) $r['run_min'] . ' min</span>' : '<span class="tag tag-gray">not live</span>' ?></h2>
@@ -88,7 +94,9 @@ page_start('Audience Insights', 'insights', $admin);
     <?php foreach ($r['requests'] as $q): ?><div class="req"><span class="muted"><?= e(date('H:i', $q['ts'])) ?></span> <b><?= e($q['a']) ?>:</b> <?= e($q['t']) ?></div><?php endforeach; ?><?php endif; ?>
 </section>
 <?php endforeach; ?>
+<?php endif; ?>
 
+<?php if ($tab === 'countries'): ?>
 <?php $ft = fans_top('flags', 7, 60); ?>
 <section class="card">
   <h2>🌍 Which countries chat in Flag Arena (last 7 days)</h2>
@@ -101,8 +109,11 @@ page_start('Audience Insights', 'insights', $admin);
   </tbody></table></div>
   <?php endif; ?>
 </section>
+<?php endif; ?>
 
-<?php $vr = ytv_results(time() - 14 * 86400); if ($vr): ?>
+<?php if ($tab === 'titles'): ?>
+<?php $vr = ytv_results(time() - 14 * 86400); if (!$vr): ?><section class="card"><h2>Which title &amp; thumbnail works best</h2><p class="muted">No results yet — they show after some lives of 30+ minutes with different titles.</p></section><?php endif; ?>
+<?php if ($vr): ?>
 <section class="card">
   <h2>Which title &amp; thumbnail works best</h2>
   <p class="muted small">Each start uses a slightly different version (Title &amp; thumbnail page → "Change them a little on every start"). ⭐ = most viewers on average among lives of 30+ minutes.</p>
@@ -116,7 +127,9 @@ page_start('Audience Insights', 'insights', $admin);
   <?php endforeach; ?>
 </section>
 <?php endif; ?>
+<?php endif; ?>
 
+<?php if ($tab === 'report'): ?>
 <section class="card">
   <h2>Report for Claude</h2>
   <p class="muted">Press <b>Copy</b> and paste it in your chat with Claude — it shows everything above as text, so Claude can tell you what to change.</p>
@@ -130,4 +143,5 @@ document.getElementById('copy-report').addEventListener('click', async (e) => {
   e.currentTarget.textContent = 'Copied ✓';
 });
 </script>
+<?php endif; ?>
 <?php page_end();

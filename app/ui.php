@@ -104,6 +104,56 @@ function nav_items(): array
     ];
 }
 
+/**
+ * Pages with several parts: each part is its own tab (and its own link under the page in the menu),
+ * so a page shows one part at a time instead of one very long page.
+ */
+function page_tabs(): array
+{
+    return [
+        'servers'  => ['monitor' => ['📈', 'Live Monitor'], 'list' => ['🖥', 'Servers & Install']],
+        'youtube'  => ['channels' => ['📺', 'Channels'], 'title' => ['🖼', 'Title & Thumbnail'], 'chat' => ['💬', 'Live Chat & Robot'],
+                       'ai' => ['🤖', 'AI Replies'], 'limit' => ['📊', 'Daily Limit'], 'keys' => ['🔑', 'Google Keys']],
+        'poll'     => ['polls' => ['📊', 'Polls'], 'message' => ['💬', 'Chat Message']],
+        'insights' => ['why' => ['💡', 'Why Growing'], 'lives' => ['📺', 'Each Live'], 'countries' => ['🌍', 'Countries'],
+                       'titles' => ['🖼', 'Best Title'], 'report' => ['📝', 'Report']],
+        'settings' => ['vps' => ['🖥', 'VPS Info'], 'fingerprint' => ['🔐', 'Fingerprint'], 'login' => ['👤', 'Login']],
+    ];
+}
+
+/** The open tab of a page: from the link (?tab=…), else the one used last (so Save brings you back to it), else the first. */
+function tab_now(string $page, ?string $force = null): string
+{
+    $tabs = page_tabs()[$page] ?? [];
+    if (!$tabs) return '';
+    $t = $force ?? (string) ($_GET['tab'] ?? '');
+    if (!isset($tabs[$t])) $t = (string) ($_SESSION['tab_' . $page] ?? '');
+    if (!isset($tabs[$t])) $t = (string) array_key_first($tabs);
+    $_SESSION['tab_' . $page] = $t;
+    return $t;
+}
+
+/** Link to one tab of a page (keeps the other things in the address, e.g. which live / which server). */
+function tab_url(string $href, string $tab, bool $keep = true): string
+{
+    $q = $keep ? array_diff_key($_GET, ['tab' => 1]) : [];
+    $q['tab'] = $tab;
+    return $href . '?' . http_build_query($q);
+}
+
+/** The row of tab buttons under the page title. */
+function tab_bar(string $page): string
+{
+    $tabs = page_tabs()[$page] ?? [];
+    $href = nav_items()[$page][1] ?? '';
+    $now = (string) ($_SESSION['tab_' . $page] ?? '');
+    $h = '<nav class="tabs" aria-label="Parts of this page">';
+    foreach ($tabs as $k => [$ic, $label]) {
+        $h .= '<a href="' . e(tab_url($href, $k)) . '"' . ($k === $now ? ' class="on" aria-current="page"' : '') . '>' . $ic . ' ' . e($label) . '</a>';
+    }
+    return $h . '</nav>';
+}
+
 /** The "Your VPS Info" box at the bottom of the sidebar. */
 function sidebar_vps(): string
 {

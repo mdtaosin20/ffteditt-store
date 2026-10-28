@@ -10,6 +10,16 @@
     menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
   if (menuBtn) menuBtn.addEventListener('click', function () { setMenu(!side.classList.contains('open')); });
+  // the open tab of a page is always visible in the tab row (on a phone the row scrolls sideways)
+  var tabOn = document.querySelector('.tabs a.on');
+  if (tabOn) { var row = tabOn.parentElement; row.scrollLeft = tabOn.offsetLeft - row.offsetLeft - (row.clientWidth - tabOn.offsetWidth) / 2; }
+  // menu: ▸ opens the parts of a page (YouTube Manager → Channels, Live Chat …) without leaving this page
+  document.querySelectorAll('.side-nav [data-sub]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var sub = $(b.getAttribute('data-sub')); if (!sub) return;
+      sub.hidden = !sub.hidden; b.textContent = sub.hidden ? '▸' : '▾'; b.setAttribute('aria-expanded', sub.hidden ? 'false' : 'true');
+    });
+  });
   if (shade) shade.addEventListener('click', function () { setMenu(false); });
 
   /* ---------- dropdowns (bell + user) ---------- */

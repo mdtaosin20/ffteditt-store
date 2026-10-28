@@ -68,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('youtube.php');
 }
 
+$tab = tab_now('youtube');
 $chat = chat_cfg();
 $ready   = yt_ready();
 $client  = yt_client();
@@ -80,19 +81,25 @@ page_start('YouTube Manager', 'youtube', $admin);
     <h1>YouTube Manager</h1>
     <p class="muted">Your YouTube channels, stream keys, and the live video’s title, description and thumbnail.</p>
   </div>
-  <div class="head-actions"><a class="btn btn-blue" href="stream_edit.php"><?= icon('plus') ?>Add Channel</a></div>
+  <?php if ($tab === 'channels'): ?><div class="head-actions"><a class="btn btn-blue" href="stream_edit.php"><?= icon('plus') ?>Add Channel</a></div><?php endif; ?>
 </div>
+<?= tab_bar('youtube') ?>
 
+<?php if ($tab === 'channels'): ?>
 <section class="panel">
   <div class="ph"><h2><span class="yt yt-lg"><?= icon('play') ?></span>Channels</h2></div>
   <?= dash_youtube('youtube.php', 200) ?>
 </section>
+<?php endif; ?>
 
+<?php if ($tab === 'limit'): ?>
 <section class="panel">
   <div class="ph"><h2>📊 YouTube daily limit</h2></div>
   <?= yt_units_box() ?>
 </section>
+<?php endif; ?>
 
+<?php if ($tab === 'title'): ?>
 <section class="panel">
   <div class="ph"><h2><?= icon('youtube') ?>Live title, description &amp; thumbnail</h2>
     <?= $ready ? '<span class="tag tag-green">Google keys saved</span>' : '<span class="tag tag-orange">Setup needed</span>' ?></div>
@@ -110,7 +117,7 @@ page_start('YouTube Manager', 'youtube', $admin);
         <td><div class="icons" style="gap:8px;flex-wrap:wrap">
           <?php if ($s['yt_refresh'] === ''): ?>
             <form method="post" action="yt_oauth.php"><?= csrf_field() ?><input type="hidden" name="id" value="<?= $sid ?>">
-              <button class="btn btn-red btn-sm" type="submit" <?= $ready ? '' : 'disabled title="Do step 1 first"' ?>><?= icon('youtube') ?>Connect YouTube</button></form>
+              <button class="btn btn-red btn-sm" type="submit" <?= $ready ? '' : 'disabled title="Save the Google keys first (🔑 Google Keys tab)"' ?>><?= icon('youtube') ?>Connect YouTube</button></form>
           <?php endif; ?>
           <a class="btn btn-ghost btn-sm" href="yt_live.php?id=<?= $sid ?>"><?= icon('pencil') ?>Title &amp; thumbnail</a>
           <?php if ($s['yt_refresh'] !== '' && $s['status'] === 'live'): ?>
@@ -123,8 +130,10 @@ page_start('YouTube Manager', 'youtube', $admin);
     </tbody>
   </table></div>
 </section>
+<?php endif; ?>
 
 <?php $ai = ai_cfg(); $use = ai_usage(); [$pin, $pout] = ai_prices($ai); ?>
+<?php if ($tab === 'ai'): ?>
 <section class="panel" id="ai">
   <div class="ph"><h2>🤖 AI replies for <?= e($chat['robot_name']) ?> (optional)</h2></div>
   <p class="muted">With an API key, <?= e($chat['robot_name']) ?> answers questions and comments her normal rules do not understand.
@@ -150,7 +159,9 @@ page_start('YouTube Manager', 'youtube', $admin);
     <?= $use['fail'] ? ' · <span class="warn-text">' . (int) $use['fail'] . ' failed — last: ' . e($use['last_error']) . '</span>' : '' ?>
     · key: <?= ai_key() !== '' ? '<span class="ok-text">saved</span>' : '<span class="muted">not set</span>' ?></p>
 </section>
+<?php endif; ?>
 
+<?php if ($tab === 'chat'): ?>
 <section class="panel">
   <div class="ph"><h2><?= icon('bell') ?>Live chat &amp; robot host</h2>
     <?= $chat['enabled'] ? '<span class="tag tag-green">On</span>' : '<span class="tag tag-gray">Off</span>' ?></div>
@@ -201,7 +212,9 @@ page_start('YouTube Manager', 'youtube', $admin);
     </tbody>
   </table></div>
 </section>
+<?php endif; ?>
 
+<?php if ($tab === 'keys'): ?>
 <section class="panel">
   <div class="ph"><h2><?= icon('gear') ?>Step 1 · Google keys (one time only)</h2></div>
   <details <?= $ready ? '' : 'open' ?>>
@@ -215,7 +228,7 @@ page_start('YouTube Manager', 'youtube', $admin);
         Under <strong>Authorized redirect URIs</strong> press Add URI and paste exactly:<br>
         <code id="ru"><?= e(yt_redirect_uri()) ?></code> <button type="button" class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('ru').textContent);this.textContent='Copied'">Copy</button></li>
       <li>Press <strong>Create</strong>. Copy the <strong>Client ID</strong> and <strong>Client secret</strong> into the boxes below → Save.</li>
-      <li>Press <strong>Connect YouTube</strong> above. Google shows “Google hasn’t verified this app” — that is normal for your own app: press <strong>Advanced</strong> → <strong>Go to GameStream</strong> → tick the box → <strong>Continue</strong>.</li>
+      <li>Open the <a href="youtube.php?tab=title">🖼 Title &amp; Thumbnail</a> tab and press <strong>Connect YouTube</strong>. Google shows “Google hasn’t verified this app” — that is normal for your own app: press <strong>Advanced</strong> → <strong>Go to GameStream</strong> → tick the box → <strong>Continue</strong>.</li>
     </ol>
   </details>
   <form method="post" class="form" style="margin-top:14px">
@@ -230,7 +243,9 @@ page_start('YouTube Manager', 'youtube', $admin);
     <div class="form-actions"><button class="btn btn-blue" type="submit">Save Google keys</button></div>
   </form>
 </section>
+<?php endif; ?>
 
+<?php if ($tab === 'channels'): ?>
 <section class="panel">
   <div class="ph"><h2><?= icon('youtube') ?>Where to find the stream key</h2></div>
   <ol class="steps">
@@ -240,4 +255,5 @@ page_start('YouTube Manager', 'youtube', $admin);
     <li>Add your channel link (e.g. <code>https://www.youtube.com/@yourname</code>) so the <strong>Watch</strong> button opens your live.</li>
   </ol>
 </section>
+<?php endif; ?>
 <?php page_end('voice_pick.js');

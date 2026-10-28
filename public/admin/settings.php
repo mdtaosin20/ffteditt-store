@@ -70,10 +70,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$tab = tab_now('settings', $errors ? 'login' : null);
 page_start('Settings', 'settings', $admin);
 ?>
 <div class="page-head"><div><h1>Settings</h1><p class="muted">Your VPS details and your login.</p></div></div>
+<?= tab_bar('settings') ?>
 <?php $o = panel_opts(); ?>
+<?php if ($tab === 'vps'): ?>
 <form method="post" class="panel form">
   <?= csrf_field() ?><input type="hidden" name="do" value="vps">
   <div class="ph"><h2><?= icon('server') ?>Your VPS Info</h2></div>
@@ -87,6 +90,8 @@ page_start('Settings', 'settings', $admin);
   <label class="field"><span>“Upgrade Plan” button link</span><input name="upgrade_url" type="url" value="<?= e($o['upgrade_url']) ?>"></label>
   <div class="form-actions"><button class="btn btn-blue" type="submit">Save VPS info</button></div>
 </form>
+<?php endif; ?>
+<?php if ($tab === 'fingerprint'): ?>
 <?php pk_table(); $pks = db()->prepare('SELECT * FROM passkeys WHERE admin_id = ? ORDER BY last_used DESC, id DESC'); $pks->execute([(int) $admin['id']]); $pks = $pks->fetchAll(); ?>
 <h2 class="sec-h" id="fingerprint">🔐 Fingerprint / Face login</h2>
 <div class="card" style="max-width:none">
@@ -107,6 +112,8 @@ page_start('Settings', 'settings', $admin);
   <div class="form-actions" style="align-items:center;gap:12px"><button class="btn btn-green" type="button" id="pk-add" data-csrf="<?= e(csrf_token()) ?>">+ Add this device</button><span class="muted small" id="pk-add-msg"></span></div>
 </div>
 
+<?php endif; ?>
+<?php if ($tab === 'login'): ?>
 <h2 class="sec-h">Login</h2>
 
 <?php foreach ($errors as $err): ?>
@@ -129,4 +136,5 @@ page_start('Settings', 'settings', $admin);
   </label>
   <div class="form-actions"><button class="btn btn-blue" type="submit">Save login</button></div>
 </form>
+<?php endif; ?>
 <?php page_end();

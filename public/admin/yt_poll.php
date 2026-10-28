@@ -80,6 +80,7 @@ $saved = ytp_saved();
 $active = $cur && $cur[1] ? ytp_active($cur[0]) : null;
 $last = $sid ? json_decode((string) (setting_get('ytp_last_' . $sid) ?? ''), true) : null;
 $ok = $cur && $cur[1];
+$tab = tab_now('poll');
 page_start('Live Poll & Message', 'poll', $admin);
 $hid = static fn () => csrf_field() . '<input type="hidden" name="s" value="' . $sid . '">';
 ?>
@@ -111,6 +112,7 @@ $hid = static fn () => csrf_field() . '<input type="hidden" name="s" value="' . 
   </div>
 </div>
 
+<?= tab_bar('poll') ?>
 <section class="panel yp">
   <label class="field"><span>Which live?</span>
     <select onchange="location.href='yt_poll.php?s='+this.value">
@@ -124,6 +126,7 @@ $hid = static fn () => csrf_field() . '<input type="hidden" name="s" value="' . 
   <?php if (!$lives): ?><p class="muted small" style="margin-top:8px">Start a live first. You can still write and save polls and messages below.</p><?php endif; ?>
 </section>
 
+<?php if ($tab === 'polls'): ?>
 <section class="panel yp">
   <h2>📊 Polls</h2>
   <?php if ($active): ?>
@@ -176,6 +179,8 @@ $hid = static fn () => csrf_field() . '<input type="hidden" name="s" value="' . 
   </form>
 </section>
 
+<?php endif; ?>
+<?php if ($tab === 'message'): ?>
 <section class="panel yp">
   <h2>💬 Chat message (for the pin)</h2>
   <p class="muted small">The message goes into the live chat from your channel. To pin it: open the live chat on your phone, press and hold the message → <b>Pin</b>.</p>
@@ -205,6 +210,7 @@ $hid = static fn () => csrf_field() . '<input type="hidden" name="s" value="' . 
   </form>
   <p class="muted small" style="margin-top:12px">Each poll or message uses 20 of YouTube's 10,000 daily units — a few a day is no problem.</p>
 </section>
+<?php endif; ?>
 <script>
 // letters left (YouTube counts an emoji as 2, like here)
 document.querySelectorAll('[data-max]').forEach((el) => {

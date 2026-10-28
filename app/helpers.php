@@ -126,7 +126,7 @@ function page_start(string $title, string $active = '', ?array $admin = null): v
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/admin.css?v=18">
+<link rel="stylesheet" href="/assets/admin.css?v=19">
 <link rel="manifest" href="/admin/manifest.json">
 <meta name="theme-color" content="#0a1528">
 <link rel="icon" type="image/png" sizes="192x192" href="/admin/app/icon-192.png">
@@ -165,7 +165,17 @@ function page_start(string $title, string $active = '', ?array $admin = null): v
 <aside class="side" id="side">
   <nav class="side-nav">
     <?php foreach (nav_items() as $key => [$label, $href, $ic]): ?>
-      <a href="<?= e($href) ?>" class="<?= $active === $key ? 'on' : '' ?>"><?= icon($ic) ?><span><?= e($label) ?></span><?php if ($key === 'devices' && ($dn = dev_pending_count()) > 0): ?><span class="nav-new"><?= $dn ?> new</span><?php endif; ?></a>
+      <?php $subs = page_tabs()[$key] ?? []; $open = $active === $key; ?>
+      <?php if ($subs): ?><div class="nav-row"><?php endif; ?>
+      <a href="<?= e($href) ?>" class="<?= $active === $key ? 'on' : '' ?><?= $subs ? ' has-sub' : '' ?>"><?= icon($ic) ?><span><?= e($label) ?></span><?php if ($key === 'devices' && ($dn = dev_pending_count()) > 0): ?><span class="nav-new"><?= $dn ?> new</span><?php endif; ?></a>
+      <?php if ($subs): ?>
+        <button type="button" class="car" data-sub="sub-<?= e($key) ?>" aria-expanded="<?= $open ? 'true' : 'false' ?>" aria-label="Parts of <?= e($label) ?>"><?= $open ? '▾' : '▸' ?></button></div>
+        <div class="sub" id="sub-<?= e($key) ?>"<?= $open ? '' : ' hidden' ?>>
+          <?php foreach ($subs as $tk => [$ti, $tl]): ?>
+            <a href="<?= e(tab_url($href, $tk, false)) ?>" class="<?= $open && ($_SESSION['tab_' . $key] ?? '') === $tk ? 'on' : '' ?>"><?= $ti ?> <?= e($tl) ?></a>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
     <?php endforeach; ?>
   </nav>
   <?= sidebar_vps() ?>
@@ -191,7 +201,7 @@ function page_end(string $script = ''): void
 {
     ?>
 </main>
-<script src="/assets/admin.js?v=3"></script>
+<script src="/assets/admin.js?v=4"></script>
 <script src="/assets/passkey.js?v=4"></script>
 <script src="/assets/app.js?v=1"></script>
 <?php if ($script && $script !== 'admin.js'): ?><script src="/assets/<?= e($script) ?>?v=<?= (int) @filemtime(rtrim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), '/') . '/assets/' . basename($script)) ?>"></script><?php endif; ?>
