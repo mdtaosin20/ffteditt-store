@@ -465,7 +465,34 @@ async function main() {
   let play = null, simT = 0, last = 0, playing = false, lastStep = 0, doneKick = new Set(), doneBump = 0, doneLand = 0, clanked = false, dinged = false, endT = 0;
   const axis = new THREE.Vector3(), dq = new THREE.Quaternion();
   const w1 = $('w1'), w2 = $('w2'), words = $('words');
-  const setWords = (a, b, end) => { w1.textContent = a; w2.textContent = b; words.classList.toggle('end', end); w1.classList.remove('pop'); w2.classList.remove('pop'); void w1.offsetWidth; w1.classList.add('pop'); w2.classList.add('pop'); };
+  // a line = the words + the emojis at the end in their own box (so gold / glossy letters do not colour the emojis)
+  const fillLine = (el, text) => {
+    el.textContent = '';
+    text = String(text || '').trim();
+    if (!text) return;
+    const m = text.match(/^(.*?)\s*((?:[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\uFE0F\u200D]\s*)+)$/u);
+    const tx = document.createElement('span'); tx.className = 'tx'; tx.textContent = m && m[1] ? m[1] : (m ? '' : text);
+    el.appendChild(tx);
+    if (m) { if (m[1]) el.appendChild(document.createTextNode(' ')); const em = document.createElement('span'); em.className = 'em'; em.textContent = m[2].trim(); el.appendChild(em); }
+  };
+  const setStyle = (st) => {
+    words.className = 'words' + (words.classList.contains('end') ? ' end' : '') + (st === 'off' ? '' : ' st-' + st);
+    words.hidden = st === 'off';
+  };
+  // a long text in a one-line style: shrink that line so it fits the picture
+  const fitLines = () => {
+    const box = words.firstElementChild;
+    w1.style.zoom = w2.style.zoom = '';
+    if (words.classList.contains('st-classic')) return;
+    const cs = getComputedStyle(box);
+    const room = words.clientWidth * 0.94 - (parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth));
+    if (room <= 0) return;
+    for (const el of [w1, w2]) {
+      const w = Math.max(el.scrollWidth, el.getBoundingClientRect().width) * 1.1;   // a little room for glows and tilts
+      if (w > room) el.style.zoom = String(Math.max(0.45, room / w));
+    }
+  };
+  const setWords = (a, b, end) => { fillLine(w1, a); fillLine(w2, b); requestAnimationFrame(fitLines); if (document.fonts) document.fonts.ready.then(() => requestAnimationFrame(fitLines)); words.classList.toggle('end', end); w1.classList.remove('pop'); w2.classList.remove('pop'); void w1.offsetWidth; w1.classList.add('pop'); w2.classList.add('pop'); };
 
   const prepare = (codes, want) => {
     play = findPlay(codes.length, -1, ctl());
@@ -634,7 +661,7 @@ async function main() {
     const size = sharp ? 4096 : 2048;
     if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
   };
-  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, quality: $('quality').value, chan: $('chan').value });
+  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, quality: $('quality').value, chan: $('chan').value, tstyle: $('tstyle').value });
   const showCtl = () => {
     const sp = Number($('speed').value);
     $('speedV').textContent = (sp < 0.95 ? 'Slow' : sp > 1.05 ? 'Fast' : 'Normal') + ` (${sp.toFixed(1)}×)`;
@@ -642,7 +669,7 @@ async function main() {
   };
   try {
     const c = JSON.parse(localStorage.getItem('fft_cupkick_ctl') || 'null');
-    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && THEMES[c.place]) $('place').value = c.place; if (c.quality) $('quality').value = c.quality; if (typeof c.chan === 'string') $('chan').value = c.chan; }
+    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && THEMES[c.place]) $('place').value = c.place; if (c.quality) $('quality').value = c.quality; if (typeof c.chan === 'string') $('chan').value = c.chan; if (c.tstyle && [...$('tstyle').options].some((o) => o.value === c.tstyle)) $('tstyle').value = c.tstyle; }
   } catch (e) { /* ignore */ }
   const setBall = (r) => { if (r === R) return; R = r; ballGeo.dispose(); ballGeo = new THREE.SphereGeometry(R, 40, 28); play = null; ballGroup.clear(); };
   // the channel name: redraw the grass and the LED board with it
@@ -659,7 +686,9 @@ async function main() {
   $('chan').addEventListener('change', () => setChannel(ctl().chan));
   $('quality').addEventListener('change', () => setQuality(ctl().quality));
   $('size').addEventListener('change', () => { PS = ctl().size; play = null; ballGroup.clear(); buildTeams(selects.map((x) => x.value)); });   // see the new size at once
-  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality', 'chan'].forEach((id) => $(id).addEventListener('input', () => {
+  setStyle(ctl().tstyle); setWords($('t1').value, $('t2').value, false);
+  $('tstyle').addEventListener('change', () => { setStyle(ctl().tstyle); setWords($('t1').value, $('t2').value, false); });
+  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality', 'chan', 'tstyle'].forEach((id) => $(id).addEventListener('input', () => {
     showCtl(); try { localStorage.setItem('fft_cupkick_ctl', JSON.stringify(ctl())); } catch (e) { /* ignore */ }
   }));
   const fillWin = () => { const v = winEl.value; winEl.innerHTML = '<option value="-1">🎲 Random</option>' + selects.map((s, i) => `<option value="${i}">${NAME(s.value)}</option>`).join(''); winEl.value = [...winEl.options].some((o) => o.value === v) ? v : '-1'; };
