@@ -172,6 +172,7 @@ async function main() {
     S.round++;
     // a shield is never lost unused: shields still on at the end of a round go with their country to its next round
     S.carry = Object.assign(S.carry || {}, Object.fromEntries(shield));
+    for (const c of Object.keys(S.bank || {})) S.want[c] = (S.want[c] || 0) + 3;   // countries with a saved gift play next
     teams = chooseTeams(); alive = new Set(teams); out = []; balls = []; shield = new Map(); revived = new Set(); revLeft = cfg.revives;
     for (const c of teams) if (S.carry[c] !== undefined) { shield.set(c, S.carry[c]); delete S.carry[c]; }
     power = new Map(); prog = new Map(); got = new Set(); heat = new Map(); support.order = []; support.page = 0; fans = new Map(); tags.clear(); feed = [];
@@ -296,10 +297,37 @@ async function main() {
   const SHARE_RX = /\bshar(e|ed|ing|ed it)\b|\bshr\b|শেয়ার|শেয়ার|शेयर/i;
   const shareAt = new Map(), giftWait = new Map(), subDone = new Set();
   const cleanName = (n) => String(n || '').toUpperCase().slice(0, 14);
+  /* ---------- gift guard: a gift (subscribe / share / super chat) is never lost ----------
+     When it cannot be used right now (the country already has a shield, the round is changing, it is not in this
+     round, no revives are left), it is SAVED and used by itself the moment it can: a new shield when the old one
+     breaks, at the start of the next round, … (kept 3 hours). */
+  const bankAdd = (code, by, why) => {
+    S.bank = S.bank || {};
+    (S.bank[code] = S.bank[code] || []).push({ by: by || '', why, at: Date.now() });
+    if (!teams.includes(code)) S.want[code] = (S.want[code] || 0) + 3;   // and it gets a place in the next round
+    save();
+  };
+  const bankUse = () => {
+    if (phase !== 'play' || !S.bank) return;
+    for (const code of Object.keys(S.bank)) {
+      const list = S.bank[code].filter((g) => Date.now() - g.at < 3 * 3600e3);
+      if (!list.length) { delete S.bank[code]; continue; }
+      S.bank[code] = list;
+      if (!teams.includes(code)) continue;
+      const g = list[0];
+      const used = alive.has(code) ? !shield.has(code) && giveShield(code, g.by, `SAVED GIFT · ${g.why}`) : revive(code, g.by);
+      if (!used) continue;
+      list.shift(); if (!list.length) delete S.bank[code];
+      save(); return;   // one at a time: each gets its own pop and thanks
+    }
+  };
+  // true = used now, 'bank' = saved for later (never false any more)
   const gift = (code, by, why) => {
-    if (!teams.includes(code) || phase !== 'play') return false;
-    if (alive.has(code)) return giveShield(code, by, `FREE SHIELD · ${why}`);
-    return revive(code, by);
+    if (teams.includes(code) && phase === 'play') {
+      if (alive.has(code) ? giveShield(code, by, `FREE SHIELD · ${why}`) : revive(code, by)) return true;
+    }
+    bankAdd(code, by, why);
+    return 'bank';
   };
   const statusLine = (code) => {
     if (!teams.includes(code)) return `IT JOINS THE NEXT ROUND — KEEP COMMENTING ${NAME(code)}!`;
@@ -324,7 +352,7 @@ async function main() {
     sfx: () => { sfx.tone({ freq: 784, type: 'sine', dur: 0.18, vol: 0.09 }); sfx.tone({ freq: 1175, type: 'sine', dur: 0.3, vol: 0.08, delay: 0.14 }); },
     onFan,
     onSub: (name, code) => {   // a new subscriber (seen by YouTube): their country gets a shield — or comes back if it is out
-      if (code && gift(code, name, 'SUBSCRIBER')) return;
+      if (code) { gift(code, name.toUpperCase().slice(0, 14), 'SUBSCRIBER'); return; }   // used now, or saved for later
       // their country is not known: the most-supported country without a shield gets it (or any country, so the gift is never lost)
       const c = [...power.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).find((k) => alive.has(k) && !shield.has(k))
         || [...alive].find((k) => !shield.has(k));
@@ -343,16 +371,19 @@ async function main() {
       if (kind === 'share' && (shareAt.get(author) || -1e9) > now - 600) return ['THANK YOU FOR SHARING AGAIN, ', { name }, '! ONE SHARE GIFT EVERY 10 MINUTES — KEEP CHATTING!'];
       if (!code) { giftWait.set(author, { kind, at: now }); return [`THANK YOU FOR ${VERB}, `, { name }, '! NOW TYPE YOUR COUNTRY — IT GETS A SHIELD, OR COMES BACK IF IT IS OUT!']; }
       giftWait.delete(author);
-      if (!teams.includes(code)) { S.want[code] = (S.want[code] || 0) + 3; return [`THANK YOU FOR ${VERB}, `, { name }, '! ', { node: flagNode(code) }, NAME(code) + ' JOINS THE NEXT ROUND!']; }
-      if (phase !== 'play') { giftWait.set(author, { kind, at: now }); return [`THANK YOU FOR ${VERB}, `, { name }, '! A NEW ROUND STARTS IN A MOMENT — TYPE ', { node: flagNode(code) }, NAME(code) + ' THEN!']; }
-      const wasOut = !alive.has(code);
-      if (!gift(code, cleanName(name), kind === 'sub' ? 'SUBSCRIBER' : 'SHARE')) return [`THANK YOU FOR ${VERB}, `, { name }, '! ', { node: flagNode(code) }, NAME(code) + (shield.has(code) ? ' ALREADY HAS A SHIELD — KEEP CHATTING!' : ' — KEEP CHATTING FOR IT!')];
+      const wasOut = !alive.has(code), hadShield = shield.has(code), inRound = teams.includes(code) && phase === 'play';
+      const res = gift(code, cleanName(name), kind === 'sub' ? 'SUBSCRIBER' : 'SHARE');
       if (kind === 'sub') { subDone.add(author); chat.subBanner?.(name); } else shareAt.set(author, now);
+      if (res === 'bank') {   // saved: say plainly when it will be used, so nobody feels cheated
+        const when = !inRound ? ' JOINS THE NEXT ROUND WITH A SHIELD!' : hadShield ? ' ALREADY HAS A SHIELD — YOUR GIFT IS SAVED: A NEW SHIELD COMES THE MOMENT THIS ONE BREAKS!'
+          : ' — YOUR GIFT IS SAVED: IT GETS A SHIELD IN THE NEXT ROUND!';
+        return [`THANK YOU FOR ${VERB}, `, { name }, '! ', { node: flagNode(code) }, NAME(code) + when];
+      }
       return [`THANK YOU FOR ${VERB}, `, { name }, '! ', { node: flagNode(code) }, NAME(code) + (wasOut ? ' IS BACK IN THE ARENA!' : ' GOT A SHIELD!') + ' MORE FRIENDS = SAFER COUNTRY!'];
     },
     onSuper: (code, name) => {
       if (!code || !teams.includes(code)) return;
-      if (!alive.has(code)) revive(code, name, true); else giveShield(code, name, 'SUPER CHAT SHIELD');
+      if (!(alive.has(code) ? giveShield(code, name, 'SUPER CHAT SHIELD') : revive(code, name, true))) bankAdd(code, name, 'SUPER CHAT');
     },
     onStats: (st) => { lastStats = st; },
     emptyHint: `Type your country — ${cfg.shield} chats give it a SHIELD!`,
@@ -765,7 +796,7 @@ async function main() {
     let n = 0;
     while (acc >= FIXED && n < 3000) { step(FIXED); acc -= FIXED; n++; }
     if (n >= 3000) acc = 0;
-    if (now - lastUI > 400) { updateUI(); updateClock(); checkGoals(); lastUI = now; }
+    if (now - lastUI > 400) { updateUI(); updateClock(); checkGoals(); bankUse(); lastUI = now; }
     if (now - lastSave > 5000) { save(); lastSave = now; }
     if (now - lastDraw >= 31) { draw(); lastDraw = now; }
     requestAnimationFrame(frame);

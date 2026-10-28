@@ -305,6 +305,16 @@ function auto_fix_tick(): void
             }
             // on a working VPS: is it really live?
             if ($r['status'] === 'live') {
+                // the game page in the VPS's browser froze (it stopped asking for chat, so no chat, no gifts): start again.
+                // Only when the page did check in during this live, then went quiet for 90 s (a game without chat is never touched).
+                $hb = (int) @filemtime(DATA_DIR . '/page_seen_' . $id);
+                if ($hb > (int) $r['started_at'] && $now - $hb > 90 && $now - (int) $r['started_at'] > 180 && $now - (int) ($f['page_fix'] ?? 0) > 600) {
+                    $f['page_fix'] = $now;
+                    db()->prepare('UPDATE streams SET rev = rev + 1, run_id = ?, updated_at = ? WHERE id = ?')->execute([$now, $now, $id]);
+                    log_activity("Auto Fix: the game page of '{$r['name']}' stopped (no check-in for " . ($now - $hb) . ' s) — started again', 'warn');
+                    $keep[$id] = $f;
+                    continue;
+                }
                 // the live chat is not being read (the chat counts stop): open it again — every 2 minutes until it reads
                 $cs = (string) $r['chat_status'];
                 if (chat_cfg()['enabled'] && $now - (int) $r['started_at'] > 120 && !str_starts_with($cs, 'Reading')) {
