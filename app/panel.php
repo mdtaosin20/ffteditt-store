@@ -13,6 +13,7 @@ function panel_defaults(): array
     return [
         'auto_start'   => true,    // streams start again by themselves after the VPS reboots
         'auto_stop'    => true,    // schedules stop streams at their end time
+        'auto_fix'     => true,    // a stream that should be live but is not: fixed by itself (restart / move to a VPS that works)
         'notify'       => true,    // bell alerts
         'provider'     => 'InterServer',
         'location'     => '',
@@ -251,6 +252,81 @@ function schedule_in_window(array $s, int $now): bool
 }
 
 /** Starts/stops streams when a schedule's start or end time arrives. Safe to call often. */
+/**
+ * Auto Fix: every stream that is switched on should really be live. When it is not, the panel fixes it by itself:
+ *  - its VPS is off / gone for 2 minutes → the stream moves to a VPS that is online (the one with the fewest streams);
+ *  - it has an error, or stays "stopped" / "starting" too long → it is started again from fresh
+ *    (waits a little longer after each try: 1, 2, 4 … up to 10 minutes, so a wrong key does not hammer YouTube);
+ *  - the worker also restarts a crashed stream by itself (Auto Restart is on for every stream while Auto Fix is on).
+ * Runs at most every 15 seconds; every fix is written in the activity log (the bell).
+ */
+function auto_fix_tick(): void
+{
+    if (!panel_opts()['auto_fix']) return;
+    $now = time();
+    if ($now - (int) (setting_get('autofix_at') ?? 0) < 15) return;
+    setting_set('autofix_at', (string) $now);
+    try {
+        $servers = [];
+        foreach (db()->query('SELECT id, name, last_seen, info_json FROM servers ORDER BY id') as $r) $servers[(int) $r['id']] = $r;
+        $online = array_filter($servers, fn ($r) => $now - (int) $r['last_seen'] <= SERVER_OFFLINE_AFTER);
+        $rows = db()->query("SELECT id, name, server_id, status, stream_key, updated_at, started_at FROM streams WHERE desired = 'on' AND stream_key <> '' ORDER BY id")->fetchAll();
+        if (!$rows) return;
+        $load = [];   // streams per online server
+        foreach ($rows as $r) if (isset($online[(int) $r['server_id']])) $load[(int) $r['server_id']] = ($load[(int) $r['server_id']] ?? 0) + 1;
+        $st = json_decode((string) (setting_get('autofix_state') ?? ''), true) ?: [];
+        $keep = [];
+        foreach ($rows as $r) {
+            $id = (int) $r['id'];
+            $f = $st[$id] ?? ['bad' => 0, 'tries' => 0, 'next' => 0];
+            $sid = (int) $r['server_id'];
+            $srv = $servers[$sid] ?? null;
+            if (!isset($online[$sid])) {
+                // the VPS of this stream is not checking in
+                $off = $srv ? $now - (int) $srv['last_seen'] : PHP_INT_MAX;
+                if ($off >= 120 && $online) {
+                    $to = null;
+                    foreach ($online as $oid => $o) {
+                        $cpus = (int) ((json_decode($o['info_json'] ?: '{}', true) ?: [])['cpus'] ?? 1);
+                        $score = ($load[$oid] ?? 0) / max(1, $cpus);
+                        if ($to === null || $score < $to[1]) $to = [$oid, $score];
+                    }
+                    $oid = $to[0];
+                    db()->prepare('UPDATE streams SET server_id = ?, rev = rev + 1, run_id = ?, error = NULL, updated_at = ? WHERE id = ?')->execute([$oid, $now, $now, $id]);
+                    $load[$oid] = ($load[$oid] ?? 0) + 1;
+                    log_activity("Auto Fix: '{$r['name']}' moved from " . ($srv ? $srv['name'] : 'a removed VPS') . " (offline) to {$online[$oid]['name']}", 'warn');
+                    $f = ['bad' => 0, 'tries' => 0, 'next' => 0];
+                } elseif (!$online && $now - (int) (setting_get('autofix_noserver') ?? 0) > 1800) {
+                    setting_set('autofix_noserver', (string) $now);
+                    log_activity('Auto Fix: no VPS is online, so streams cannot start. Turn the VPS on (or restart it in the provider panel).', 'error');
+                }
+                $keep[$id] = $f;
+                continue;
+            }
+            // on a working VPS: is it really live?
+            if ($r['status'] === 'live') {
+                if ($f['tries'] && $now - (int) $r['started_at'] > 300) $f = ['bad' => 0, 'tries' => 0, 'next' => 0];   // stable again
+                else $f['bad'] = 0;
+                $keep[$id] = $f;
+                continue;
+            }
+            if (!$f['bad']) $f['bad'] = $now;
+            $limit = $r['status'] === 'starting' ? 180 : 75;   // Chrome + YouTube need a moment to start
+            if ($now - $f['bad'] >= $limit && $now >= $f['next'] && $now - (int) $r['updated_at'] >= 60) {
+                $f['tries']++;
+                $f['next'] = $now + min(600, 60 * (2 ** ($f['tries'] - 1)));
+                $f['bad'] = $now;
+                db()->prepare('UPDATE streams SET rev = rev + 1, run_id = ?, error = NULL, updated_at = ? WHERE id = ?')->execute([$now, $now, $id]);
+                log_activity("Auto Fix: '{$r['name']}' was {$r['status']} — started again (try {$f['tries']})", 'warn');
+            }
+            $keep[$id] = $f;
+        }
+        setting_set('autofix_state', json_encode($keep));
+    } catch (Throwable $e) {
+        // never break the page or the worker check-in
+    }
+}
+
 function schedule_tick(): void
 {
     $now  = time();

@@ -4,6 +4,7 @@ require APP_DIR . '/dash.php';
 $admin = require_login();
 
 schedule_tick();
+auto_fix_tick();
 $srv     = dash_server();
 $servers = all_servers();
 $opts    = panel_opts();
@@ -69,7 +70,7 @@ page_start('Dashboard', 'dashboard', $admin);
           <button class="btn btn-lg btn-blue" type="submit"><?= icon('refresh') ?>Restart All</button></form>
       </div>
       <div class="qa qa-t">
-        <?php foreach ([['auto_start', 'Auto Start', 'Start streams when VPS boots'], ['auto_stop', 'Auto Stop', 'Stop after scheduled time'], ['notify', 'Notification', 'Get alerts on issues']] as [$k, $t, $d]): ?>
+        <?php foreach ([['auto_start', 'Auto Start', 'Start streams when VPS boots'], ['auto_stop', 'Auto Stop', 'Stop after scheduled time'], ['notify', 'Notification', 'Get alerts on issues'], ['auto_fix', 'Auto Fix', 'Fix a stream that is not live by itself']] as [$k, $t, $d]): ?>
         <div class="qt"><div class="qt-h"><b><?= e($t) ?></b><?= toggle_form('panel_action.php', ['key' => $k, 'back' => 'dashboard.php'], (bool) $opts[$k], $t) ?></div><p><?= e($d) ?></p></div>
         <?php endforeach; ?>
       </div>

@@ -6,7 +6,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     redirect('dashboard.php');
 }
 check_csrf();
-$labels = ['auto_start' => 'Auto Start', 'auto_stop' => 'Auto Stop', 'notify' => 'Notifications'];
+$labels = ['auto_start' => 'Auto Start', 'auto_stop' => 'Auto Stop', 'notify' => 'Notifications', 'auto_fix' => 'Auto Fix'];
 $key = (string) ($_POST['key'] ?? '');
 if (isset($labels[$key])) {
     $on = ($_POST['to'] ?? '') === 'on';

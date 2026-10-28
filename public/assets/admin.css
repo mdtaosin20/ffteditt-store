@@ -572,3 +572,7 @@ input[type=file] { color: var(--soft); font-family: inherit; font-size: 14px; ma
 .ow-row { align-items: flex-start; }
 .ow-link { display: flex; gap: 8px; margin: 10px 0 4px; flex-wrap: wrap; }
 .ow-link input { flex: 1; min-width: 180px; font-family: ui-monospace, monospace; font-size: 12px; background: var(--field); color: #9fc0ff; border: 1px solid var(--line2); border-radius: 8px; padding: 8px 10px; }
+
+/* switches row: Auto Start, Auto Stop, Notification, Auto Fix */
+.qa.qa-t { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1500px) { .qa.qa-t { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

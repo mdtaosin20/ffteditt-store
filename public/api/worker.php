@@ -83,6 +83,7 @@ if ($clean['cpu_pct'] !== null) {
     record_metrics($sid, $prevInfo, $clean);
 }
 schedule_tick();
+auto_fix_tick();
 
 // 2) Save what each stream on this server is doing right now.
 $mine = [];
@@ -192,7 +193,7 @@ foreach ($mine as $id => $row) {
         'height'       => $preset['h'],
         'kbps'         => $preset['kbps'],
         'fps'          => (int) $row['fps'],
-        'auto_restart' => (bool) $row['auto_restart'],
+        'auto_restart' => (bool) $row['auto_restart'] || panel_opts()['auto_fix'],
         'chat'         => $row['status'] === 'live' ? chat_target($row) : null,
     ];
 }

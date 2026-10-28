@@ -11,6 +11,7 @@ if (!current_admin()) {
     exit;
 }
 schedule_tick();
+auto_fix_tick();
 check_offline_servers();
 $srv = dash_server();
 $data = dash_live_data($srv);
