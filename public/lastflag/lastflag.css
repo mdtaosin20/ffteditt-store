@@ -138,3 +138,23 @@ body { position: fixed; inset: 0; overflow: clip; }
 .lc.lc-lastflag .lc-rb-name { font-size: 15px; letter-spacing: 3px; color: #d6a8ff; }
 .lc.lc-lastflag .lc-rb-text { font-size: 24px; line-height: 1.05; max-height: 52px; overflow: hidden; }
 .lc.lc-lastflag .lc-rb-text .flag { transform: scale(.65); margin: 0 2px; }
+
+/* the instant "OUT" alert (with the announcer's voice) */
+.outal { position: absolute; left: 50%; top: 640px; transform: translateX(-50%); z-index: 8; width: 860px; padding: 18px 26px; border-radius: 26px; pointer-events: none;
+  background: linear-gradient(180deg, #ff2d55, #b0102e); border: 4px solid #fff; box-shadow: 0 0 60px rgba(255, 45, 85, .6), 0 14px 30px rgba(0, 0, 0, .6);
+  display: flex; align-items: center; gap: 22px; color: #fff; }
+.outal[hidden] { display: none; }
+.outal.in { animation: outal 3.6s ease forwards; }
+.outal-f { flex: 0 0 auto; border: 3px solid #fff; border-radius: 12px; overflow: hidden; display: block; line-height: 0; }
+.outal b { display: block; font-family: var(--display); font-weight: 700; font-size: 60px; line-height: 1; letter-spacing: 1px; white-space: nowrap; }
+.outal b.mid { font-size: 50px; } .outal b.long { font-size: 38px; }
+.outal small { display: block; font-size: 28px; font-weight: 800; margin-top: 10px; color: #ffe3ea; letter-spacing: 1px; }
+@keyframes outal { 0% { transform: translateX(-50%) scale(.6); opacity: 0; } 8% { transform: translateX(-50%) scale(1.05); opacity: 1; } 14%, 86% { transform: translateX(-50%); opacity: 1; } 100% { transform: translateX(-50%) translateY(-24px); opacity: 0; } }
+
+/* the chat panel: a line that names a country shows name + flag + how far it is (the flag says the country) */
+.lc.lc-lastflag .lc-box .lc-row { gap: 6px; }
+.lc.lc-lastflag .lc-box .lc-row:has(.lc-tag) .lc-t { display: none; }
+.lc.lc-lastflag .lc-box .lc-row b { max-width: 150px; }
+.lc.lc-lastflag .lc-box .lc-row .lc-new { font-size: 12px; padding: 0 5px; border-radius: 6px; }
+.lc.lc-lastflag .lc-box .lc-row .lc-tag { font-size: 16px; padding-right: 4px; }
+.lc.lc-lastflag .lc-box .lc-row > .flag { margin: 0 -4px; }
