@@ -7,6 +7,14 @@
  */
 declare(strict_types=1);
 
+/** Languages the line can come out in (the voice model speaks all of these). */
+const MV_LANGS = [
+    'en' => 'English', 'bn' => 'বাংলা (Bangla)', 'hi' => 'हिन्दी (Hindi)', 'ur' => 'اردو (Urdu)', 'ar' => 'العربية (Arabic)',
+    'es' => 'Español (Spanish)', 'pt' => 'Português (Portuguese)', 'fr' => 'Français (French)', 'de' => 'Deutsch (German)',
+    'tr' => 'Türkçe (Turkish)', 'id' => 'Bahasa Indonesia', 'ru' => 'Русский (Russian)', 'it' => 'Italiano (Italian)',
+    'pl' => 'Polski (Polish)', 'ja' => '日本語 (Japanese)', 'ko' => '한국어 (Korean)', 'zh' => '中文 (Chinese)', 'fil' => 'Filipino',
+];
+
 const MV_MODELS = [
     'eleven_multilingual_v2' => 'Multilingual v2 — best quality (1 credit per letter)',
     'eleven_v3'              => 'Eleven v3 — most expressive',
@@ -26,15 +34,20 @@ function mv_ready(): bool { return mv_key() !== '' && mv_cfg()['voice'] !== ''; 
 
 function mv_history(): array { return json_decode((string) (setting_get('mv_hist') ?? ''), true) ?: []; }
 
-/** Bangla (or mixed) → natural spoken English for a live game stream. English stays as it is. */
-function mv_english(string $text): array
+/** The line in the chosen language (translated with the panel's OpenAI key when needed). */
+function mv_translate(string $text, string $lang = 'en'): array
 {
     $text = trim($text);
-    if (!preg_match('/[\x{0980}-\x{09FF}]/u', $text)) return [true, $text];   // no Bangla letters: already English
-    if (ai_key() === '') return [false, 'To turn Bangla into English, save an OpenAI key in YouTube Manager → AI Replies (or type in English).'];
-    $out = ai_call('You translate Bangla into natural, simple spoken English for a YouTube live game host talking to viewers. '
-        . 'Keep the meaning and the energy. Keep names, numbers and emojis. Answer with the English sentence only — no quotes, no notes.', $text, 400, 20);
-    if ($out === null) return [false, 'The translation did not work (OpenAI). Try again, or type in English.'];
+    $lang = isset(MV_LANGS[$lang]) ? $lang : 'en';
+    $hasBangla = (bool) preg_match('/[\x{0980}-\x{09FF}]/u', $text);
+    if ($lang === 'en' && !$hasBangla && preg_match('/^[\x{0000}-\x{024F}\s\p{P}\p{S}\p{N}]*$/u', $text)) return [true, $text];   // already English
+    if ($lang === 'bn' && $hasBangla) return [true, $text];                                          // already Bangla
+    if (ai_key() === '') return [false, 'To translate, save an OpenAI key in YouTube Manager → AI Replies (or type it in ' . MV_LANGS[$lang] . ').'];
+    $name = preg_replace('/^.*\((.+)\)$/', '$1', MV_LANGS[$lang]);
+    $out = ai_call("You translate into natural, simple spoken {$name} for a YouTube live game host talking to viewers. "
+        . "Keep the meaning and the energy. Keep names, numbers and emojis. If the text is already in {$name}, return it unchanged. "
+        . "Answer with the {$name} sentence only — no quotes, no notes.", $text, 500, 25);
+    if ($out === null) return [false, 'The translation did not work (OpenAI). Try again.'];
     return [true, trim($out, " \t\n\r\"'“”")];
 }
 
@@ -72,13 +85,14 @@ function mv_speak(string $en): array
 }
 
 /** Make one line: translate when needed, then speak. Saved in the history (last 40). */
-function mv_make(string $text, string $en = ''): array
+function mv_make(string $text, string $en = '', string $lang = 'en'): array
 {
     $text = trim(mb_substr($text, 0, 1000));
-    if ($en === '') { [$ok, $en] = mv_english($text); if (!$ok) return ['error' => $en]; }
+    $lang = isset(MV_LANGS[$lang]) ? $lang : 'en';
+    if ($en === '') { [$ok, $en] = mv_translate($text, $lang); if (!$ok) return ['error' => $en]; }
     [$ok, $file] = mv_speak($en);
     if (!$ok) return ['error' => $file, 'en' => $en];
-    $item = ['id' => substr($file, 0, 24), 'ts' => time(), 'text' => $text, 'en' => $en, 'url' => upload_url($file), 'chars' => mb_strlen($en)];
+    $item = ['id' => substr($file, 0, 24), 'ts' => time(), 'text' => $text, 'en' => $en, 'lang' => $lang, 'url' => upload_url($file), 'chars' => mb_strlen($en)];
     $h = array_values(array_filter(mv_history(), fn ($x) => $x['id'] !== $item['id']));
     array_unshift($h, $item);
     setting_set('mv_hist', json_encode(array_slice($h, 0, 40), JSON_UNESCAPED_UNICODE));

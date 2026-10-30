@@ -41,7 +41,7 @@ page_start('My Voice', 'myvoice', $admin);
 .mv .hi { padding: 10px; border-radius: 12px; background: #0f1f38; border: 1px solid var(--line); }
 .mv .hi .bn { font-size: 12.5px; color: #9fb0d6; margin-top: 2px; }
 </style>
-<div class="page-head"><div><h1>🗣 My Voice</h1><p class="muted">Type in Bangla (or English) — it comes out in English in YOUR voice. Download it, or play it on your live.</p></div></div>
+<div class="page-head"><div><h1>🗣 My Voice</h1><p class="muted">Type in Bangla (or any language) — it comes out in the language you choose, in YOUR voice. Download it, or play it on your live.</p></div></div>
 <?= tab_bar('myvoice') ?>
 
 <?php if ($tab === 'make'): ?>
@@ -50,13 +50,14 @@ page_start('My Voice', 'myvoice', $admin);
   <div class="box">
     <h3>① বাংলায় বা ইংরেজিতে লিখুন</h3>
     <textarea id="mv-text" maxlength="1000" placeholder="যেমন: সবাইকে স্বাগতম! চ্যাটে তোমার দেশের নাম লেখো!"></textarea>
+    <label class="field" style="margin-top:10px"><span>কোন ভাষায় বানাবে (Make it in)</span><select id="mv-lang"><?php foreach (MV_LANGS as $k => $l): ?><option value="<?= e($k) ?>"><?= e($l) ?></option><?php endforeach; ?></select></label>
     <div class="row"><button type="button" class="btn btn-blue" id="mv-make">✨ Make my voice</button></div>
     <p class="meta" id="mv-msg"></p>
   </div>
   <div class="box" id="mv-res" hidden>
-    <h3>② আপনার কণ্ঠে ইংরেজি</h3>
+    <h3>② আপনার কণ্ঠে (<span id="mv-lname">English</span>)</h3>
     <textarea id="mv-en" maxlength="1000" style="min-height:60px"></textarea>
-    <p class="meta">Not right? Fix the English above and press “Make again” (it uses credits again).</p>
+    <p class="meta">Not right? Fix the words above and press “Make again” (it uses credits again).</p>
     <audio id="mv-audio" controls></audio>
     <div class="row">
       <a class="btn btn-ghost" id="mv-dl" download>💾 Download</a>
@@ -77,7 +78,7 @@ page_start('My Voice', 'myvoice', $admin);
       <audio controls preload="none" src="<?= e($x['url']) ?>"></audio>
       <div class="row"><a class="btn btn-ghost btn-sm" href="<?= e($x['url']) ?>" download="my-voice-<?= e(date('Ymd-His', (int) $x['ts'])) ?>.mp3">💾 Download</a>
         <button type="button" class="btn btn-green btn-sm" data-live="<?= e($x['id']) ?>">📡 Play on live</button></div>
-      <div class="meta"><?= e(date('d M H:i', (int) $x['ts'])) ?> · <?= (int) $x['chars'] ?> letters</div>
+      <div class="meta"><?= e(date('d M H:i', (int) $x['ts'])) ?> · <?= e(MV_LANGS[$x['lang'] ?? 'en'] ?? 'English') ?> · <?= (int) $x['chars'] ?> letters</div>
     </div>
   <?php endforeach; ?>
   </div>
@@ -114,21 +115,25 @@ page_start('My Voice', 'myvoice', $admin);
   document.querySelectorAll('[data-live]').forEach((b) => b.addEventListener('click', () => live(b.dataset.live, b)));
   const make = document.getElementById('mv-make'); if (!make) return;
   const msg = document.getElementById('mv-msg'), res = document.getElementById('mv-res'), en = document.getElementById('mv-en');
+  const lang = document.getElementById('mv-lang');
+  try { const l = localStorage.getItem('fft_mv_lang'); if (l && [...lang.options].some((o) => o.value === l)) lang.value = l; } catch (e) { /* ignore */ }
+  lang.addEventListener('change', () => { try { localStorage.setItem('fft_mv_lang', lang.value); } catch (e) { /* ignore */ } });
+  const lname = () => lang.options[lang.selectedIndex].textContent;
   let cur = null;
   const run = async (body, btn) => {
     btn.disabled = true; msg.textContent = '⏳ Making your voice… (5–15 s)';
     const j = await api(body);
     btn.disabled = false;
     if (j.error) { msg.textContent = '⚠️ ' + j.error; if (j.en) { en.value = j.en; res.hidden = false; } return; }
-    cur = j.item; msg.textContent = '';
+    cur = j.item; msg.textContent = ''; document.getElementById('mv-lname').textContent = lname();
     res.hidden = false; en.value = cur.en;
     const a = document.getElementById('mv-audio'); a.src = cur.url; a.play().catch(() => {});
     const dl = document.getElementById('mv-dl'); dl.href = cur.url; dl.download = 'my-voice-' + new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '') + '.mp3';
     document.getElementById('mv-info').textContent = `${cur.chars} letters · about ${cur.chars} credits (less with Flash)`;
     res.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-  make.addEventListener('click', () => { const t = document.getElementById('mv-text').value.trim(); if (!t) { msg.textContent = 'Write something first.'; return; } run({ do: 'make', text: t }, make); });
-  document.getElementById('mv-again').addEventListener('click', (e) => run({ do: 'make', text: document.getElementById('mv-text').value.trim(), en: en.value.trim() }, e.target));
+  make.addEventListener('click', () => { const t = document.getElementById('mv-text').value.trim(); if (!t) { msg.textContent = 'Write something first.'; return; } run({ do: 'make', text: t, lang: lang.value }, make); });
+  document.getElementById('mv-again').addEventListener('click', (e) => run({ do: 'make', text: document.getElementById('mv-text').value.trim(), en: en.value.trim(), lang: lang.value }, e.target));
   document.getElementById('mv-live').addEventListener('click', (e) => { if (cur) live(cur.id, e.target); });
 })();
 </script>

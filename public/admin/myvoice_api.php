@@ -15,7 +15,7 @@ if ($do === 'make') {
     $text = trim((string) ($in['text'] ?? ''));
     $en = trim(mb_substr((string) ($in['en'] ?? ''), 0, 1000));
     if ($text === '' && $en === '') $out(['error' => 'Write something first.']);
-    $out(mv_make($text !== '' ? $text : $en, $en));
+    $out(mv_make($text !== '' ? $text : $en, $en, (string) ($in['lang'] ?? 'en')));
 }
 if ($do === 'live') $out(mv_play_live((string) ($in['id'] ?? '')) ? ['ok' => true] : ['error' => 'Not found — make it again.']);
 $out(['error' => 'Unknown request.'], 400);
