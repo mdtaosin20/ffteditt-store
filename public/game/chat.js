@@ -461,6 +461,17 @@ export function liveChat(o) {
     setTimeout(pollLocal, wait);
   };
 
+  // Admin → My Voice → "Play on live": the owner's line in his own voice, once (the host talks quietly meanwhile)
+  let ownerLast = ''; try { ownerLast = localStorage.getItem('fft_ov') || ''; } catch (e) { /* ignore */ }
+  const playOwner = (ov) => {
+    if (ov.id === ownerLast) return;
+    ownerLast = ov.id; try { localStorage.setItem('fft_ov', ov.id); } catch (e) { /* ignore */ }
+    const a = new Audio(ov.url); a.volume = 1;
+    o.duck && o.duck(true); hush(20000);
+    const end = () => { o.duck && o.duck(false); hush(0); };
+    a.onended = end; a.onerror = end;
+    a.play().catch(end);
+  };
   let after = 0, failures = 0;
   const poll = async () => {
     let wait = 500;
@@ -474,6 +485,7 @@ export function liveChat(o) {
         if (!cfg.enabled) wait = 20000;
         else if (localOk) wait = 2500;   // chat already comes from the worker; the panel adds subscribers and stats
         if (j.stats) o.onStats?.(j.stats);
+        if (j.ov && j.ov.id) playOwner(j.ov);
         for (const ev of j.events || []) if (fresh(ev)) handle(ev);
         after = j.last || after || -1;   // -1: the first look is done (an empty chat: the next message is new, not old)
         failures = 0;

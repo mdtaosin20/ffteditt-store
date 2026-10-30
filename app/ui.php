@@ -87,6 +87,7 @@ function nav_items(): array
     return [
         'dashboard' => ['Dashboard',           'dashboard.php', 'home'],
         'assistant' => ['Ask Claude',          'assistant.php', 'spark'],
+        'myvoice'   => ['My Voice',            'myvoice.php',   'mic'],
         'servers'   => ['VPS Monitor',         'servers.php',   'server'],
         'games'     => ['Game Manager',        'games.php',     'gamepad'],
         'streams'   => ['Live Stream Manager', 'streams.php',   'live'],
@@ -119,6 +120,7 @@ function page_tabs(): array
         'poll'     => ['polls' => ['📊', 'Polls'], 'message' => ['💬', 'Chat Message']],
         'insights' => ['why' => ['💡', 'Why Growing'], 'lives' => ['📺', 'Each Live'], 'countries' => ['🌍', 'Countries'],
                        'titles' => ['🖼', 'Best Title'], 'report' => ['📝', 'Report']],
+        'myvoice'   => ['make' => ['🎙', 'Make'], 'history' => ['📜', 'History'], 'settings' => ['⚙️', 'Settings']],
         'assistant' => ['chat' => ['💬', 'Chat'], 'log' => ['📜', 'What Claude did'], 'settings' => ['⚙️', 'Settings']],
         'settings' => ['vps' => ['🖥', 'VPS Info'], 'fingerprint' => ['🔐', 'Fingerprint'], 'login' => ['👤', 'Login']],
     ];

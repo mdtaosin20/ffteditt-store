@@ -166,6 +166,7 @@ function chat_feed(int $sid, int $after): array
         'enabled' => $cfg['enabled'], 'robot' => $cfg['robot'], 'voice' => $cfg['robot'] && $cfg['voice'], 'name' => $cfg['robot_name'], 'look' => $cfg['look'],
         'box' => $cfg['box'], 'subs' => $cfg['subs'], 'idle' => $cfg['idle'], 'ai' => ai_ready(),
     ], 'events' => [], 'last' => $after];
+    if ($ov = mv_live_now()) $out['ov'] = $ov;   // Admin → My Voice → Play on live
     if (!$cfg['enabled']) return $out;
     if ($after === 0) {   // the page's first look: the last few messages, shown as old (no welcome / no gifts for them)
         $st = db()->prepare('SELECT * FROM chat_events WHERE stream_id = ? AND kind = \'chat\' ORDER BY id DESC LIMIT 4');

@@ -3,7 +3,7 @@
 // itself: 6 groups → quarterfinals → semifinals → final → champion, then a new tournament.
 // Typing a country in the live chat gives it more shots. Made for 24/7 vertical live streams with LUNA as host.
 import { Sfx, holdScreen, PACE, freshRun } from '/game/audio.js?v=13';
-import { liveChat, countryMatcher } from '/game/chat.js?v=28';
+import { liveChat, countryMatcher } from '/game/chat.js?v=29';
 import { goLive } from '/game/golive.js?v=2';
 import { autoUpdate } from '/game/update.js?v=1';
 
