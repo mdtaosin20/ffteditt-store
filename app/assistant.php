@@ -68,7 +68,8 @@ function as_tools(): array
 {
     $id = ['type' => 'integer', 'description' => 'Stream id (from panel_overview)'];
     $why = ['type' => 'string', 'description' => 'One short sentence IN BANGLA: why this helps (shown to the owner on the Yes/No card)'];
-    $obj = fn (array $props, array $req) => ['type' => 'object', 'properties' => $props, 'required' => $req];
+    // an empty list must be sent as {} (JSON object), not [] — the API rejects []
+    $obj = fn (array $props, array $req) => ['type' => 'object', 'properties' => $props ?: new stdClass()] + ($req ? ['required' => $req] : []);
     return [
         ['name' => 'panel_overview', 'description' => 'Everything at once, right now: every VPS (online, CPU, RAM, worker version), every stream (game, LIVE or not, speed, errors, YouTube state, live chat reader state, Auto Fix state), panel switches, YouTube daily units. Call this first.', 'input_schema' => $obj([], [])],
         ['name' => 'activity_log', 'description' => 'The panel log / bell alerts, newest first (Auto Fix actions, errors, starts/stops, YouTube messages).', 'input_schema' => $obj(['limit' => ['type' => 'integer', 'description' => '1-120, default 40'], 'problems_only' => ['type' => 'boolean']], [])],
@@ -256,6 +257,9 @@ function as_system(): string
 function as_call(array $msgs): array
 {
     $c = as_cfg();
+    // saved conversations come back from JSON as arrays: a tool call without inputs must go out as {} again
+    foreach ($msgs as &$m) if (is_array($m['content'])) foreach ($m['content'] as &$b) if (($b['type'] ?? '') === 'tool_use' && empty($b['input'])) $b['input'] = new stdClass();
+    unset($m, $b);
     $body = json_encode(['model' => $c['model'], 'max_tokens' => 1800, 'system' => as_system(), 'tools' => as_tools(), 'messages' => $msgs], JSON_UNESCAPED_UNICODE);
     $ch = curl_init(defined('AS_API_URL') ? AS_API_URL : 'https://api.anthropic.com/v1/messages');   // AS_API_URL: only for local tests
     curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 100, CURLOPT_CONNECTTIMEOUT => 10,
