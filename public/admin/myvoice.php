@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'custom_model' => preg_replace('/[^a-z0-9_.\-]/', '', strtolower(trim((string) ($_POST['custom_model'] ?? '')))) ?? '',
             'stability'    => max(0, min(100, (int) ($_POST['stability'] ?? 50))),
             'similarity'   => max(0, min(100, (int) ($_POST['similarity'] ?? 80))),
-            'style'        => max(0, min(100, (int) ($_POST['style'] ?? 20))),
+            'style'        => max(0, min(100, (int) ($_POST['style'] ?? 0))),
             'natural'      => isset($_POST['natural']),
             'mood'         => in_array($_POST['mood'] ?? '', ['', 'excited', 'happy', 'calm', 'surprised'], true) ? $_POST['mood'] : '',
         ]);
@@ -101,10 +101,10 @@ page_start('My Voice', 'myvoice', $admin);
       <label class="field"><span>Voice ID</span><input name="voice" autocomplete="off" spellcheck="false" value="<?= e($c['voice']) ?>" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM"></label>
       <label class="field"><span>Model</span><select name="model"><?php foreach (MV_MODELS as $k => $l): ?><option value="<?= e($k) ?>" <?= $c['model'] === $k ? 'selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select></label>
       <label class="field"><span>Other model name (optional, e.g. a newer one from ElevenLabs)</span><input name="custom_model" value="<?= e($c['custom_model']) ?>" placeholder="leave empty to use the one above"></label>
-      <label class="field"><span>Stability: <b id="st-v"><?= (int) $c['stability'] ?></b> (left = more emotion, right = steadier)</span><input type="range" name="stability" min="0" max="100" value="<?= (int) $c['stability'] ?>" oninput="document.getElementById('st-v').textContent=this.value"></label>
+      <label class="field"><span>Stability: <b id="st-v"><?= (int) $c['stability'] ?></b> (best 50–65 · below 40 the voice can stutter)</span><input type="range" name="stability" min="0" max="100" value="<?= (int) $c['stability'] ?>" oninput="document.getElementById('st-v').textContent=this.value"></label>
       <label class="field"><span>Similarity: <b id="si-v"><?= (int) $c['similarity'] ?></b> (right = closer to your voice)</span><input type="range" name="similarity" min="0" max="100" value="<?= (int) $c['similarity'] ?>" oninput="document.getElementById('si-v').textContent=this.value"></label>
     </div>
-      <label class="field"><span>Style / emotion: <b id="sy-v"><?= (int) $c['style'] ?></b> (right = more energy and feeling)</span><input type="range" name="style" min="0" max="100" value="<?= (int) $c['style'] ?>" oninput="document.getElementById('sy-v').textContent=this.value"></label>
+      <label class="field"><span>Style / emotion: <b id="sy-v"><?= (int) $c['style'] ?></b> (keep 0 — higher can make the voice stutter)</span><input type="range" name="style" min="0" max="100" value="<?= (int) $c['style'] ?>" oninput="document.getElementById('sy-v').textContent=this.value"></label>
       <label class="field"><span>Mood (works with the Eleven v3 model)</span><select name="mood">
         <?php foreach (['' => 'Normal', 'excited' => 'Excited 🔥', 'happy' => 'Happy 😄', 'calm' => 'Calm 😌', 'surprised' => 'Surprised 😮'] as $k => $l): ?><option value="<?= e($k) ?>" <?= $c['mood'] === $k ? 'selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select></label>
     </div>

@@ -24,8 +24,10 @@ const MV_MODELS = [
 function mv_cfg(): array
 {
     $d = ['voice' => '', 'model' => 'eleven_multilingual_v2', 'custom_model' => '', 'stability' => 50, 'similarity' => 80,
-          'style' => 20, 'natural' => true, 'mood' => ''];
+          'style' => 0, 'natural' => true, 'mood' => '', 'v' => 2];
     $c = json_decode((string) (setting_get('mv_cfg') ?? ''), true);
+    // older settings: a style above 0 made the voice choppy (stutter), so it goes back to 0 once
+    if (is_array($c) && (int) ($c['v'] ?? 1) < 2) { $c['style'] = 0; $c['v'] = 2; }
     return array_merge($d, is_array($c) ? array_intersect_key($c, $d) : []);
 }
 function mv_save_cfg(array $c): void { setting_set('mv_cfg', json_encode(array_merge(mv_cfg(), $c))); }
@@ -61,8 +63,9 @@ function mv_speak(string $en): array
     $model = mv_model();
     // 🎲 Natural: every line a little different (like a person, not one flat tone) — steadiness and emotion move a bit each time
     $st = (int) $c['stability']; $sy = (int) $c['style']; $nonce = '';
-    if (!empty($c['natural'])) { $st += random_int(-15, 10); $sy += random_int(-10, 15); $nonce = bin2hex(random_bytes(4)); }
-    $settings = ['stability' => max(0, min(100, $st)) / 100, 'similarity_boost' => max(0, min(100, (int) $c['similarity'])) / 100,
+    // (only small moves: a low steadiness or a high style makes a cloned voice stutter)
+    if (!empty($c['natural'])) { $st += random_int(-3, 6); $nonce = bin2hex(random_bytes(4)); }
+    $settings = ['stability' => max(40, min(100, $st)) / 100, 'similarity_boost' => max(0, min(100, (int) $c['similarity'])) / 100,
                  'style' => max(0, min(100, $sy)) / 100, 'use_speaker_boost' => true];
     // a mood is said with an audio tag; only the v3 model understands these
     if ($c['mood'] !== '' && str_starts_with($model, 'eleven_v3')) $en = '[' . $c['mood'] . '] ' . $en;
