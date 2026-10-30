@@ -29,7 +29,8 @@
 <div class="menu" id="menu">
   <div class="card">
     <h1>⚽ CUP KICK</h1>
-    <p class="muted">Pick 6 countries and press START. Then record your screen. Tap the screen any time for this menu.</p>
+    <p class="muted">Pick the countries and press START. Then record your screen. Tap the screen any time for this menu.</p>
+    <label class="row"><span>How many players</span><select id="np"><option value="6">6 players</option><option value="5">5 players</option><option value="4">4 players</option><option value="3">3 players</option><option value="2">2 players</option></select></label>
     <div class="teams" id="teams"></div>
     <label class="row"><span>Whose ball touches the cup?</span><select id="win"></select></label>
     <div class="ctl">
@@ -90,6 +91,6 @@
   </div>
 </div>
 <script type="importmap">{ "imports": { "three": "/game/vendor/three.module.js" } }</script>
-<script type="module" src="/cupkick/cupkick.js?v=30"></script>
+<script type="module" src="/cupkick/cupkick.js?v=31"></script>
 </body>
 </html>

@@ -15,8 +15,9 @@ const CLOSE = new URLSearchParams(location.search).has('closeup');
 let R = 0.45;   // ball size (menu → CONTROL → Ball size): 0.38 = small, 0.45 = a little bigger, 0.52 = big
 const CUP = { x: 0, z: -1.5, r: 0.32 }, PZ = -19;
 let PS = 1;   // player size (menu → CONTROL): 1 = normal, 1.4 = bigger, 1.7 = biggest; bigger players stand further apart
-const PX = (i) => (i - 2.5) * (1.58 * PS + 0.2);   // a player is 1.58 wide (with arms): keep a small gap so they never touch
-const WALL = () => Math.max(6.2, PX(5) + 0.9);   // the side lines the balls bounce off
+let NP = 6;   // how many players (menu: 2 … 6)
+const PX = (i) => (i - (NP - 1) / 2) * (1.58 * PS + 0.2);   // a player is 1.58 wide (with arms): keep a small gap so they never touch
+const WALL = () => Math.max(6.2, PX(NP - 1) + 0.9);   // the side lines the balls bounce off
 const SLOW = 1;                         // speed of the moment the cup is touched (1 = no slow motion)
 const KITS = {   // known shirts; other countries get colours from their flag
   fr: ['#1e3a8a', '#ffffff', '#ffffff', '#b91c1c'], br: ['#facc15', '#16a34a', '#1d4ed8', '#ffffff'], tr: ['#e30a17', '#ffffff', '#ffffff', '#e30a17'],
@@ -141,13 +142,13 @@ function findPlay(n, want, o = PLAY) {
           const sd = Math.sign(A[st * 3] - C[st * 3]); if (side && sd && sd !== side) { swaps++; if (a === w.id || c === w.id) mine++; } if (sd) side = sd;
         }
       }
-      if (swaps < o.mess + 1 || (o.mess > 1 && mine < 1) || (o.mess > 2 && mine < 2)) continue;
+      if (swaps < Math.min(o.mess + 1, p.balls.length - 1) || (o.mess > 1 && mine < 1) || (o.mess > 2 && mine < 2)) continue;
     }
     // Very hard: a crowd of balls at the cup when it is hit, and a moment before, another ball looks like the one that will hit it
     if (o.mess > 2 && easy < 2) {
       const at = (k, tt) => { const st = Math.max(0, Math.floor(tt / DT)); return Math.hypot(p.track[k][st * 3] - CUP.x, p.track[k][st * 3 + 2] - CUP.z); };
       let crowd = 0; for (let k = 0; k < p.balls.length; k++) if (k !== w.id && p.balls[k].t < T && at(k, T) < 2.0) crowd++;
-      if (crowd < 2) continue;
+      if (crowd < Math.min(2, p.balls.length - 2)) continue;   // (with few players there are fewer balls to crowd the cup)
       let decoy = false; for (let k = 0; k < p.balls.length; k++) if (k !== w.id && p.balls[k].t < T - 0.7 && at(k, T - 0.7) < at(w.id, T - 0.7)) decoy = true;
       if (!decoy) continue;
     }
@@ -699,7 +700,7 @@ async function main() {
     const size = sharp ? 4096 : 2048;
     if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
   };
-  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, bcol: $('bcol').value, quality: $('quality').value, grass: $('grass3d').checked, chan: $('chan').value, kvol: Number($('kvol').value), tstyle: $('tstyle').value });
+  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, np: Number($('np').value) || 6, ball: Number($('ball').value) || 0.45, place: $('place').value, bcol: $('bcol').value, quality: $('quality').value, grass: $('grass3d').checked, chan: $('chan').value, kvol: Number($('kvol').value), tstyle: $('tstyle').value });
   const showCtl = () => {
     const sp = Number($('speed').value);
     $('speedV').textContent = (sp < 0.95 ? 'Slow' : sp > 1.05 ? 'Fast' : 'Normal') + ` (${sp.toFixed(1)}×)`;
@@ -709,7 +710,7 @@ async function main() {
   $('bcol').innerHTML = Object.entries(BALL_GROUPS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('') + '<option value="rand">🎲 New colours every START (unlimited)</option>';
   try {
     const c = JSON.parse(localStorage.getItem('fft_cupkick_ctl') || 'null');
-    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && (THEMES[c.place] || c.place === 'rand')) $('place').value = c.place; if (c.bcol && (BALL_GROUPS[c.bcol] || c.bcol === 'rand')) $('bcol').value = c.bcol; if (c.quality) $('quality').value = c.quality; if (typeof c.grass === 'boolean') $('grass3d').checked = c.grass; if (typeof c.chan === 'string') $('chan').value = c.chan; if (typeof c.kvol === 'number' && c.kvol >= 0 && c.kvol <= 3) $('kvol').value = String(c.kvol); if (c.tstyle && [...$('tstyle').options].some((o) => o.value === c.tstyle)) $('tstyle').value = c.tstyle; }
+    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.np >= 2 && c.np <= 6) $('np').value = String(c.np); if (c.ball) $('ball').value = String(c.ball); if (c.place && (THEMES[c.place] || c.place === 'rand')) $('place').value = c.place; if (c.bcol && (BALL_GROUPS[c.bcol] || c.bcol === 'rand')) $('bcol').value = c.bcol; if (c.quality) $('quality').value = c.quality; if (typeof c.grass === 'boolean') $('grass3d').checked = c.grass; if (typeof c.chan === 'string') $('chan').value = c.chan; if (typeof c.kvol === 'number' && c.kvol >= 0 && c.kvol <= 3) $('kvol').value = String(c.kvol); if (c.tstyle && [...$('tstyle').options].some((o) => o.value === c.tstyle)) $('tstyle').value = c.tstyle; }
   } catch (e) { /* ignore */ }
   const setBall = (r) => { if (r === R) return; R = r; ballGeo.dispose(); ballGeo = new THREE.SphereGeometry(R, 40, 28); play = null; ballGroup.clear(); };
   // the channel name: redraw the grass and the LED board with it
@@ -745,15 +746,23 @@ async function main() {
   $('place').addEventListener('change', () => { themeNow = ctl().place; if (themeNow === 'rand') randTh = genStadium(newSeed()); applyTheme(themeNow); lookInfo(); });
   $('chan').addEventListener('change', () => setChannel(ctl().chan));
   $('quality').addEventListener('change', () => setQuality(ctl().quality));
-  $('size').addEventListener('change', () => { PS = ctl().size; play = null; ballGroup.clear(); buildTeams(selects.map((x) => x.value)); });   // see the new size at once
+  $('size').addEventListener('change', () => { PS = ctl().size; play = null; ballGroup.clear(); buildTeams(selects.slice(0, NP).map((x) => x.value)); });   // see the new size at once
   setStyle(ctl().tstyle); setWords($('t1').value, $('t2').value, false);
   $('tstyle').addEventListener('change', () => { setStyle(ctl().tstyle); setWords($('t1').value, $('t2').value, false); });
   $('kvol').addEventListener('change', () => { if (!$('snd').checked) return; snd.on = true; snd.start(); snd.kick(); });   // hear the new loudness at once
-  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality', 'chan', 'kvol', 'tstyle', 'bcol', 'grass3d'].forEach((id) => $(id).addEventListener('input', () => {
+  ['speed', 'within', 'mess', 'size', 'np', 'ball', 'place', 'quality', 'chan', 'kvol', 'tstyle', 'bcol', 'grass3d'].forEach((id) => $(id).addEventListener('input', () => {
     showCtl(); try { localStorage.setItem('fft_cupkick_ctl', JSON.stringify(ctl())); } catch (e) { /* ignore */ }
   }));
-  const fillWin = () => { const v = winEl.value; winEl.innerHTML = '<option value="-1">🎲 Random</option>' + selects.map((s, i) => `<option value="${i}">${NAME(s.value)}</option>`).join(''); winEl.value = [...winEl.options].some((o) => o.value === v) ? v : '-1'; };
+  const fillWin = () => { const v = winEl.value; winEl.innerHTML = '<option value="-1">🎲 Random</option>' + selects.slice(0, NP).map((s, i) => `<option value="${i}">${NAME(s.value)}</option>`).join(''); winEl.value = [...winEl.options].some((o) => o.value === v) ? v : '-1'; };
   fillWin();
+  // 👥 how many players: the boxes for the others are hidden, the line-up is built again at once
+  const setNP = () => {
+    NP = Math.max(2, Math.min(6, Number($('np').value) || 6));
+    selects.forEach((s, i) => { s.closest('label').hidden = i >= NP; });
+    fillWin(); play = null; ballGroup.clear(); buildTeams(selects.slice(0, NP).map((x) => x.value));
+  };
+  $('np').addEventListener('change', setNP);
+  setNP();
   $('shuffle').addEventListener('click', () => {
     const pool = sorted.slice(0, 40).sort(() => Math.random() - 0.5), pick = [];
     for (const c of pool) { if (pick.length >= 6) break; if (!pick.includes(c)) pick.push(c); }
@@ -769,9 +778,9 @@ async function main() {
     onOpenMenu: () => { menu.hidden = false; },
   });
   $('go').addEventListener('click', () => {
-    const codes = selects.map((s) => s.value);
-    if (new Set(codes).size !== codes.length) { $('answer').textContent = '⚠️ Pick 6 different countries.'; return; }
-    try { localStorage.setItem('fft_cupkick', JSON.stringify(codes)); } catch (e) { /* ignore */ }
+    const codes = selects.slice(0, NP).map((s) => s.value);
+    if (new Set(codes).size !== codes.length) { $('answer').textContent = `⚠️ Pick ${NP} different countries.`; return; }
+    try { localStorage.setItem('fft_cupkick', JSON.stringify(selects.map((s) => s.value))); } catch (e) { /* ignore */ }
     snd.on = $('snd').checked; snd.start();
     newLook();   // 🎲 a new stadium / new ball colours when chosen
     if (!prepare(codes, Number(winEl.value))) { $('answer').textContent = 'Could not make a play — press START again.'; return; }
