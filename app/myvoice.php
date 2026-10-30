@@ -24,10 +24,11 @@ const MV_MODELS = [
 function mv_cfg(): array
 {
     $d = ['voice' => '', 'model' => 'eleven_multilingual_v2', 'custom_model' => '', 'stability' => 50, 'similarity' => 80,
-          'style' => 0, 'natural' => true, 'mood' => '', 'v' => 2];
+          'style' => 0, 'natural' => false, 'mood' => '', 'v' => 3];
     $c = json_decode((string) (setting_get('mv_cfg') ?? ''), true);
     // older settings: a style above 0 made the voice choppy (stutter), so it goes back to 0 once
-    if (is_array($c) && (int) ($c['v'] ?? 1) < 2) { $c['style'] = 0; $c['v'] = 2; }
+    // back to the first sound the owner liked: no Style, no Natural changes, no mood (once, for older saved settings)
+    if (is_array($c) && (int) ($c['v'] ?? 1) < 3) { $c['style'] = 0; $c['natural'] = false; $c['mood'] = ''; $c['v'] = 3; }
     return array_merge($d, is_array($c) ? array_intersect_key($c, $d) : []);
 }
 function mv_save_cfg(array $c): void { setting_set('mv_cfg', json_encode(array_merge(mv_cfg(), $c))); }
@@ -65,11 +66,11 @@ function mv_speak(string $en): array
     $st = (int) $c['stability']; $sy = (int) $c['style']; $nonce = '';
     // (only small moves: a low steadiness or a high style makes a cloned voice stutter)
     if (!empty($c['natural'])) { $st += random_int(-3, 6); $nonce = bin2hex(random_bytes(4)); }
-    $settings = ['stability' => max(40, min(100, $st)) / 100, 'similarity_boost' => max(0, min(100, (int) $c['similarity'])) / 100,
-                 'style' => max(0, min(100, $sy)) / 100, 'use_speaker_boost' => true];
+    $settings = ['stability' => max(0, min(100, $st)) / 100, 'similarity_boost' => max(0, min(100, (int) $c['similarity'])) / 100];
+    if ($sy > 0) $settings['style'] = min(100, $sy) / 100;   // only when chosen (the first, liked sound had none)
     // a mood is said with an audio tag; only the v3 model understands these
     if ($c['mood'] !== '' && str_starts_with($model, 'eleven_v3')) $en = '[' . $c['mood'] . '] ' . $en;
-    $h = substr(hash('sha256', 'mv1|' . $c['voice'] . '|' . $model . '|' . json_encode($settings) . '|' . $nonce . '|' . $en), 0, 24);
+    $h = substr(hash('sha256', 'mv1|' . $c['voice'] . '|' . $model . '|' . json_encode($settings) . ($nonce !== '' ? '|' . $nonce : '') . '|' . $en), 0, 24);
     $file = $h . '.mp3';
     if (is_file(upload_dir() . '/' . $file)) return [true, $file];   // the same line again: no new credits
     $ch = curl_init((defined('MV_API_BASE') ? MV_API_BASE : 'https://api.elevenlabs.io') . '/v1/text-to-speech/' . rawurlencode($c['voice']) . '?output_format=mp3_44100_128');
