@@ -26,7 +26,10 @@ if ($do === 'send') {
     if ($text === '') $out(as_view($st));
     if (!as_cfg()['on'] || as_key() === '') $out(['error' => 'Add your Anthropic API key in Settings first.'] + as_view($st));
     if ($st['pending']) $out(['error' => 'First press Yes or No on the card.'] + as_view($st));
-    $st['msgs'][] = ['role' => 'user', 'content' => $text];
+    // the last question got no answer (error): put the new words with it instead of two questions in a row
+    $last = end($st['msgs']);
+    if ($last && $last['role'] === 'user' && is_string($last['content'])) $st['msgs'][count($st['msgs']) - 1]['content'] .= "\n" . $text;
+    else $st['msgs'][] = ['role' => 'user', 'content' => $text];
     as_run($st);
     as_store($st);
 } elseif ($do === 'answer') {

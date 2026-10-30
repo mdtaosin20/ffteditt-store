@@ -13,8 +13,12 @@
     .replace(/\n/g, '<br>').replace(/<\/span><br>/g, '</span>');
   let busy = false;
   const api = async (body) => {
-    const r = await fetch('assistant_api.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF': root.dataset.csrf }, body: JSON.stringify(body) });
-    return r.json().catch(() => ({ error: 'The panel did not answer — try again.' }));
+    try {
+      const r = await fetch('assistant_api.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF': root.dataset.csrf }, body: JSON.stringify(body) });
+      return await r.json();
+    } catch (e) {   // the internet dropped, or the answer took too long: never leave the box locked
+      return { error: 'উত্তর আসেনি (ইন্টারনেট বা সময় শেষ)। একটু পরে আবার পাঠান।' };
+    }
   };
   const render = (j, thinking) => {
     const items = j.items || [];
@@ -36,7 +40,9 @@
     chat.innerHTML = h;
     if (j.usd !== undefined && usd) usd.textContent = '$' + Number(j.usd).toFixed(2);
     const waiting = !!j.waiting;
-    text.disabled = send.disabled = busy || waiting;
+    // the box is never locked: you can always type; only Send waits while Claude answers or a card waits for Yes / No
+    text.disabled = false;
+    send.disabled = busy || waiting;
     text.placeholder = waiting ? 'আগে উপরের কার্ডে হ্যাঁ বা না চাপুন' : 'সমস্যাটা লিখুন…';
     chat.scrollTop = chat.scrollHeight;
     window.scrollTo(0, document.body.scrollHeight);
@@ -50,11 +56,12 @@
     const j = await api(body);
     busy = false;
     last = j.items ? j : { ...last, error: j.error || 'Something went wrong.' };
+    if (!j.items) setTimeout(() => api({ do: 'view' }).then((v) => { if (v.items && !busy) { last = v; render(last, false); } }), 4000);   // fetch what really happened
     render(last, false);
   };
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    const t = text.value.trim(); if (!t) return;
+    const t = text.value.trim(); if (!t || busy || last.waiting) return;
     text.value = '';
     go({ do: 'send', text: t }, { k: 'me', t });
   });

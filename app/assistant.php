@@ -37,7 +37,12 @@ function as_use(): array
 function as_state(): array
 {
     $s = json_decode((string) (setting_get('as_conv') ?? ''), true);
-    return is_array($s) ? $s + ['msgs' => [], 'pending' => null, 'error' => ''] : ['msgs' => [], 'pending' => null, 'error' => ''];
+    $s = is_array($s) ? $s + ['msgs' => [], 'pending' => null, 'error' => ''] : ['msgs' => [], 'pending' => null, 'error' => ''];
+    // an answer that broke half way (error, timeout) can leave a tool call without its result: drop it
+    $last = end($s['msgs']);
+    if (!$s['pending'] && $last && $last['role'] === 'assistant' && is_array($last['content'])
+        && array_filter($last['content'], fn ($b) => ($b['type'] ?? '') === 'tool_use')) array_pop($s['msgs']);
+    return $s;
 }
 function as_store(array $s): void
 {
