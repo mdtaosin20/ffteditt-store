@@ -6,6 +6,7 @@ import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
 import { setupRecorder } from '/game/recorder.js?v=3';
 import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=2';
 import { genStadium, genBall, newSeed, BALL_GROUPS } from '/game/variety.js?v=1';
+import { makeGrass } from '/game/grass.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
@@ -254,6 +255,16 @@ async function main() {
   const fieldTex = groundTex('#2f8f34', '#287d2d', 'rgba(255,255,255,.9)');
   const field = new THREE.Mesh(new THREE.PlaneGeometry(40, 46), new THREE.MeshStandardMaterial({ map: fieldTex, roughness: 1 }));
   field.rotation.x = -Math.PI / 2; field.position.z = -8; field.receiveShadow = true; scene.add(field);
+// 🌱 3D grass blades on the field — only when "3D grass" is on in the menu (made the first time it is turned on).
+  // The white lines stay free: the half-way line and the big circle.
+  let grass = null, grassOn = false, lastTh = null;
+  const paintGrass = () => {
+    if (grassOn && !grass) grass = makeGrass({ scene, count: 55000, field: { z0: -31, depth: 46, stripes: 16 }, lines: (x, z) => {
+      if (z > -17.75 && z < -17.0) return true;   // (a little more space on the camera side, so the blades do not hide the line)
+      const d = Math.hypot(x / 11.72, (z - 0.45) / 13.48); return Math.abs(d - 1) < 0.03;
+    } });
+    if (grass && lastTh) grass.paint(lastTh.ground[0], lastTh.ground[1], grassOn && !['beach', 'street', 'snow'].includes(lastTh.extra));   // no blades on sand, snow or the street
+  };
   const standMat = new THREE.MeshStandardMaterial({ color: '#3a4050', roughness: 0.9 });
   const crowdCols = ['#f5c518', '#2563eb', '#e11d48', '#f8fafc', '#16a34a', '#f97316'];
   const stadium = new THREE.Group(); scene.add(stadium);   // stands, crowd, roof and lights (hidden on the beach and in the street)
@@ -343,6 +354,7 @@ async function main() {
     if (th.stand) standMat.color.set(th.stand);
     if (th.roof) roof.material.color.set(th.roof);
     if (th.extra) props[th.extra]();
+    lastTh = th; paintGrass();
     const cc = th.crowd || crowdCols;   // the crowd's shirt colours
     for (let k = 0; k < ci; k++) crowd.setColorAt(k, col.set(cc[crowdSlot[k]]));
     if (crowd.instanceColor) crowd.instanceColor.needsUpdate = true;
@@ -680,6 +692,7 @@ async function main() {
       const x = (0.5 + 0.32 * Math.sin(u * 0.23)) * W - el.offsetWidth / 2, y = (0.52 + 0.3 * Math.sin(u * 0.17 + 1.3)) * H;
       el.style.transform = `translate(${x}px, ${y}px) rotate(-8deg)`; wmX = x; wmY = y;
     }
+    if (grass) grass.tick(now / 1000);
     renderer.render(scene, camera);
     rec.frame();
   };
@@ -706,7 +719,7 @@ async function main() {
     const size = sharp ? 4096 : 2048;
     if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
   };
-  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, bcol: $('bcol').value, quality: $('quality').value, chan: $('chan').value, kvol: Number($('kvol').value), tstyle: $('tstyle').value });
+  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, bcol: $('bcol').value, quality: $('quality').value, grass: $('grass3d').checked, chan: $('chan').value, kvol: Number($('kvol').value), tstyle: $('tstyle').value });
   const showCtl = () => {
     const sp = Number($('speed').value);
     $('speedV').textContent = (sp < 0.95 ? 'Slow' : sp > 1.05 ? 'Fast' : 'Normal') + ` (${sp.toFixed(1)}×)`;
@@ -716,7 +729,7 @@ async function main() {
   $('bcol').innerHTML = Object.entries(BALL_GROUPS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('') + '<option value="rand">🎲 New colours every START (unlimited)</option>';
   try {
     const c = JSON.parse(localStorage.getItem('fft_actkick_ctl') || 'null');
-    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && (THEMES[c.place] || c.place === 'rand')) $('place').value = c.place; if (c.bcol && (BALL_GROUPS[c.bcol] || c.bcol === 'rand')) $('bcol').value = c.bcol; if (c.quality) $('quality').value = c.quality; if (typeof c.chan === 'string') $('chan').value = c.chan; if (typeof c.kvol === 'number' && c.kvol >= 0 && c.kvol <= 3) $('kvol').value = String(c.kvol); if (c.tstyle && [...$('tstyle').options].some((o) => o.value === c.tstyle)) $('tstyle').value = c.tstyle; }
+    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && (THEMES[c.place] || c.place === 'rand')) $('place').value = c.place; if (c.bcol && (BALL_GROUPS[c.bcol] || c.bcol === 'rand')) $('bcol').value = c.bcol; if (c.quality) $('quality').value = c.quality; if (typeof c.grass === 'boolean') $('grass3d').checked = c.grass; if (typeof c.chan === 'string') $('chan').value = c.chan; if (typeof c.kvol === 'number' && c.kvol >= 0 && c.kvol <= 3) $('kvol').value = String(c.kvol); if (c.tstyle && [...$('tstyle').options].some((o) => o.value === c.tstyle)) $('tstyle').value = c.tstyle; }
   } catch (e) { /* ignore */ }
   const setBall = (r) => { if (r === R) return; R = r; ballGeo.dispose(); ballGeo = new THREE.SphereGeometry(R, 40, 28); play = null; ballGroup.clear(); };
   // the channel name: redraw the grass and the LED board with it
@@ -746,6 +759,8 @@ async function main() {
     lookInfo();
   };
   applyBall(false);
+  grassOn = $('grass3d').checked; paintGrass();
+  $('grass3d').addEventListener('change', () => { grassOn = $('grass3d').checked; paintGrass(); });
   $('bcol').addEventListener('change', () => applyBall(true));
   $('place').addEventListener('change', () => { themeNow = ctl().place; if (themeNow === 'rand') randTh = genStadium(newSeed()); applyTheme(themeNow); lookInfo(); });
   setStyle(ctl().tstyle); setWords($('t1').value, $('t2').value, false);
@@ -754,7 +769,7 @@ async function main() {
   $('quality').addEventListener('change', () => setQuality(ctl().quality));
   $('size').addEventListener('change', () => { PS = ctl().size; play = null; ballGroup.clear(); buildTeams(selects.map((x) => x.value)); });   // see the new size at once
   $('kvol').addEventListener('change', () => { if (!$('snd').checked) return; snd.on = true; snd.start(); snd.kick(); });   // hear the new loudness at once
-  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality', 'chan', 'kvol', 'tstyle', 'bcol'].forEach((id) => $(id).addEventListener('input', () => {
+  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality', 'chan', 'kvol', 'tstyle', 'bcol', 'grass3d'].forEach((id) => $(id).addEventListener('input', () => {
     showCtl(); try { localStorage.setItem('fft_actkick_ctl', JSON.stringify(ctl())); } catch (e) { /* ignore */ }
   }));
   const fillWin = () => { const v = winEl.value; winEl.innerHTML = '<option value="-1">🎲 Random</option>' + selects.map((s, i) => `<option value="${i}">${NAME(s.value)}</option>`).join(''); winEl.value = [...winEl.options].some((o) => o.value === v) ? v : '-1'; };
