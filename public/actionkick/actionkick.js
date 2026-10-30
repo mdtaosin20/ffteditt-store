@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
 import { setupRecorder } from '/game/recorder.js?v=3';
 import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=2';
+import { genStadium, genBall, newSeed, BALL_GROUPS } from '/game/variety.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
@@ -257,14 +258,14 @@ async function main() {
   const crowdCols = ['#f5c518', '#2563eb', '#e11d48', '#f8fafc', '#16a34a', '#f97316'];
   const stadium = new THREE.Group(); scene.add(stadium);   // stands, crowd, roof and lights (hidden on the beach and in the street)
   const crowd = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.5, 0.3), new THREE.MeshStandardMaterial({ roughness: 0.8 }), 3200);
-  let ci = 0; const m4 = new THREE.Matrix4(), col = new THREE.Color(), crowdPos = [];
+  let ci = 0; const m4 = new THREE.Matrix4(), col = new THREE.Color(), crowdPos = [], crowdSlot = [];
   for (let r = 0; r < 16; r++) {
     const z = -22 - r * 1.1, y = 0.6 + r * 0.9;
     const step = new THREE.Mesh(new THREE.BoxGeometry(40, 0.9, 1.1), standMat); step.position.set(0, y - 0.45, z); step.receiveShadow = true; stadium.add(step);
     for (let k = 0; k < 96 && ci < 3200; k++) {
       if (R2() < 0.12) continue;
       const x = -19 + k * 0.42 + (r % 2) * 0.2; crowdPos.push([x, y + 0.25, z, R2() * 6]);
-      m4.makeTranslation(x, y + 0.25, z); crowd.setMatrixAt(ci, m4); crowd.setColorAt(ci, col.set(crowdCols[(k * 7 + r * 3 + (R2() * 3 | 0)) % 6])); ci++;
+      m4.makeTranslation(x, y + 0.25, z); crowd.setMatrixAt(ci, m4); { const sl = (k * 7 + r * 3 + (R2() * 3 | 0)) % 6; crowdSlot.push(sl); crowd.setColorAt(ci, col.set(crowdCols[sl])); } ci++;
     }
   }
   crowd.count = ci; stadium.add(crowd);
@@ -327,8 +328,9 @@ async function main() {
     snow: { name: '❄️ Snow', sky: ['#7d8fa8', '#b9c6d6', '#e8eef5'], fog: [30, 80], fogC: '#dfe7f0', sun: ['#f2f6ff', 1.8], hemi: ['#f4f8ff', '#b0bccb', 1.1], exp: 1.0, ground: ['#f3f7fb', '#e6edf5', 'rgba(220,40,60,.85)', ['#ffffff', '#d4dee9', '#c5d9c0']], stand: '#7d8796', roof: '#5d6675', stadium: true, lamps: true, extra: 'snow', wmc: 'rgba(40,60,90,.18)' },
     street: { name: '🏙 Street court', sky: ['#141a3a', '#3b3f75', '#c06a6a'], fog: [40, 90], fogC: '#3b3f75', sun: ['#ffe6c2', 1.7], hemi: ['#c8d2ff', '#3d3d48', 0.8], exp: 0.95, ground: ['#7c818c', '#747984', 'rgba(255,214,58,.95)', ['#6b707a', '#8a8f99']], stadium: false, extra: 'street' },
   };
+  let randTh = null;   // 🎲 the made-up stadium (a new one at every START when "New stadium every START" is chosen)
   const applyTheme = (key) => {
-    const th = THEMES[key] || THEMES.night;
+    const th = key === 'rand' ? (randTh || (randTh = genStadium(newSeed()))) : (THEMES[key] || THEMES.night);
     extras.clear();
     if (th.sky) { scene.background = sky(...th.sky); scene.fog = new THREE.Fog(th.fogC, th.fog[0], th.fog[1]); }
     else { scene.background = new THREE.Color(th.bg); scene.fog = new THREE.Fog(th.bg, th.fog[0], th.fog[1]); }
@@ -341,6 +343,9 @@ async function main() {
     if (th.stand) standMat.color.set(th.stand);
     if (th.roof) roof.material.color.set(th.roof);
     if (th.extra) props[th.extra]();
+    const cc = th.crowd || crowdCols;   // the crowd's shirt colours
+    for (let k = 0; k < ci; k++) crowd.setColorAt(k, col.set(cc[crowdSlot[k]]));
+    if (crowd.instanceColor) crowd.instanceColor.needsUpdate = true;
   };
   applyTheme('night');
 
@@ -371,17 +376,18 @@ async function main() {
   };
   const flagKit = (code) => (ACT.get(code) || ACTS[0]).kit;
 
-  const ballTex = tex(1024, 512, (g, w, h) => {
-    g.fillStyle = '#fafafa'; g.fillRect(0, 0, w, h);
+  const makeBallTex = (base, patch) => tex(1024, 512, (g, w, h) => {
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
     const ph = (1 + Math.sqrt(5)) / 2, v = [[-1, ph, 0], [1, ph, 0], [-1, -ph, 0], [1, -ph, 0], [0, -1, ph], [0, 1, ph], [0, -1, -ph], [0, 1, -ph], [ph, 0, -1], [ph, 0, 1], [-ph, 0, -1], [-ph, 0, 1]];
-    g.fillStyle = '#151515';
+    g.fillStyle = patch;
     for (const [x, y, z] of v) {
       const l = Math.hypot(x, y, z), lat = Math.asin(y / l), lon = Math.atan2(z, x);
       const cx = (lon / (2 * Math.PI) + 0.5) * w, cy = (0.5 - lat / Math.PI) * h, r = 46, sx = 1 / Math.max(0.2, Math.cos(lat));
       for (const off of [-w, 0, w]) { g.beginPath(); for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + k * 2 * Math.PI / 5; g.lineTo(cx + off + Math.cos(a) * r * sx, cy + Math.sin(a) * r); } g.closePath(); g.fill(); }
     }
   });
-  const ballMat = new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.45 });
+  const ballMat = new THREE.MeshStandardMaterial({ map: makeBallTex('#fafafa', '#151515'), roughness: 0.45 });
+  const paintBalls = (c) => { ballMat.map.dispose(); ballMat.map = makeBallTex(c.base, c.patch); ballMat.needsUpdate = true; };
   let ballGeo = new THREE.SphereGeometry(R, 40, 28);
 
   // the trophy (our own design): a black-and-gold base with laurel-and-ball badges, a fluted golden stem,
@@ -700,16 +706,17 @@ async function main() {
     const size = sharp ? 4096 : 2048;
     if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
   };
-  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, quality: $('quality').value, chan: $('chan').value, kvol: Number($('kvol').value), tstyle: $('tstyle').value });
+  const ctl = () => ({ speed: Number($('speed').value) || 1, within: Number($('within').value) || 2, mess: Number($('mess').value), size: Number($('size').value) || 1, ball: Number($('ball').value) || 0.45, place: $('place').value, bcol: $('bcol').value, quality: $('quality').value, chan: $('chan').value, kvol: Number($('kvol').value), tstyle: $('tstyle').value });
   const showCtl = () => {
     const sp = Number($('speed').value);
     $('speedV').textContent = (sp < 0.95 ? 'Slow' : sp > 1.05 ? 'Fast' : 'Normal') + ` (${sp.toFixed(1)}×)`;
     const w = Number($('within').value); $('withinV').textContent = `${w} second${w === 1 ? '' : 's'}`;
     const kv = Number($('kvol').value); $('kvolV').textContent = kv === 0 ? 'Off' : Math.round(kv * 100) + '%'; snd.kv = kv;
   };
+  $('bcol').innerHTML = Object.entries(BALL_GROUPS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('') + '<option value="rand">🎲 New colours every START (unlimited)</option>';
   try {
     const c = JSON.parse(localStorage.getItem('fft_actkick_ctl') || 'null');
-    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && THEMES[c.place]) $('place').value = c.place; if (c.quality) $('quality').value = c.quality; if (typeof c.chan === 'string') $('chan').value = c.chan; if (typeof c.kvol === 'number' && c.kvol >= 0 && c.kvol <= 3) $('kvol').value = String(c.kvol); if (c.tstyle && [...$('tstyle').options].some((o) => o.value === c.tstyle)) $('tstyle').value = c.tstyle; }
+    if (c) { if (c.speed) $('speed').value = c.speed; if (c.within) $('within').value = c.within; if (c.mess !== undefined) $('mess').value = String(c.mess); if (c.size) $('size').value = String(c.size); if (c.ball) $('ball').value = String(c.ball); if (c.place && (THEMES[c.place] || c.place === 'rand')) $('place').value = c.place; if (c.bcol && (BALL_GROUPS[c.bcol] || c.bcol === 'rand')) $('bcol').value = c.bcol; if (c.quality) $('quality').value = c.quality; if (typeof c.chan === 'string') $('chan').value = c.chan; if (typeof c.kvol === 'number' && c.kvol >= 0 && c.kvol <= 3) $('kvol').value = String(c.kvol); if (c.tstyle && [...$('tstyle').options].some((o) => o.value === c.tstyle)) $('tstyle').value = c.tstyle; }
   } catch (e) { /* ignore */ }
   const setBall = (r) => { if (r === R) return; R = r; ballGeo.dispose(); ballGeo = new THREE.SphereGeometry(R, 40, 28); play = null; ballGroup.clear(); };
   // the channel name: redraw the grass and the LED board with it
@@ -722,14 +729,32 @@ async function main() {
   };
   showCtl(); PS = ctl().size; setBall(ctl().ball);
   $('ball').addEventListener('change', () => setBall(ctl().ball)); themeNow = ctl().place; setChannel(ctl().chan); applyTheme(themeNow); setQuality(ctl().quality);
-  $('place').addEventListener('change', () => { themeNow = ctl().place; applyTheme(themeNow); });
+  // 🎲 unlimited looks: a new stadium and/or new ball colours (shown under the place)
+  let randBall = null;
+  const lookInfo = () => {
+    const a = themeNow === 'rand' && randTh ? randTh.name : '', b = $('bcol').value === 'rand' && randBall ? randBall.name : '';
+    $('lookInfo').textContent = [a, b].filter(Boolean).join(' · ');
+  };
+  const applyBall = (fresh) => {
+    const v = $('bcol').value;
+    if (v === 'rand') { if (fresh || !randBall) randBall = genBall(newSeed()); paintBalls(randBall); } else { const g = BALL_GROUPS[v] || BALL_GROUPS.classic; paintBalls({ base: g[1], patch: g[2] }); }
+    lookInfo();
+  };
+  const newLook = () => {   // at START
+    if (themeNow === 'rand') { randTh = genStadium(newSeed()); applyTheme('rand'); }
+    if ($('bcol').value === 'rand') applyBall(true);
+    lookInfo();
+  };
+  applyBall(false);
+  $('bcol').addEventListener('change', () => applyBall(true));
+  $('place').addEventListener('change', () => { themeNow = ctl().place; if (themeNow === 'rand') randTh = genStadium(newSeed()); applyTheme(themeNow); lookInfo(); });
   setStyle(ctl().tstyle); setWords($('t1').value, $('t2').value, false);
   $('tstyle').addEventListener('change', () => { setStyle(ctl().tstyle); setWords($('t1').value, $('t2').value, false); });
   $('chan').addEventListener('change', () => setChannel(ctl().chan));
   $('quality').addEventListener('change', () => setQuality(ctl().quality));
   $('size').addEventListener('change', () => { PS = ctl().size; play = null; ballGroup.clear(); buildTeams(selects.map((x) => x.value)); });   // see the new size at once
   $('kvol').addEventListener('change', () => { if (!$('snd').checked) return; snd.on = true; snd.start(); snd.kick(); });   // hear the new loudness at once
-  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality', 'chan', 'kvol', 'tstyle'].forEach((id) => $(id).addEventListener('input', () => {
+  ['speed', 'within', 'mess', 'size', 'ball', 'place', 'quality', 'chan', 'kvol', 'tstyle', 'bcol'].forEach((id) => $(id).addEventListener('input', () => {
     showCtl(); try { localStorage.setItem('fft_actkick_ctl', JSON.stringify(ctl())); } catch (e) { /* ignore */ }
   }));
   const fillWin = () => { const v = winEl.value; winEl.innerHTML = '<option value="-1">🎲 Random</option>' + selects.map((s, i) => `<option value="${i}">${NAME(s.value)}</option>`).join(''); winEl.value = [...winEl.options].some((o) => o.value === v) ? v : '-1'; };
@@ -753,6 +778,7 @@ async function main() {
     if (new Set(codes).size !== codes.length) { $('answer').textContent = '⚠️ Pick 6 different signs.'; return; }
     try { localStorage.setItem('fft_actkick', JSON.stringify(codes)); } catch (e) { /* ignore */ }
     snd.on = $('snd').checked; snd.start();
+    newLook();   // 🎲 a new stadium / new ball colours when chosen
     if (!prepare(codes, Number(winEl.value))) { $('answer').textContent = 'Could not make a play — press START again.'; return; }
     $('answer').textContent = `Answer for this play (only you see it here): ${NAME(codes[play.winner])}`;
     setWords($('t1').value, $('t2').value, false);
