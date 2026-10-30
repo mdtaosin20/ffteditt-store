@@ -87,7 +87,6 @@ function nav_items(): array
     return [
         'dashboard' => ['Dashboard',           'dashboard.php', 'home'],
         'assistant' => ['Ask Claude',          'assistant.php', 'spark'],
-        'video'     => ['Video Maker',         'video.php',     'play'],
         'servers'   => ['VPS Monitor',         'servers.php',   'server'],
         'games'     => ['Game Manager',        'games.php',     'gamepad'],
         'streams'   => ['Live Stream Manager', 'streams.php',   'live'],
