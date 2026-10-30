@@ -55,8 +55,9 @@ function mv_translate(string $text, string $lang = 'en'): array
     return [true, trim($out, " \t\n\r\"'“”")];
 }
 
-/** English text → mp3 in the owner's voice. Returns [ok, file name or error]. */
-function mv_speak(string $en): array
+/** Text → mp3 in the owner's voice. Returns [ok, file name or error, words].
+ *  timed: also ask ElevenLabs WHEN each letter is said, for subtitles → words = [[word, start s, end s], …] */
+function mv_speak(string $en, bool $timed = false): array
 {
     $c = mv_cfg();
     $en = trim(mb_substr($en, 0, 1000));
@@ -71,16 +72,25 @@ function mv_speak(string $en): array
     // a mood is said with an audio tag; only the v3 model understands these
     if ($c['mood'] !== '' && str_starts_with($model, 'eleven_v3')) $en = '[' . $c['mood'] . '] ' . $en;
     $h = substr(hash('sha256', 'mv1|' . $c['voice'] . '|' . $model . '|' . json_encode($settings) . ($nonce !== '' ? '|' . $nonce : '') . '|' . $en), 0, 24);
-    $file = $h . '.mp3';
-    if (is_file(upload_dir() . '/' . $file)) return [true, $file];   // the same line again: no new credits
-    $ch = curl_init((defined('MV_API_BASE') ? MV_API_BASE : 'https://api.elevenlabs.io') . '/v1/text-to-speech/' . rawurlencode($c['voice']) . '?output_format=mp3_44100_128');
+    $file = $h . '.mp3'; $wfile = upload_dir() . '/' . $h . '.words.json';
+    if (is_file(upload_dir() . '/' . $file) && (!$timed || is_file($wfile))) {   // the same line again: no new credits
+        return [true, $file, $timed ? (json_decode((string) file_get_contents($wfile), true) ?: []) : []];
+    }
+    $ch = curl_init((defined('MV_API_BASE') ? MV_API_BASE : 'https://api.elevenlabs.io') . '/v1/text-to-speech/' . rawurlencode($c['voice'])
+        . ($timed ? '/with-timestamps' : '') . '?output_format=mp3_44100_128');
     curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 60, CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_HTTPHEADER => ['xi-api-key: ' . mv_key(), 'Content-Type: application/json', 'Accept: audio/mpeg'],
+        CURLOPT_HTTPHEADER => ['xi-api-key: ' . mv_key(), 'Content-Type: application/json', 'Accept: ' . ($timed ? 'application/json' : 'audio/mpeg')],
         CURLOPT_POSTFIELDS => json_encode(['text' => $en, 'model_id' => $model, 'voice_settings' => $settings], JSON_UNESCAPED_UNICODE)]);
     $body = (string) curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $err = curl_error($ch);
     curl_close($ch);
+    $words = [];
+    if ($timed && $code === 200) {   // {audio_base64, alignment: {characters, character_start_times_seconds, character_end_times_seconds}}
+        $j = json_decode($body, true);
+        $body = is_array($j) ? (string) base64_decode((string) ($j['audio_base64'] ?? '')) : '';
+        $words = mv_words(is_array($j) ? ($j['alignment'] ?? $j['normalized_alignment'] ?? []) : []);
+    }
     if ($code !== 200 || strlen($body) < 200) {
         $j = json_decode($body, true);
         $m = is_array($j) ? (string) ($j['detail']['message'] ?? (is_string($j['detail'] ?? null) ? $j['detail'] : '')) : '';
@@ -92,22 +102,41 @@ function mv_speak(string $en): array
         return [false, $why];
     }
     file_put_contents(upload_dir() . '/' . $file, $body);
-    return [true, $file];
+    if ($timed) file_put_contents($wfile, json_encode($words, JSON_UNESCAPED_UNICODE));
+    return [true, $file, $words];
+}
+
+/** Letters with times → words with times (for the subtitles). [voice tags] like [excited] are left out. */
+function mv_words(array $a): array
+{
+    $ch = $a['characters'] ?? []; $st = $a['character_start_times_seconds'] ?? []; $en = $a['character_end_times_seconds'] ?? [];
+    $out = []; $w = ''; $s = 0.0; $e = 0.0;
+    $push = function () use (&$out, &$w, &$s, &$e) {
+        if ($w !== '' && !preg_match('/^\[[^\]]*\]$/u', $w)) $out[] = [$w, round($s, 3), round($e, 3)];
+        $w = '';
+    };
+    foreach ($ch as $i => $c) {
+        if (preg_match('/^\s$/u', (string) $c)) { $push(); continue; }
+        if ($w === '') $s = (float) ($st[$i] ?? 0);
+        $w .= $c; $e = (float) ($en[$i] ?? $s);
+    }
+    $push();
+    return $out;
 }
 
 /** Make one line: translate when needed, then speak. Saved in the history (last 40). */
-function mv_make(string $text, string $en = '', string $lang = 'en'): array
+function mv_make(string $text, string $en = '', string $lang = 'en', bool $timed = false): array
 {
     $text = trim(mb_substr($text, 0, 1000));
     $lang = isset(MV_LANGS[$lang]) ? $lang : 'en';
     if ($en === '') { [$ok, $en] = mv_translate($text, $lang); if (!$ok) return ['error' => $en]; }
-    [$ok, $file] = mv_speak($en);
+    [$ok, $file, $words] = mv_speak($en, $timed) + [2 => []];
     if (!$ok) return ['error' => $file, 'en' => $en];
     $item = ['id' => substr($file, 0, 24), 'ts' => time(), 'text' => $text, 'en' => $en, 'lang' => $lang, 'url' => upload_url($file), 'chars' => mb_strlen($en)];
     $h = array_values(array_filter(mv_history(), fn ($x) => $x['id'] !== $item['id']));
     array_unshift($h, $item);
     setting_set('mv_hist', json_encode(array_slice($h, 0, 40), JSON_UNESCAPED_UNICODE));
-    return ['item' => $item];
+    return ['item' => $item, 'words' => $words];
 }
 
 /** Play it once on every running live (the game page plays it with the chat it reads). */

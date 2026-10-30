@@ -11,8 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $from === '' || $from !== preg_repl
 if (!owner_cookie_ok() && !current_admin()) $out(['error' => 'Open the admin panel once on this phone (log in), then try again.'], 403);
 if (!mv_ready()) $out(['error' => 'Set up Admin → 🗣 My Voice → Settings first.']);
 $in = json_decode((string) file_get_contents('php://input'), true) ?: [];
-$text = trim(mb_substr((string) ($in['text'] ?? ''), 0, 400));
+$text = trim(mb_substr((string) ($in['text'] ?? ''), 0, 320));
 if ($text === '') $out(['error' => 'empty']);
 @set_time_limit(90);
-$r = mv_make($text, '', (string) ($in['lang'] ?? 'en'));
-$out(isset($r['item']) ? ['url' => $r['item']['url'], 'en' => $r['item']['en']] : ['error' => $r['error']]);
+$r = mv_make($text, '', (string) ($in['lang'] ?? 'en'), true);   // with the time of every word (subtitles)
+$out(isset($r['item']) ? ['url' => $r['item']['url'], 'en' => $r['item']['en'], 'words' => $r['words']] : ['error' => $r['error']]);

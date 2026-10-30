@@ -4,8 +4,8 @@
 // The owner picks the countries in the menu, presses START and records the screen. Tap the screen = menu again.
 import * as THREE from 'three';
 import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
-import { setupRecorder } from '/game/recorder.js?v=2';
-import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=1';
+import { setupRecorder } from '/game/recorder.js?v=3';
+import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=2';
 
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
@@ -517,8 +517,8 @@ async function main() {
     meshes = play.balls.map(() => { const m = new THREE.Mesh(ballGeo, ballMat); m.castShadow = true; ballGroup.add(m); return m; });
     quats = play.balls.map(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 6, Math.random() * 6, 0)));
     simT = 0; lastStep = 0; doneKick = new Set(); doneBump = 0; doneLand = 0; clanked = false; dinged = false;
-    endT = play.touchT + Math.max(3.5, 0.4 + vr.extra());   // more time when My Voice still has lines to say
     vr.reset();
+    endT = Math.max(play.touchT + 3.5, vr.minEnd(play.touchT));   // more time when My Voice still has something to say
     place(0);
     return true;
   };
@@ -719,10 +719,10 @@ async function main() {
     for (const c of pool) { if (pick.length >= 6) break; if (!pick.includes(c)) pick.push(c); }
     selects.forEach((s, i) => { s.value = pick[i]; s.dispatchEvent(new Event('change')); });
   });
-  const mv = setupMyVoice({ game: 'cupkick', after: $('snd').closest('label') });
+  const mv = setupMyVoice({ game: 'cupkick', after: $('snd').closest('label'), stage });
   vr = voiceRun(mv, snd);
   rec = setupRecorder({
-    game: 'cupkick', renderer, canvas, stage, words, Sound, snd, fit, after: $('snd').closest('label'),
+    game: 'cupkick', renderer, canvas, stage, words, sub: () => mv.subNow(), Sound, snd, fit, after: $('snd').closest('label'),
     cssUrl: document.querySelector('link[href*="cupkick.css"]').href,
     setSize: (w, h) => { renderer.setPixelRatio(1); renderer.setSize(w, h, false); },
     wm: () => { const el = $('wm'); return WM ? { text: WM, x: wmX, y: wmY, w: el.offsetWidth, h: el.offsetHeight, fs: parseFloat(getComputedStyle(el).fontSize) } : null; },

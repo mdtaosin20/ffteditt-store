@@ -141,6 +141,15 @@ export function setupRecorder(o) {
       g.drawImage(wImg, 0, 0, TW, TH);
       g.globalAlpha = 1; g.setTransform(1, 0, 0, 1, 0, 0);
     }
+    // 💬 the My Voice subtitle (plain white words, soft dark shadow — changes with the voice)
+    const sb = o.sub && o.sub();
+    if (sb && sb.text) {
+      const S = TW / o.stage.clientWidth, x = TW / 2, y = sb.y * TH;
+      g.save(); g.font = `700 ${sb.fs * S}px Verdana, Tahoma, "DejaVu Sans", Arial, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
+      g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 8 * S; g.shadowOffsetY = 2 * S; g.fillText(sb.text, x, y);
+      g.shadowColor = '#000'; g.shadowBlur = 3 * S; g.shadowOffsetY = 1 * S; g.fillText(sb.text, x, y);
+      g.restore();
+    }
   };
 
   /* ---------- on screen while recording, and the result ---------- */
