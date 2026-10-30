@@ -596,3 +596,38 @@ input[type=file] { color: var(--soft); font-family: inherit; font-size: 14px; ma
 .tabs a { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 99px; background: #0f1f38; border: 1px solid var(--line); color: #cfe0ff; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .tabs a:hover { border-color: var(--blue); }
 .tabs a.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+/* Ask Claude */
+.cl-wrap { display: flex; flex-direction: column; gap: 12px; max-width: 860px; }
+.cl-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cl-pill { font-size: 12.5px; padding: 4px 10px; border-radius: 99px; background: #0f1f38; border: 1px solid var(--line); color: #cfe0ff; }
+.cl-pill b { color: #4ade80; }
+.cl-top .btn { margin-left: auto; }
+.cl-chat { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-height: 260px; max-height: 68vh; overflow-y: auto; }
+.cl-empty { margin: auto; text-align: center; font-size: 14px; }
+.cl-chat .m { max-width: 88%; padding: 11px 13px; border-radius: 14px; font-size: 14.5px; line-height: 1.6; font-family: 'Noto Sans Bengali', Inter, system-ui, sans-serif; overflow-wrap: anywhere; }
+.cl-chat .m.u { align-self: flex-end; background: var(--blue); color: #fff; border-bottom-right-radius: 4px; }
+.cl-chat .m.a { align-self: flex-start; background: #0f1f38; border: 1px solid var(--line); color: #e5edf8; border-bottom-left-radius: 4px; }
+.cl-chat .m.a .who { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #e0a07f; font-weight: 700; margin-bottom: 4px; font-family: Inter, sans-serif; }
+.cl-chat .m.a .who i { width: 16px; height: 16px; border-radius: 5px; background: linear-gradient(135deg, #d97757, #c15f3c); display: inline-block; }
+.cl-chat .m code { background: rgba(255, 255, 255, .08); padding: 1px 5px; border-radius: 5px; font-size: 13px; }
+.cl-chat .m .li { display: block; padding-left: 4px; }
+.cl-chat .look { align-self: flex-start; font-size: 12px; color: #8fa3c4; padding-left: 6px; }
+.cl-chat .act { align-self: flex-start; max-width: 88%; border: 1px solid #f59e0b88; background: #f59e0b14; border-radius: 12px; padding: 10px 12px; font-size: 14px; line-height: 1.55; font-family: 'Noto Sans Bengali', Inter, sans-serif; }
+.cl-chat .act b { display: block; color: #fbbf24; font-size: 13px; margin-bottom: 4px; }
+.cl-chat .act.done { border-color: #22c55e88; background: #22c55e12; } .cl-chat .act.done b { color: #4ade80; }
+.cl-chat .act.no { border-color: var(--line); background: transparent; opacity: .75; } .cl-chat .act.no b { color: #9fb0d6; }
+.cl-chat .act.fail { border-color: #ef444488; background: #ef444412; } .cl-chat .act.fail b { color: #f87171; }
+.cl-chat .act .why { font-size: 12.5px; color: #b9c6dc; margin-top: 4px; }
+.cl-chat .act .r { display: flex; gap: 8px; margin-top: 10px; }
+.cl-chat .dots { display: inline-flex; gap: 4px; margin-right: 6px; vertical-align: middle; }
+.cl-chat .dots i { width: 7px; height: 7px; border-radius: 50%; background: #e0a07f; animation: cldot 1s infinite; }
+.cl-chat .dots i:nth-child(2) { animation-delay: .15s; } .cl-chat .dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes cldot { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
+.cl-q { display: flex; gap: 6px; flex-wrap: wrap; }
+.cl-q button { font: 12.5px 'Noto Sans Bengali', Inter, sans-serif; padding: 6px 10px; border-radius: 99px; border: 1px dashed #2a4a9a; background: none; color: #b9c6dc; cursor: pointer; }
+.cl-q button:hover { border-color: var(--blue); color: #fff; }
+.cl-in { display: flex; gap: 8px; align-items: flex-end; }
+.cl-in textarea { flex: 1; min-height: 50px; max-height: 160px; border-radius: 12px; background: #0b1527; border: 1px solid var(--line); color: #fff; padding: 12px; font: 15px 'Noto Sans Bengali', Inter, sans-serif; resize: vertical; }
+.cl-in .btn { height: 50px; }
+td.bn { font-family: 'Noto Sans Bengali', Inter, sans-serif; }

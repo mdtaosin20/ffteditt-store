@@ -10,6 +10,7 @@ function icon(string $name, string $class = 'ic'): string
         'server'    => '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01M11 7.5h6M11 16.5h6"/>',
         'live'      => '<circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/>',
         'calendar'  => '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h2M14 14h2M8 18h2M14 18h2"/>',
+        'spark'     => '<path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
         'youtube'   => '<path d="M2.5 17a24 24 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.6 49.6 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24 24 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.6 49.6 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/>',
         'bell'      => '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
         'gear'      => '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
@@ -85,6 +86,7 @@ function nav_items(): array
 {
     return [
         'dashboard' => ['Dashboard',           'dashboard.php', 'home'],
+        'assistant' => ['Ask Claude',          'assistant.php', 'spark'],
         'servers'   => ['VPS Monitor',         'servers.php',   'server'],
         'games'     => ['Game Manager',        'games.php',     'gamepad'],
         'streams'   => ['Live Stream Manager', 'streams.php',   'live'],
@@ -117,6 +119,7 @@ function page_tabs(): array
         'poll'     => ['polls' => ['📊', 'Polls'], 'message' => ['💬', 'Chat Message']],
         'insights' => ['why' => ['💡', 'Why Growing'], 'lives' => ['📺', 'Each Live'], 'countries' => ['🌍', 'Countries'],
                        'titles' => ['🖼', 'Best Title'], 'report' => ['📝', 'Report']],
+        'assistant' => ['chat' => ['💬', 'Chat'], 'log' => ['📜', 'What Claude did'], 'settings' => ['⚙️', 'Settings']],
         'settings' => ['vps' => ['🖥', 'VPS Info'], 'fingerprint' => ['🔐', 'Fingerprint'], 'login' => ['👤', 'Login']],
     ];
 }
