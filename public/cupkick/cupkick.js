@@ -7,6 +7,7 @@ import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
 import { setupRecorder } from '/game/recorder.js?v=3';
 import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=2';
 import { genStadium, genBall, newSeed, BALL_GROUPS } from '/game/variety.js?v=1';
+import { makeGrass } from '/game/grass.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
@@ -244,6 +245,11 @@ async function main() {
   const fieldTex = groundTex('#2f8f34', '#287d2d', 'rgba(255,255,255,.9)');
   const field = new THREE.Mesh(new THREE.PlaneGeometry(40, 46), new THREE.MeshStandardMaterial({ map: fieldTex, roughness: 1 }));
   field.rotation.x = -Math.PI / 2; field.position.z = -8; field.receiveShadow = true; scene.add(field);
+  // 🌱 3D grass blades on the field (the white lines stay free: the half-way line and the big circle)
+  const grass = makeGrass({ scene, count: 55000, field: { z0: -31, depth: 46, stripes: 16 }, lines: (x, z) => {
+    if (z > -17.75 && z < -17.0) return true;   // (a little more space on the camera side, so the blades do not hide the line)
+    const d = Math.hypot(x / 11.72, (z - 0.45) / 13.48); return Math.abs(d - 1) < 0.03;
+  } });
   const standMat = new THREE.MeshStandardMaterial({ color: '#3a4050', roughness: 0.9 });
   const crowdCols = ['#f5c518', '#2563eb', '#e11d48', '#f8fafc', '#16a34a', '#f97316'];
   const stadium = new THREE.Group(); scene.add(stadium);   // stands, crowd, roof and lights (hidden on the beach and in the street)
@@ -333,6 +339,7 @@ async function main() {
     if (th.stand) standMat.color.set(th.stand);
     if (th.roof) roof.material.color.set(th.roof);
     if (th.extra) props[th.extra]();
+    grass.paint(th.ground[0], th.ground[1], !['beach', 'street', 'snow'].includes(th.extra));   // no grass blades on sand, snow or the street
     const cc = th.crowd || crowdCols;   // the crowd's shirt colours
     for (let k = 0; k < ci; k++) crowd.setColorAt(k, col.set(cc[crowdSlot[k]]));
     if (crowd.instanceColor) crowd.instanceColor.needsUpdate = true;
@@ -660,6 +667,7 @@ async function main() {
       const x = (0.5 + 0.32 * Math.sin(u * 0.23)) * W - el.offsetWidth / 2, y = (0.52 + 0.3 * Math.sin(u * 0.17 + 1.3)) * H;
       el.style.transform = `translate(${x}px, ${y}px) rotate(-8deg)`; wmX = x; wmY = y;
     }
+    grass.tick(now / 1000);
     renderer.render(scene, camera);
     rec.frame();
   };
