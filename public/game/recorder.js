@@ -12,7 +12,7 @@ const SIZES = { 720: [720, 1280], 1080: [1080, 1920], 1440: [1440, 2560], 2160: 
 const SIZE_NAME = { 720: '720p', 1080: '1080p', 1440: '2K', 2160: '4K' };
 const RATE = { 720: [7.5, 10], 1080: [12, 18], 1440: [24, 36], 2160: [45, 65] };   // Mbit/s for 30 / 60 fps (like YouTube's own advice)
 const LEAD = 0.6, TAIL = 0.7;   // seconds before the kick-off and after the end text
-const SOUNDS = ['kick', 'bump', 'land', 'ding', 'clank', 'win'];
+const SOUNDS = ['kick', 'bump', 'land', 'ding', 'clank', 'win', 'clip'];   // clip = the owner's voice line
 
 const css = `
 .rec{margin-top:14px;padding:12px 14px;border:1px solid #ff3355aa;border-radius:12px;background:linear-gradient(180deg,#2a0f22,#160d24)}

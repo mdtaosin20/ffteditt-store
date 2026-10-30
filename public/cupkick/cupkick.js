@@ -4,7 +4,8 @@
 // The owner picks the countries in the menu, presses START and records the screen. Tap the screen = menu again.
 import * as THREE from 'three';
 import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
-import { setupRecorder } from '/game/recorder.js?v=1';
+import { setupRecorder } from '/game/recorder.js?v=2';
+import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
@@ -174,6 +175,7 @@ class Sound {
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g).connect(this.out || c.destination); o.start(t); o.stop(t + dur + 0.02);
   }
+  clip(buf) { if (!this.ctx || !this.on || !buf) return; const c = this.ctx, s = c.createBufferSource(); s.buffer = buf; s.connect(this.out || c.destination); s.start(this.at ?? c.currentTime); }   // 🗣 the owner's voice line
   kick() { if (this.kv <= 0) return; this.tone(140, 50, 0.18, 0.6 * this.kv); this.tone(900, 300, 0.05, 0.08 * this.kv, 'triangle'); }
   clank() { this.tone(520, 300, 0.25, 0.25, 'triangle'); this.tone(1650, 900, 0.3, 0.1, 'square'); this.tone(80, 40, 0.2, 0.4); }
   land(v) { if (this.kv > 0) this.tone(90, 40, 0.14, Math.min(0.5, v * 0.07) * this.kv); }
@@ -468,6 +470,7 @@ async function main() {
 
   /* ---------- play ---------- */
   const snd = new Sound();
+  let vr = null;   // 🗣 My Voice lines (made below)
   let play = null, simT = 0, last = 0, playing = false, lastStep = 0, doneKick = new Set(), doneBump = 0, doneLand = 0, clanked = false, dinged = false, endT = 0;
   const axis = new THREE.Vector3(), dq = new THREE.Quaternion();
   const w1 = $('w1'), w2 = $('w2'), words = $('words');
@@ -514,7 +517,8 @@ async function main() {
     meshes = play.balls.map(() => { const m = new THREE.Mesh(ballGeo, ballMat); m.castShadow = true; ballGroup.add(m); return m; });
     quats = play.balls.map(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 6, Math.random() * 6, 0)));
     simT = 0; lastStep = 0; doneKick = new Set(); doneBump = 0; doneLand = 0; clanked = false; dinged = false;
-    endT = play.touchT + 3.5;
+    endT = play.touchT + Math.max(3.5, 0.4 + vr.extra());   // more time when My Voice still has lines to say
+    vr.reset();
     place(0);
     return true;
   };
@@ -582,12 +586,13 @@ async function main() {
     if (play && playing) {
       const near = simT > play.touchT - 0.6 && simT < play.touchT + 0.4;
       simT += real * (near ? SLOW : 1);
-      if (simT >= endT) { simT = endT; playing = false; rec.ended(); }
+      if (simT >= endT) { simT = endT; if (vr.done()) { playing = false; rec.ended(); } }
       // sounds at the right moments
       play.kicks.forEach((k, i) => { if (simT >= k.t && !doneKick.has(i)) { doneKick.add(i); snd.kick(); } });
       while (doneBump < play.bumps.length && play.bumps[doneBump] <= simT) { if (doneBump % 2 === 0) snd.bump(); doneBump++; }
       while (doneLand < play.lands.length && play.lands[doneLand].t <= simT) { snd.land(play.lands[doneLand].v); doneLand++; }
       if (!dinged && simT >= play.touchT) { dinged = true; snd.ding(); setWords($('t2').value.replace(/touches/i, 'touched').replace(/will touch/i, 'touched'), $('t3').value, true); }
+      vr.tick(real, dinged);
     }
     const t = simT;
     if (play) {
@@ -714,6 +719,8 @@ async function main() {
     for (const c of pool) { if (pick.length >= 6) break; if (!pick.includes(c)) pick.push(c); }
     selects.forEach((s, i) => { s.value = pick[i]; s.dispatchEvent(new Event('change')); });
   });
+  const mv = setupMyVoice({ game: 'cupkick', after: $('snd').closest('label') });
+  vr = voiceRun(mv, snd);
   rec = setupRecorder({
     game: 'cupkick', renderer, canvas, stage, words, Sound, snd, fit, after: $('snd').closest('label'),
     cssUrl: document.querySelector('link[href*="cupkick.css"]').href,

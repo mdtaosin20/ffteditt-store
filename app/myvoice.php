@@ -23,7 +23,8 @@ const MV_MODELS = [
 
 function mv_cfg(): array
 {
-    $d = ['voice' => '', 'model' => 'eleven_multilingual_v2', 'custom_model' => '', 'stability' => 50, 'similarity' => 80];
+    $d = ['voice' => '', 'model' => 'eleven_multilingual_v2', 'custom_model' => '', 'stability' => 50, 'similarity' => 80,
+          'style' => 20, 'natural' => true, 'mood' => ''];
     $c = json_decode((string) (setting_get('mv_cfg') ?? ''), true);
     return array_merge($d, is_array($c) ? array_intersect_key($c, $d) : []);
 }
@@ -58,8 +59,14 @@ function mv_speak(string $en): array
     $en = trim(mb_substr($en, 0, 1000));
     if ($en === '') return [false, 'Nothing to say.'];
     $model = mv_model();
-    $settings = ['stability' => max(0, min(100, (int) $c['stability'])) / 100, 'similarity_boost' => max(0, min(100, (int) $c['similarity'])) / 100];
-    $h = substr(hash('sha256', 'mv1|' . $c['voice'] . '|' . $model . '|' . json_encode($settings) . '|' . $en), 0, 24);
+    // 🎲 Natural: every line a little different (like a person, not one flat tone) — steadiness and emotion move a bit each time
+    $st = (int) $c['stability']; $sy = (int) $c['style']; $nonce = '';
+    if (!empty($c['natural'])) { $st += random_int(-15, 10); $sy += random_int(-10, 15); $nonce = bin2hex(random_bytes(4)); }
+    $settings = ['stability' => max(0, min(100, $st)) / 100, 'similarity_boost' => max(0, min(100, (int) $c['similarity'])) / 100,
+                 'style' => max(0, min(100, $sy)) / 100, 'use_speaker_boost' => true];
+    // a mood is said with an audio tag; only the v3 model understands these
+    if ($c['mood'] !== '' && str_starts_with($model, 'eleven_v3')) $en = '[' . $c['mood'] . '] ' . $en;
+    $h = substr(hash('sha256', 'mv1|' . $c['voice'] . '|' . $model . '|' . json_encode($settings) . '|' . $nonce . '|' . $en), 0, 24);
     $file = $h . '.mp3';
     if (is_file(upload_dir() . '/' . $file)) return [true, $file];   // the same line again: no new credits
     $ch = curl_init((defined('MV_API_BASE') ? MV_API_BASE : 'https://api.elevenlabs.io') . '/v1/text-to-speech/' . rawurlencode($c['voice']) . '?output_format=mp3_44100_128');
