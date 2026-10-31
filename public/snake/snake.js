@@ -3,7 +3,7 @@
 // stuck or crashes — or fills the whole board — a new round starts. Every chat message drops a fruit with the
 // viewer's name on the board; a new subscriber drops a GOLDEN fruit. LUNA, the live host, welcomes new viewers
 // and answers the chat. Our own look (not Google's): purple snake, green board, gold frame.
-import { Sfx, freshRun } from '/game/audio.js?v=13';
+import { Sfx, freshRun, holdScreen, PACE } from '/game/audio.js?v=13';
 import { liveChat } from '/game/chat.js?v=29';
 import { goLive } from '/game/golive.js?v=2';
 import { Music } from '/game/music.js?v=2';
@@ -12,18 +12,26 @@ import { autoUpdate } from '/game/update.js?v=1';
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
-const N = 20, SIZE = 900, CELL = SIZE / N;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const FAST = Math.max(1, Math.min(50, Number(QS.get('fast')) || 1));   // testing only
-const STEPS = 9;                    // moves a second
 const FRUITS = ['🍎', '🍊', '🍋', '🍉', '🍇', '🍓', '🍒', '🍑', '🍍', '🥝', '🍌', '🥭', '🍐', '🫐', '🥥'];
-const MAX_NAMED = 6;                // fruits with a viewer's name on the board at once
 const KEY = 'fft_snake';
+
+/* ---------- settings (Admin → Snake Live), checked again every 30 seconds ---------- */
+const DEF = { title: 'SNAKE LIVE', speed: 9, grid: 20, chat: true, cooldown: 8, named: 6, gold: 3, eat_sound: true, music: true, chan: '', autoplay: true, pace: 'normal', rev: '', reset: '' };
+const getCfg = async () => { try { const r = await fetch('/api/snake.php', { cache: 'no-store' }); if (r.ok) return await r.json(); } catch (e) { /* offline */ } return null; };
+const cfg = { ...DEF, ...((await getCfg()) || {}) };
+if (cfg.autoplay === false) { holdScreen('/api/snake.php', cfg.rev); throw new Error('paused'); }
+const steps = () => clamp(Number(cfg.speed) || 9, 3, 20) * (PACE[cfg.pace] || 1);   // moves a second
+const SIZE = 900;
+let N = clamp(Math.round(cfg.grid) || 20, 12, 30), CELL = SIZE / N;
 
 /* ---------- state (kept over reloads) ---------- */
 const day = () => new Date().toISOString().slice(0, 10);
-let S = { round: 1, best: 0, today: 0, day: day() };
+let S = { round: 1, best: 0, today: 0, day: day(), reset: cfg.reset };
 freshRun('snake', [KEY]);
 try { S = { ...S, ...(JSON.parse(localStorage.getItem(KEY) || 'null') || {}) }; } catch (e) { /* ignore */ }
+if (S.reset !== cfg.reset) S = { round: 1, best: 0, today: 0, day: day(), reset: cfg.reset };
 if (S.day !== day()) { S.day = day(); S.today = 0; }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } };
 
@@ -45,8 +53,10 @@ setTimeout(() => { if (sfx.ok && !sfx.running) soundBtn.hidden = false; }, 1500)
 const musicBus = sfx.ok ? sfx.ctx.createGain() : null;
 if (musicBus) musicBus.connect(sfx.ctx.destination);
 const duckAll = (on) => { sfx.duck(on); if (musicBus) musicBus.gain.setTargetAtTime(on ? 0.25 : 1, sfx.ctx.currentTime, on ? 0.15 : 0.6); };
-if (sfx.ok && !QS.has('nomusic')) new Music(sfx.ctx, musicBus, { style: 'upbeat', volume: 0.2 }).start();
+const music = sfx.ok && !QS.has('nomusic') ? new Music(sfx.ctx, musicBus, { style: 'upbeat', volume: 0.2 }) : null;
+if (music && cfg.music) music.start();
 const chomp = (big) => {
+  if (!cfg.eat_sound) return;
   sfx.tone({ freq: big ? 660 : 520, to: big ? 1320 : 880, type: 'square', dur: 0.08, vol: 0.06 });
   sfx.tone({ freq: big ? 990 : 780, type: 'sine', dur: 0.12, vol: 0.07, delay: 0.06 });
 };
@@ -55,9 +65,9 @@ const chomp = (big) => {
 const cv = $('board'), c = cv.getContext('2d');
 let k = 1, boardImg = null;
 const sprites = new Map();
-function sizeCanvas() {
+function sizeCanvas(force) {
   const px = Math.max(300, Math.round(SIZE * scale * Math.min(devicePixelRatio || 1, 2)));
-  if (cv.width === px) return;
+  if (cv.width === px && !force) return;
   cv.width = cv.height = px; k = px / SIZE;
   boardImg = document.createElement('canvas'); boardImg.width = boardImg.height = px;
   const g = boardImg.getContext('2d'); g.scale(k, k);
@@ -80,6 +90,8 @@ const idx = (x, y) => y * N + x;
 const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 let body = [], prevTail = null, dir = [1, 0], grow = 0, fruits = [], alive = true, phase = 'play', phaseT = 0, ate = 0, flash = 0;
 const newRound = () => {
+  const g = clamp(Math.round(cfg.grid) || 20, 12, 30);
+  if (g !== N) { N = g; CELL = SIZE / N; fruits = []; sizeCanvas(true); }   // a new board size starts with a new round
   const y = Math.floor(N / 2);
   body = [[6, y], [5, y], [4, y], [3, y]]; prevTail = [2, y]; dir = [1, 0]; grow = 0; ate = 0; alive = true; phase = 'play';
   fruits = fruits.filter((f) => f.name);   // fruits with names stay for the next round
@@ -169,7 +181,7 @@ const step = () => {
   body.unshift(nxt);
   const fi = fruits.findIndex((f) => f.x === nxt[0] && f.y === nxt[1]);
   if (fi >= 0) {
-    const f = fruits.splice(fi, 1)[0], plus = f.gold ? 3 : 1;
+    const f = fruits.splice(fi, 1)[0], plus = f.gold ? clamp(Math.round(cfg.gold) || 3, 1, 10) : 1;
     grow += plus - 1; ate += plus; S.today += plus; save();
     chomp(f.gold);
     pop(f.name ? `+${plus} ${f.name}` : `+${plus}`, f.x, f.y, f.gold);
@@ -255,7 +267,7 @@ setInterval(() => {
 const lastDrop = new Map();
 const dropFruit = (name, gold) => {
   const named = fruits.filter((f) => f.name).length;
-  if (!gold && named >= MAX_NAMED) return false;
+  if (!gold && named >= clamp(Math.round(cfg.named) || 6, 1, 20)) return false;
   const p = freeCell(); if (!p) return false;
   fruits.push({ x: p[0], y: p[1], emo: gold ? '🌟' : pick(FRUITS), name: String(name).toUpperCase().slice(0, 12), gold: !!gold, born: performance.now() });
   sfx.tone({ freq: 880, to: 1320, type: 'sine', dur: 0.12, vol: 0.05 });
@@ -273,7 +285,7 @@ const chat = liveChat({
   onSuper: (code, name) => { dropFruit(name, true); dropFruit(name, true); },
   onText: (name, text, code, author) => {   // a fruit for (almost) every chat — one per viewer every 8 seconds
     const now = performance.now();
-    if ((lastDrop.get(author) || -1e9) > now - 8000) return null;
+    if (!cfg.chat || (lastDrop.get(author) || -1e9) > now - clamp(Number(cfg.cooldown), 0, 120) * 1000) return null;
     if (dropFruit(name, false)) lastDrop.set(author, now);
     return null;   // LUNA still welcomes / answers as usual
   },
@@ -296,7 +308,21 @@ const chat = liveChat({
   demoTexts: ['hello', 'go snake go!', 'how long is it?', 'Bangladesh 🇧🇩', 'nice', 'eat my fruit', 'wow', 'salam', 'record?', 'faster!'],
 });
 const host = (parts, prio = 2) => { if (chat.active) chat.say(parts, prio); };
-if (QS.get('chan')) $('chan').textContent = QS.get('chan');
+const showText = () => {
+  const t = String(cfg.title || 'SNAKE LIVE').toUpperCase().split(' ').map((w) => w.replace(/[&<>"']/g, ''));
+  $('title').innerHTML = t.length > 1 ? `${t.slice(0, -1).join(' ')} <b>${t[t.length - 1]}</b>` : t[0];
+  $('chan').textContent = QS.get('chan') || cfg.chan || '';
+  $('pill').hidden = !cfg.chat;
+};
+showText();
+setInterval(async () => {   // new settings from the admin panel
+  const n = await getCfg(); if (!n) return;
+  if (n.reset !== cfg.reset) { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } location.reload(); return; }
+  if (n.autoplay === false) { save(); location.reload(); return; }
+  if (n.rev === cfg.rev) return;
+  const musicWas = cfg.music; Object.assign(cfg, n); showText();
+  if (music && cfg.music && !musicWas) music.start(); else if (music && !cfg.music && musicWas) music.stop();
+}, 30000);
 
 /* ---------- loop ---------- */
 addEventListener('resize', fit); fit();
@@ -305,7 +331,7 @@ let last = performance.now(), acc = 0;
 const frame = (now) => {
   const dt = Math.min(0.1, (now - last) / 1000) * FAST; last = now;
   if (phase === 'play') {
-    acc += dt * STEPS;
+    acc += dt * steps();
     let guard = 0;
     while (acc >= 1 && guard++ < 60) { acc -= 1; step(); if (phase !== 'play') break; }
     t = Math.min(1, acc);

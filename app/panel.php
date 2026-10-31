@@ -50,6 +50,7 @@ function games_list(): array
     $kp    = keeper_config();
     $race  = race_config();
     $lf    = lastflag_config();
+    $sn    = snake_config();
     return [
         'ball'  => ['id' => 1, 'key' => 'ball',  'name' => 'Ball Drop',      'url' => '/ball/',  'settings' => 'game.php',
                     'title' => ucwords(strtolower($ball['players'][0]['name'])) . ' vs ' . ucwords(strtolower($ball['players'][1]['name'])), 'category' => 'football',
@@ -108,11 +109,12 @@ function games_list(): array
                     'desc' => 'A neon arena with a turning bearing: the black hole pulls the flags in one by one. Chat to shield or revive your country — the last flag standing wins!',
                     'autoplay' => (bool) $lf['autoplay'], 'pace' => (string) $lf['pace'],
                     'detail' => (int) $lf['count'] . ' countries · hole every ' . (int) $lf['gap'] . ' s'],
-        'snake' => ['id' => 11, 'key' => 'snake', 'name' => 'Snake Live', 'url' => '/snake/', 'settings' => '/snake/',
+        'snake' => ['id' => 11, 'key' => 'snake', 'name' => 'Snake Live', 'url' => '/snake/', 'settings' => 'snake.php',
                     'title' => 'Snake Live · Feed the Snake', 'category' => 'arcade',
                     'tags' => ['arcade', 'chat', 'relax'], 'thumb' => '/assets/site/snake.jpg',
                     'desc' => 'A snake plays by itself and eats fruit 24/7. Every chat drops a fruit with your name — subscribe for a golden fruit!',
-                    'autoplay' => true, 'pace' => 'normal', 'detail' => '20×20 board · chat = fruit with your name'],
+                    'autoplay' => (bool) $sn['autoplay'], 'pace' => (string) $sn['pace'],
+                    'detail' => (int) $sn['grid'] . '×' . (int) $sn['grid'] . ' board · ' . (int) $sn['speed'] . ' moves a second'],
     ];
 }
 
