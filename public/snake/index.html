@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script src="/game/fpscap.js?v=3"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snake Live · Type to Feed the Snake</title>
+<link rel="stylesheet" href="/snake/snake.css?v=1">
+<link rel="stylesheet" href="/game/chat.css?v=4">
+</head>
+<body>
+<div id="stage">
+  <header class="top">
+    <div class="brand"><h1 id="title">SNAKE <b>LIVE</b></h1><div class="sub" id="round">ROUND 1 · LIVE 24/7</div></div>
+    <div class="num"><span>🍎 SCORE</span><b id="score">0</b></div>
+    <div class="num n2"><span>🏆 BEST</span><b class="g" id="best">0</b></div>
+  </header>
+
+  <div class="subbar">
+    <div class="today"><span>FRUITS TODAY</span><b id="today">0</b></div>
+    <div class="subscribe" id="subscribe"><i class="yt"></i>SUBSCRIBE <span class="bell">🔔</span><span class="hand" id="hand">👆</span></div>
+  </div>
+
+  <div class="board-wrap"><canvas id="board" aria-label="The snake on its board"></canvas></div>
+  <div class="pops" id="pops"></div>
+
+  <div class="pill" id="pill">💬 TYPE ANYTHING = 🍓 A FRUIT WITH YOUR NAME</div>
+
+  <div class="banner" id="banner" hidden><div class="banner-in" id="banner-text"></div></div>
+
+  <div class="chan" id="chan"></div>
+
+  <button class="sound-btn" id="sound-btn" type="button" hidden>🔊 TAP FOR SOUND</button>
+</div>
+<script type="module" src="/snake/snake.js?v=1"></script>
+</body>
+</html>

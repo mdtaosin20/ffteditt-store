@@ -1,0 +1,65 @@
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Rajdhani:wght@700&display=swap");
+:root { --gold: #ffc93a; --display: "Oswald", "Bebas Neue", Impact, "Arial Narrow", sans-serif; --ui: "Rajdhani", "Oswald", system-ui, sans-serif; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; background: #03050c; overflow: hidden; }
+body { position: fixed; inset: 0; overflow: clip; }
+/* Fixed 1080x1920 stage, scaled to fit (YouTube's name bar covers y < ~110, its chat y > ~1395 on phones) */
+#stage { position: absolute; left: 50%; top: 50%; width: 1080px; height: 1920px; transform-origin: 50% 50%; overflow: hidden; color: #fff; font-family: var(--ui);
+  background: radial-gradient(50% 30% at 20% 30%, rgba(130, 60, 230, .32), transparent 70%), radial-gradient(50% 30% at 80% 75%, rgba(20, 170, 120, .28), transparent 70%), #070b1c; }
+
+.top .brand { position: absolute; left: 34px; top: 112px; }
+.top h1 { font-family: var(--display); font-weight: 700; font-size: 70px; line-height: 1; letter-spacing: 2px; }
+.top h1 b { color: #b98cff; font-weight: 700; }
+.top .sub { margin-top: 8px; font-size: 26px; letter-spacing: 3px; color: #9fb2dc; font-weight: 700; }
+.num { position: absolute; top: 108px; left: 560px; width: 220px; height: 108px; text-align: center; padding-top: 8px; border-radius: 18px; border: 3px solid #2a4a9a; background: rgba(8, 12, 30, .9); }
+.num.n2 { left: 800px; width: 246px; }
+.num span { display: block; font-size: 24px; letter-spacing: 2px; color: #9fb2dc; }
+.num b { display: block; font-family: var(--display); font-size: 56px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.num b.g { color: var(--gold); }
+.num b.bump { animation: bump .5s ease-out; }
+@keyframes bump { 30% { transform: scale(1.3); color: #7cf0b0; } }
+
+.subbar { position: absolute; left: 34px; right: 34px; top: 236px; height: 80px; display: flex; align-items: center; gap: 20px; }
+.today { height: 72px; padding: 6px 22px; border-radius: 16px; background: rgba(8, 12, 30, .9); border: 3px solid #2a4a9a; display: flex; align-items: center; gap: 14px; }
+.today span { font-size: 22px; letter-spacing: 2px; color: #9fb2dc; }
+.today b { font-family: var(--display); font-size: 40px; color: #7cf0b0; font-variant-numeric: tabular-nums; }
+.subscribe { position: relative; margin-left: auto; height: 74px; padding: 0 30px 0 22px; border-radius: 14px; background: #ff1f3d; display: flex; align-items: center; gap: 14px;
+  font-family: var(--display); font-size: 38px; letter-spacing: 2px; box-shadow: 0 6px 0 #9b0f22, 0 0 30px rgba(255, 31, 61, .5); }
+.subscribe .yt { width: 44px; height: 32px; border-radius: 9px; background: #fff; position: relative; }
+.subscribe .yt::after { content: ""; position: absolute; left: 17px; top: 8px; border-left: 14px solid #ff1f3d; border-top: 8px solid transparent; border-bottom: 8px solid transparent; }
+.subscribe .bell { font-size: 32px; }
+.subscribe.tap { animation: tap .6s ease-out; }
+@keyframes tap { 25% { transform: scale(.92); box-shadow: 0 2px 0 #9b0f22; } }
+.hand { position: absolute; right: -10px; top: 40px; font-size: 64px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+.hand.on { opacity: 1; animation: hand 1.6s ease-in-out; }
+@keyframes hand { 0% { transform: translate(40px, 40px); } 40% { transform: translate(-60px, -10px); } 55% { transform: translate(-60px, 4px); } 70% { transform: translate(-60px, -10px); } 100% { transform: translate(40px, 40px); } }
+
+.board-wrap { position: absolute; left: 84px; top: 336px; width: 912px; height: 912px; border-radius: 22px; padding: 6px; background: linear-gradient(135deg, #ffd23a, #f59e0b); box-shadow: 0 0 40px rgba(255, 200, 40, .35); }
+#board { width: 900px; height: 900px; display: block; border-radius: 16px; }
+.pops { position: absolute; inset: 0; pointer-events: none; }
+.pop { position: absolute; font-family: var(--display); font-size: 40px; font-weight: 700; color: #fff; text-shadow: 0 3px 0 #000, 0 0 12px #000; white-space: nowrap; transform: translate(-50%, -50%); animation: pop 1.4s ease-out forwards; }
+.pop.big { font-size: 54px; color: var(--gold); }
+@keyframes pop { from { opacity: 0; transform: translate(-50%, -20%) scale(.6); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } to { opacity: 0; transform: translate(-50%, -160%) scale(1); } }
+
+.pill { position: absolute; left: 50%; top: 1262px; transform: translateX(-50%); padding: 10px 30px; border-radius: 999px; background: rgba(8, 12, 30, .92); border: 3px solid #7cf0b0; color: #7cf0b0; font-size: 32px; font-weight: 700; letter-spacing: 1px; white-space: nowrap; }
+
+.banner { position: absolute; left: 0; right: 0; top: 650px; display: flex; justify-content: center; pointer-events: none; z-index: 20; }
+.banner[hidden] { display: none; }
+.banner-in { padding: 26px 46px; border-radius: 26px; background: rgba(6, 10, 26, .94); border: 5px solid #b98cff; box-shadow: 0 0 60px rgba(185, 140, 255, .6); text-align: center;
+  font-family: var(--display); font-size: 64px; line-height: 1.15; letter-spacing: 2px; animation: ban .5s cubic-bezier(.2, 1.4, .4, 1); }
+.banner-in small { display: block; font-size: 34px; color: #cbd5ff; letter-spacing: 1px; }
+.banner-in.gold { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 70px rgba(255, 200, 40, .7); }
+.banner-in.red { border-color: #ff5a6e; box-shadow: 0 0 60px rgba(255, 90, 110, .6); }
+@keyframes ban { from { transform: scale(.4); opacity: 0; } }
+
+.chan { position: absolute; left: 0; right: 0; top: 1858px; text-align: center; font-family: var(--display); font-size: 34px; letter-spacing: 3px; color: #cbd5ff; }
+.sound-btn { position: absolute; right: 30px; top: 1780px; padding: 16px 26px; border-radius: 999px; border: 0; background: #ff1f3d; color: #fff; font: 700 30px var(--ui); }
+.sound-btn[hidden] { display: none; }
+
+/* LUNA and the chat box under the board */
+.lc.lc-snake .lc-fans { display: none !important; }
+.lc.lc-snake .lc-sub { top: 560px; }
+.lc.lc-snake .lc-robot, .lc.lc-snake .lc-robot.girl { top: 1336px; bottom: auto; left: 26px; right: 26px; min-height: 0; height: 190px; padding: 10px 24px 10px 230px; gap: 0; }
+.lc.lc-snake .lc-robot.girl .lc-rb-face { width: 220px; }
+.lc.lc-snake .lc-box { top: 1546px; left: 26px; right: 26px; width: auto; padding: 8px 18px 6px; }
+.lc.lc-snake .lc-box .lc-row { font-size: 24px; padding: 4px 0; }

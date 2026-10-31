@@ -245,6 +245,25 @@ function yt_defaults(string $game): array
                 . "#beatthekeeper #worldcup #marblerace #countryballs #football #soccer #live #countries #flags #chatgame #philippines #malaysia #usa #india #bangladesh",
         ];
     }
+    if ($game === 'snake') {
+        $titles = [
+            "🔴 LIVE Snake Game 🐍 Type in Chat = A Fruit With YOUR Name! 🍓 24/7",
+            "🐍 Feed the Snake LIVE! Every Comment Drops a Fruit 🍎 Can It Fill the Board?",
+            "🔴 LIVE Satisfying Snake 🐍 It Plays by Itself — Your Comment Feeds It! 🍉",
+            "🐍 Can the Snake Fill the WHOLE Board? 🏆 Comment to Drop a Fruit | LIVE 24/7",
+        ];
+        return [
+            'title'  => $titles[0],
+            'titles' => $titles,
+            'desc'   => "🐍 SNAKE LIVE — a snake plays by itself and eats fruit, 24 hours a day!\n"
+                . "Every fruit makes it one longer. Can it fill the whole board? 🏆\n\n"
+                . "👇 TYPE ANYTHING IN CHAT — a fruit with YOUR NAME drops on the board and the snake comes to eat it!\n"
+                . "🔔 Subscribe = a 🌟 GOLDEN FRUIT (+3)\n"
+                . "🎙️ LUNA, our live host, welcomes you and answers your comments live.\n\n"
+                . "👍 Like if you love the snake · 📣 Share with your friends so they can feed it too!\n\n"
+                . "#snake #snakegame #satisfying #live #relaxing #chatgame #interactive #gaming #fruit #24/7",
+        ];
+    }
     if ($game === 'race') {
         return [
             'title' => '🔴 LIVE Flag Race 🏁 Which Country Wins? Type Your Country to BOOST It ⚡ New Race Every Minute!',

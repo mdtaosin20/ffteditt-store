@@ -108,6 +108,11 @@ function games_list(): array
                     'desc' => 'A neon arena with a turning bearing: the black hole pulls the flags in one by one. Chat to shield or revive your country — the last flag standing wins!',
                     'autoplay' => (bool) $lf['autoplay'], 'pace' => (string) $lf['pace'],
                     'detail' => (int) $lf['count'] . ' countries · hole every ' . (int) $lf['gap'] . ' s'],
+        'snake' => ['id' => 11, 'key' => 'snake', 'name' => 'Snake Live', 'url' => '/snake/', 'settings' => '/snake/',
+                    'title' => 'Snake Live · Feed the Snake', 'category' => 'arcade',
+                    'tags' => ['arcade', 'chat', 'relax'], 'thumb' => '/assets/site/snake.jpg',
+                    'desc' => 'A snake plays by itself and eats fruit 24/7. Every chat drops a fruit with your name — subscribe for a golden fruit!',
+                    'autoplay' => true, 'pace' => 'normal', 'detail' => '20×20 board · chat = fruit with your name'],
     ];
 }
 
@@ -133,6 +138,7 @@ function game_of_url(string $url): string
     if (preg_match('#/lastflag/?(\?|$)#', $path)) return 'lastflag';
     if (preg_match('#/cupkick/?(\?|$)#', $path)) return 'cupkick';
     if (preg_match('#/actionkick/?(\?|$)#', $path)) return 'actionkick';
+    if (preg_match('#/snake/?(\?|$)#', $path)) return 'snake';
     return preg_match('#/flags/?(\?|$)#', $path) ? 'flags' : 'ball';
 }
 
