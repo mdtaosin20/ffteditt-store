@@ -79,6 +79,13 @@ function cam_tick(): void
     }
 }
 
+/** How his picture is turned: r = small turn in degrees, q = quarter turns (0–3), m = mirror. */
+function cam_view(array $link): array
+{
+    $v = is_array($link['view'] ?? null) ? $link['view'] : [];
+    return ['r' => (float) ($v['r'] ?? 0), 'q' => (int) ($v['q'] ?? 0), 'm' => !empty($v['m'])];
+}
+
 /** Seconds as "2h 18m" / "12m" / "40s". */
 function cam_left(int $s): string
 {

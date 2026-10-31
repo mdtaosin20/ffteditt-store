@@ -25,5 +25,5 @@ function golive_public(int $sid): array
     $g = golive_get($sid);
     $alive = $g['on'] && time() - (int) $g['seen'] <= GOLIVE_STALE;
     return ['on' => $alive, 'sess' => $alive ? $g['sess'] : '', 'mode' => $g['mode'], 'name' => $g['name'],
-            'offer' => $alive && $g['answer'] === '' ? $g['offer'] : ''];
+            'offer' => $alive && $g['answer'] === '' ? $g['offer'] : '', 'view' => $g['view'] ?? null];   // view: camera links only (turn / mirror)
 }

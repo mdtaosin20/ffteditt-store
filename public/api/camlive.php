@@ -15,7 +15,7 @@ $s = cli_stream($sid);
 $do = (string) ($in['do'] ?? '');
 $now = time();
 $state = fn (array $s) => ['left' => (int) $link['exp'] - $now, 'has_key' => $s['stream_key'] !== '', 'orient' => str_ends_with($s['quality'], '-h') ? 'h' : 'v',
-                   'on' => $s['desired'] === 'on', 'running' => $s['desired'] === 'on' && $s['status'] === 'running'];
+                   'on' => $s['desired'] === 'on', 'running' => $s['desired'] === 'on' && $s['status'] === 'running', 'view' => cam_view($link)];
 
 if ($do === 'info') $out(['ok' => true, 'name' => $link['label']] + $state($s));
 
@@ -54,7 +54,7 @@ if ($do === 'start') {
 if ($do === 'offer') {
     $offer = (string) ($in['offer'] ?? '');
     if ($offer === '' || strlen($offer) > 20000) $out(['error' => 'offer']);
-    $g = ['on' => true, 'sess' => bin2hex(random_bytes(8)), 'mode' => 'cam', 'offer' => $offer, 'answer' => '', 'seen' => $now,
+    $g = ['on' => true, 'sess' => bin2hex(random_bytes(8)), 'mode' => 'cam', 'offer' => $offer, 'answer' => '', 'seen' => $now, 'view' => cam_view($link),
           'name' => mb_substr(preg_replace('/[^\p{L}\p{N} ]/u', '', $link['label']) ?? '', 0, 16) ?: 'LIVE', 'state' => ''];
     golive_put($sid, $g);
     cam_update($link['id'], ['seen' => $now]);
@@ -67,6 +67,16 @@ if ($do === 'poll') {
     if (!$g['on'] || !hash_equals($g['sess'], (string) ($in['sess'] ?? ''))) $out(['error' => 'ended'] + $state($s));
     $g['seen'] = $now; golive_put($sid, $g);
     $out(['ok' => true, 'answer' => $g['answer'], 'state' => $g['state']] + $state($s));
+}
+
+// 📐 turn / straighten / mirror: kept with the link and sent to the live page at once (no restart)
+if ($do === 'view') {
+    $v = is_array($in['view'] ?? null) ? $in['view'] : [];
+    $view = ['r' => max(-45, min(45, round((float) ($v['r'] ?? 0), 1))), 'q' => ((int) ($v['q'] ?? 0) % 4 + 4) % 4, 'm' => !empty($v['m'])];
+    cam_update($link['id'], ['view' => $view]);
+    $g = golive_get($sid);
+    if ($g['on']) { $g['view'] = $view; golive_put($sid, $g); }
+    $out(['ok' => true, 'view' => $view]);
 }
 
 if ($do === 'stop') {

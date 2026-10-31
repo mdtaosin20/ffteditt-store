@@ -28,14 +28,19 @@ small{display:block;font-size:12px;color:#8e98b8;margin-top:5px;line-height:1.45
 .er:empty{display:none}
 #live{position:fixed;inset:0;background:#000;display:none}
 #live video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
-#live video.mirror{transform:scaleX(-1)}
+#live video{transform-origin:50% 50%}
 .top{position:absolute;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top));display:flex;justify-content:space-between;gap:8px;font-weight:800;font-size:13px}
 .pill{padding:6px 11px;border-radius:99px;background:#000a;color:#fff}.pill.red{background:#dc2626}
 .bot{position:absolute;left:14px;right:14px;bottom:calc(16px + env(safe-area-inset-bottom))}
 .lvl{height:8px;border-radius:6px;background:#ffffff26;overflow:hidden}.lvl i{display:block;height:100%;width:0;background:linear-gradient(90deg,#22c55e,#facc15,#ef4444);transition:width .08s}
 .zm{display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px 12px;border-radius:12px;background:#0009;color:#fff;font-weight:700;font-size:13px}.zm[hidden]{display:none}.zm input{flex:1;margin:0;padding:0;accent-color:#3b82f6}.zm b{min-width:42px;text-align:right}
 .ctr{display:flex;gap:8px;margin-top:10px}.ctr button{flex:1;padding:11px 4px;border-radius:12px;border:0;background:#ffffff2b;color:#fff;font-weight:700;font-size:13px;backdrop-filter:blur(6px)}
-.ctr button.off{background:#991b1b}
+.ctr button.off{background:#991b1b}.ctr button.on{background:#2563eb}
+.tp{margin-top:10px;padding:10px 12px;border-radius:14px;background:#0b1024ee;border:1px solid #3b82f655;color:#fff;font-weight:700;font-size:13px}.tp[hidden]{display:none}
+.tp input{width:100%;margin:6px 0 0;padding:0;accent-color:#3b82f6}.tp .rw{display:flex;gap:6px;margin-top:8px}.tp .rw button{flex:1;padding:9px 2px;border-radius:10px;border:0;background:#ffffff26;color:#fff;font-weight:700;font-size:12.5px}
+.tp .rw button.on{background:#2563eb}
+#grid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(#ffffff40 1px,transparent 1px),linear-gradient(90deg,#ffffff40 1px,transparent 1px);background-size:33.33% 33.33%}
+#grid[hidden]{display:none}
 #go{display:block;width:100%;margin-top:10px;padding:16px;border:0;border-radius:15px;background:#dc2626;color:#fff;font-weight:900;font-size:17px}
 #go.end{background:#1f2937;border:2px solid #dc2626}
 #msg{margin-top:8px;text-align:center;font-size:13px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000}
@@ -52,12 +57,15 @@ small{display:block;font-size:12px;color:#8e98b8;margin-top:5px;line-height:1.45
   <small style="text-align:center;margin-top:14px">Keep this page open while you are live. Use earphones if you watch your live on another phone.</small>
 </div>
 <div id="live">
-  <video id="pv" playsinline muted autoplay class="mirror"></video>
+  <video id="pv" playsinline muted autoplay></video><div id="grid" hidden></div>
   <div class="top"><span class="pill" id="st">● Not live</span><span class="pill" id="left">⏳</span></div>
   <div class="bot">
     <div class="lvl"><i id="lv"></i></div>
     <div class="zm" id="zm" hidden>🔍 Zoom <input type="range" id="zoom"><b id="zv">1.0×</b></div>
-    <div class="ctr"><button type="button" id="flip">🔄 Flip</button><button type="button" id="mic">🎤 Mic on</button><button type="button" id="torch">🔆 Light</button></div>
+    <div class="ctr"><button type="button" id="flip">🔄 Flip</button><button type="button" id="mic">🎤 Mic on</button><button type="button" id="torch">🔆 Light</button><button type="button" id="turn">📐 Turn</button></div>
+    <div class="tp" id="tp" hidden>📐 Straighten <span style="float:right" id="rv">0°</span>
+      <input type="range" id="rot" min="-45" max="45" step="0.5" value="0">
+      <div class="rw"><button type="button" id="ql">↺ 90°</button><button type="button" id="qr">↻ 90°</button><button type="button" id="mir">🪞 Mirror</button><button type="button" id="rst">⟲ Reset</button></div></div>
     <button type="button" id="go">● Go live</button>
     <div id="msg"></div>
   </div>
@@ -71,7 +79,21 @@ small{display:block;font-size:12px;color:#8e98b8;margin-top:5px;line-height:1.45
   const over = (m) => { want = false; stopAll(); document.body.innerHTML = '<div class="pg" style="text-align:center;padding-top:80px"><h1>⌛ Link over</h1><div class="p">' + (m || 'This link does not work any more.') + '</div></div>'; };
   const msg = (t) => { $('msg').textContent = t || ''; };
   const fmt = (s) => s >= 86400 ? Math.floor(s / 86400) + 'd ' + Math.floor(s % 86400 / 3600) + 'h' : s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor(s % 3600 / 60) + 'm' : s >= 60 ? Math.floor(s / 60) + 'm' : Math.max(0, s) + 's';
+  // 📐 the turn of the picture (the live page does the same): r = small turn, q = quarter turns, m = mirror
+  let view = { r: 0, q: 0, m: false }, viewT = 0;
+  const showView = () => {
+    const v = $('pv'), odd = view.q % 2 === 1, W = innerWidth, H = innerHeight, a = odd ? H / W : W / H, rad = Math.abs(view.r) * Math.PI / 180;
+    const s = Math.cos(rad) + Math.sin(rad) * Math.max(a, 1 / a);   // a little bigger, so no black corners
+    v.style.width = (odd ? H : W) + 'px'; v.style.height = (odd ? W : H) + 'px';
+    v.style.left = (odd ? (W - H) / 2 : 0) + 'px'; v.style.top = (odd ? (H - W) / 2 : 0) + 'px'; v.style.right = v.style.bottom = 'auto';
+    const selfie = facing === 'user';   // the front camera looks like a mirror on this screen (the live is not mirrored unless you choose it)
+    v.style.transform = `rotate(${view.q * 90 + view.r}deg) scale(${s.toFixed(3)}) scaleX(${(view.m !== selfie) ? -1 : 1})`;
+    $('rv').textContent = (view.r > 0 ? '+' : '') + view.r + '°' + (view.q ? ` · ${view.q * 90}°` : '');
+    $('rot').value = view.r; $('mir').classList.toggle('on', view.m);
+  };
+  const sendView = () => { showView(); clearTimeout(viewT); viewT = setTimeout(() => api({ do: 'view', view }).catch(() => {}), 250); };
   const info = (j) => {
+    if (j.view && !viewT) { view = { r: Number(j.view.r) || 0, q: Number(j.view.q) || 0, m: !!j.view.m }; showView(); }
     if (typeof j.left === 'number') { left = j.left; $('until').textContent = new Date(Date.now() + j.left * 1000).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }); }
   };
   setInterval(() => { left--; $('left').textContent = '⏳ ' + fmt(left) + ' left'; if (left <= 0 && want) over('The time of this link is over. Your live was stopped.');
@@ -114,7 +136,7 @@ small{display:block;font-size:12px;color:#8e98b8;margin-top:5px;line-height:1.45
       return;
     }
     $('s1').style.display = 'none'; $('live').style.display = 'block';
-    $('pv').srcObject = local; $('pv').classList.toggle('mirror', facing === 'user');
+    $('pv').srcObject = local; showView();
     try { ac = new AudioContext(); const an = ac.createAnalyser(); an.fftSize = 128; ac.createMediaStreamSource(new MediaStream(local.getAudioTracks())).connect(an);
       const a = new Uint8Array(an.frequencyBinCount); const m = () => { requestAnimationFrame(m); an.getByteFrequencyData(a); let s = 0; for (let i = 2; i < 40; i++) s += a[i]; $('lv').style.width = Math.min(100, s / 38 / 1.4) + '%'; }; m(); } catch (e) { /* no meter */ }
     msg('Your camera is ready. Press ● Go live when you are ready.');
@@ -172,11 +194,18 @@ small{display:block;font-size:12px;color:#8e98b8;margin-top:5px;line-height:1.45
     const t = (await cam()).getVideoTracks()[0];
     local.getVideoTracks().forEach((o) => { o.stop(); local.removeTrack(o); }); local.addTrack(t);
     zoomSetup(t);
-    $('pv').srcObject = local; $('pv').classList.toggle('mirror', facing === 'user');
+    $('pv').srcObject = local; showView();
     const tx = pc && pc.getTransceivers().find((x) => x.receiver.track && x.receiver.track.kind === 'video');
     if (tx) await tx.sender.replaceTrack(t);
   };
   $('flip').onclick = async () => { facing = facing === 'user' ? 'environment' : 'user'; torchOn = false; $('torch').classList.remove('off'); try { await swap(); } catch (e) { msg('Could not flip: ' + e.message); } };
+  $('turn').onclick = () => { const o = $('tp').hidden; $('tp').hidden = !o; $('grid').hidden = !o; $('turn').classList.toggle('on', o); };
+  $('rot').oninput = () => { view.r = Number($('rot').value); sendView(); };
+  $('ql').onclick = () => { view.q = (view.q + 3) % 4; sendView(); };
+  $('qr').onclick = () => { view.q = (view.q + 1) % 4; sendView(); };
+  $('mir').onclick = () => { view.m = !view.m; sendView(); };
+  $('rst').onclick = () => { view = { r: 0, q: 0, m: false }; sendView(); };
+  addEventListener('resize', showView);
   $('mic').onclick = () => { const a = local && local.getAudioTracks()[0]; if (!a) return; a.enabled = !a.enabled; $('mic').textContent = a.enabled ? '🎤 Mic on' : '🔇 Mic off'; $('mic').classList.toggle('off', !a.enabled); };
   $('torch').onclick = async () => {
     const v = local && local.getVideoTracks()[0]; if (!v) return;
