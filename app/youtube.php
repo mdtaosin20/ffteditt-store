@@ -158,6 +158,7 @@ function yt_err(array $r): string
     $m = $j['error']['message'] ?? $j['error_description'] ?? (is_string($j['error'] ?? null) ? $j['error'] : '') ?: substr(strip_tags($raw), 0, 120);
     $reason = $j['error']['errors'][0]['reason'] ?? '';
     if ($reason === 'quotaExceeded') return 'YouTube daily limit used up. It resets at 1–2 PM Bangladesh time.';
+    if ($reason === 'uploadRateLimitExceeded' || $code === 429) return 'YouTube says this channel set too many thumbnails just now.';
     if ($code === 403 && stripos((string) $m, 'thumbnail') !== false) return 'YouTube does not allow custom thumbnails on this channel yet. Verify the channel with your phone at youtube.com/verify.';
     return "Google said ({$code}): " . strip_tags((string) $m);
 }
@@ -461,14 +462,19 @@ function yt_find_video(array $s, string $tok, bool $create = false): string
     // Which YouTube "stream" uses our stream key? (so the right live video is used when a channel has several)
     $boundId = '';
     $streamActive = false;
-    $r = yt_get($tok, 'liveStreams', ['part' => 'id,cdn,status', 'mine' => 'true', 'maxResults' => 50]);
-    if ($r[0] === 200) {
+    // (a channel can have more than 50 stream keys: look through every page, at most 5)
+    $page = '';
+    for ($p = 0; $p < 5 && $boundId === ''; $p++) {
+        $r = yt_get($tok, 'liveStreams', ['part' => 'id,cdn,status', 'mine' => 'true', 'maxResults' => 50] + ($page !== '' ? ['pageToken' => $page] : []));
+        if ($r[0] !== 200) break;
         foreach ($r[1]['items'] ?? [] as $ls) {
             if (($ls['cdn']['ingestionInfo']['streamName'] ?? '') === $s['stream_key']) {
                 $boundId = (string) $ls['id'];
                 $streamActive = ($ls['status']['streamStatus'] ?? '') === 'active';
             }
         }
+        $page = (string) ($r[1]['nextPageToken'] ?? '');
+        if ($page === '') break;
     }
     $video = '';
     foreach (['active', 'upcoming'] as $status) {
@@ -588,25 +594,80 @@ function yt_apply(array $s): array
         if ($r[0] !== 200) throw new RuntimeException(yt_err($r));
 
         $note = 'Title and description set' . ($vary ? " (version {$vary['letter']})" : '');
+        $thumbOk = true;
         if ($thumb) {
-            $r = yt_http('POST', 'https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=' . rawurlencode($video),
-                ['Authorization: Bearer ' . $tok, 'Content-Type: ' . $thumb[1]], (string) file_get_contents($thumb[0]), 30);
-            $note .= $r[0] === 200 ? ', thumbnail set' : '. Thumbnail failed: ' . yt_err($r);
+            $r = yt_set_thumb($tok, $video, $thumb);
+            $thumbOk = $r[0] === 200;
+            if ($thumbOk) { $note .= ', thumbnail set'; setting_set('yt_thumb_retry_' . $s['id'], ''); }
+            else {
+                $note .= '. Thumbnail failed: ' . yt_err($r) . (yt_thumb_retryable($r) ? ' — trying the thumbnail again in 2 minutes' : '');
+                setting_set('yt_thumb_retry_' . $s['id'], yt_thumb_retryable($r)
+                    ? json_encode(['video' => $video, 'start' => (int) $s['started_at'], 'file' => $thumb[0], 'mime' => $thumb[1], 'tries' => 1, 'at' => time()]) : '');
+            }
         }
 
         db()->prepare('UPDATE streams SET yt_done_rev = yt_rev, yt_done_start = COALESCE(started_at, 0) WHERE id = ?')
             ->execute([$s['id']]);
         setting_set('yt_done_video_' . $s['id'], $video);
         $msg = $note . ' (' . date('d M, h:i A') . ').';
-        $mark->execute([$msg, 1, time(), $s['id']]);
+        $mark->execute([$msg, $thumbOk ? 1 : 0, time(), $s['id']]);
         db()->prepare('UPDATE streams SET yt_fails = 0 WHERE id = ?')->execute([$s['id']]);
-        log_activity("YouTube: {$s['name']} — {$note}", 'ok');
+        log_activity("YouTube: {$s['name']} — {$note}", $thumbOk ? 'ok' : 'warn');
         return [true, $msg];
     } catch (Throwable $e) {
         $mark->execute([$e->getMessage(), 0, time(), $s['id']]);
         db()->prepare('UPDATE streams SET yt_fails = CASE WHEN yt_fail_start = COALESCE(started_at, 0) THEN yt_fails + 1 ELSE 1 END,
                        yt_fail_start = COALESCE(started_at, 0) WHERE id = ?')->execute([$s['id']]);
         return [false, $e->getMessage()];
+    }
+}
+
+/** Put a picture on a video as its thumbnail. YouTube lets one channel set only a few in a short time. */
+function yt_set_thumb(string $tok, string $video, array $thumb): array
+{
+    // two lives on the same channel start together: never send two thumbnails in the same few seconds
+    $last = (int) (setting_get('yt_thumb_last_at') ?? 0);
+    if (time() - $last < 8) sleep(min(8, 8 - (time() - $last)));
+    setting_set('yt_thumb_last_at', (string) time());
+    return yt_http('POST', 'https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=' . rawurlencode($video),
+        ['Authorization: Bearer ' . $tok, 'Content-Type: ' . $thumb[1]], (string) @file_get_contents($thumb[0]), 30);
+}
+
+/** Worth trying again later? (not when the channel may not use custom thumbnails, or the limit is used up) */
+function yt_thumb_retryable(array $r): bool
+{
+    $reason = (string) ($r[1]['error']['errors'][0]['reason'] ?? '');
+    if ($reason === 'quotaExceeded' || $reason === 'dailyLimitExceeded') return false;
+    if ($r[0] === 403 && $reason !== 'uploadRateLimitExceeded' && $reason !== 'rateLimitExceeded') return false;
+    return true;
+}
+
+/** A thumbnail that failed (e.g. YouTube said "too many thumbnails just now"): only the thumbnail again, every 2 minutes, up to 6 times. */
+function yt_thumb_retry_tick(int $serverId): void
+{
+    $now = time();
+    $st = db()->prepare("SELECT * FROM streams WHERE server_id = ? AND status = 'live' AND yt_refresh != '' AND yt_video != ''");
+    $st->execute([$serverId]);
+    foreach ($st->fetchAll() as $s) {
+        $k = json_decode((string) (setting_get('yt_thumb_retry_' . $s['id']) ?? ''), true);
+        if (!is_array($k)) continue;
+        if ($k['video'] !== $s['yt_video'] || (int) $k['start'] !== (int) $s['started_at'] || $k['tries'] >= 6) { setting_set('yt_thumb_retry_' . $s['id'], ''); continue; }
+        if ($now - (int) $k['at'] < 120 || yt_units_out()) continue;
+        $k['tries']++; $k['at'] = $now;
+        setting_set('yt_thumb_retry_' . $s['id'], json_encode($k));   // claim it first
+        $thumb = is_file($k['file']) ? [$k['file'], $k['mime']] : yt_thumb_file($s);
+        if (!$thumb) { setting_set('yt_thumb_retry_' . $s['id'], ''); continue; }
+        try {
+            $r = yt_set_thumb(yt_token($s), $k['video'], $thumb);
+            if ($r[0] === 200) {
+                setting_set('yt_thumb_retry_' . $s['id'], '');
+                db()->prepare('UPDATE streams SET yt_msg = ?, yt_msg_ok = 1 WHERE id = ?')->execute(['Title, description and thumbnail set (thumbnail on try ' . $k['tries'] . ', ' . date('d M, h:i A') . ').', $s['id']]);
+                log_activity("YouTube: {$s['name']} — thumbnail set (try {$k['tries']})", 'ok');
+            } elseif (!yt_thumb_retryable($r)) {
+                setting_set('yt_thumb_retry_' . $s['id'], '');
+                db()->prepare('UPDATE streams SET yt_msg = ?, yt_msg_ok = 0 WHERE id = ?')->execute(['Thumbnail failed: ' . yt_err($r), $s['id']]);
+            }
+        } catch (Throwable $e) { /* again in 2 minutes */ }
     }
 }
 
@@ -674,6 +735,8 @@ function yt_tick(int $serverId): void
             yt_apply($s);
         }
     }
+
+    yt_thumb_retry_tick($serverId);
 
     if (chat_cfg()['enabled']) {
         yt_subscribers_tick($serverId);
