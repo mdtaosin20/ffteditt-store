@@ -7,7 +7,7 @@ import { setupRecorder } from '/game/recorder.js?v=3';
 import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=2';
 import { genStadium, genBall, newSeed, BALL_GROUPS } from '/game/variety.js?v=1';
 import { makeGrass } from '/game/grass.js?v=1';
-import { setupMyBg } from '/game/mybg.js?v=1';
+import { setupMyBg } from '/game/mybg.js?v=2';
 
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
