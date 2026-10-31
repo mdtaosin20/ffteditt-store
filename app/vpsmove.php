@@ -71,16 +71,16 @@ function vps_share_load(): array
  * (the youngest one that has run 10+ minutes, so long-running lives keep their viewers). Then 15 minutes of calm.
  */
 const BAL_HOT = 75;      // % CPU: a VPS is busy from here
-const BAL_CHECKS = 3;   // … for this many checks in a row (one a minute)
-const BAL_ROOM = 55;    // % CPU: a VPS has room under this
-const BAL_GAP = 600;    // seconds between two moves
-const BAL_YOUNG = 300;  // a live that started less than this ago stays where it is
+const BAL_TICK = 30;    // seconds between two checks
+const BAL_CHECKS = 2;   // busy on this many checks in a row (about 1 minute) = move one live
+const BAL_GAP = 150;    // seconds between two moves (the moved live needs a moment to show its load)
+const BAL_YOUNG = 120;  // a live that started less than this ago stays where it is
 
 function vps_balance_tick(): void
 {
     if (empty(panel_opts()['auto_balance'])) return;
     $now = time();
-    if ($now - (int) (setting_get('bal_tick_at') ?? 0) < 60) return;
+    if ($now - (int) (setting_get('bal_tick_at') ?? 0) < BAL_TICK) return;
     setting_set('bal_tick_at', (string) $now);
     $note = fn (string $t) => setting_set('bal_note', json_encode(['t' => $now, 'msg' => $t], JSON_UNESCAPED_UNICODE));
     $srv = [];
@@ -110,24 +110,28 @@ function vps_balance_tick(): void
     setting_set('bal_state', json_encode(array_intersect_key($st, $srv)));
     if ($busy === null) {
         $hotNow = array_filter($srv, fn ($s, $id) => ($st[$id] ?? 0) > 0, ARRAY_FILTER_USE_BOTH);
-        $note($hotNow ? 'Watching: ' . implode(', ', array_map(fn ($id) => $srv[$id]['name'] . ' busy ' . $st[$id] . '/' . BAL_CHECKS . ' min', array_keys($hotNow)))
+        $note($hotNow ? 'Watching: ' . implode(', ', array_map(fn ($id) => $srv[$id]['name'] . ' busy (CPU ' . (int) $srv[$id]['cpu'] . ' %) ' . $st[$id] . '/' . BAL_CHECKS, array_keys($hotNow)))
                       : 'All VPS are fine (CPU under ' . BAL_HOT . ' %).');
         return;
     }
     $B = $srv[$busy];
     $wait = BAL_GAP - ($now - (int) (setting_get('bal_last') ?? 0));
     if ($wait > 0) { $note("{$B['name']} is busy (CPU " . (int) $B['cpu'] . ' %) — the last move was a short time ago; next move possible in ' . ceil($wait / 60) . ' min.'); return; }
-    // where to: the VPS with the most free room (free CPU × number of CPUs)
+    // where to: a VPS where one live fits so that afterwards BOTH are less busy than the busy one is now
+    // (e.g. 100 % with 3 lives + 50 % → about 67 % + 83 %). One live ≈ the busy VPS's CPU ÷ its lives
+    // (more or fewer CPUs on the other VPS make it smaller or bigger there). No move that only swaps the problem.
+    $load = $B['cpu'] / max(1, count($B['live']));
     $to = null;
     foreach ($srv as $id => $s) {
-        if ($id === $busy || $s['cpu'] >= BAL_ROOM || $s['slow']) continue;
-        if (count($B['live']) < 2 && $s['cpus'] <= $B['cpus']) continue;   // only one live: moving it helps only on a bigger VPS (else it just bounces)
-        $room = (100 - $s['cpu']) * $s['cpus'];
-        if ($to === null || $room > $to[1]) $to = [$id, $room];
+        if ($id === $busy || $s['slow']) continue;
+        $there = $s['cpu'] + $load * $B['cpus'] / $s['cpus'];
+        $after = max($B['cpu'] - $load, $there);
+        if ($there > 92 || $after > $B['cpu'] - 8) continue;
+        if ($to === null || $after < $to[1]) $to = [$id, $after];
     }
     if ($to === null) {
         $why = count($B['live']) < 2 ? "{$B['name']} has only one live and no other VPS is bigger — moving it would not help. Lower its quality / fps, or use a bigger VPS."
-                                     : "{$B['name']} is busy, but no other VPS has room (all " . BAL_ROOM . ' %+ CPU).';
+                                     : "{$B['name']} is busy (CPU " . (int) $B['cpu'] . ' %), but moving a live would make the other VPS just as busy — no VPS has enough room.';
         $note($why);
         if ($now - (int) (setting_get('bal_full_said') ?? 0) > 3600) { setting_set('bal_full_said', (string) $now); log_activity('🔁 ' . $why, 'warn'); }
         return;

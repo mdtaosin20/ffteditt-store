@@ -146,7 +146,7 @@ page_start('VPS Monitor', 'servers', $admin);
 <form method="post" class="card" style="max-width:none;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
   <?= csrf_field() ?><input type="hidden" name="do" value="auto_balance"><input type="hidden" name="to" value="<?= $ab ? 'off' : 'on' ?>">
   <div style="flex:1;min-width:220px"><b>🔁 Auto share</b> <span class="tag <?= $ab ? 'tag-green' : 'tag-gray' ?>"><?= $ab ? 'ON' : 'OFF' ?></span>
-    <div class="muted small">When one VPS stays busy for 3 minutes (CPU <?= BAL_HOT ?> %+ or its lives get slow) and another VPS has room, one live moves over by itself (about 20 s break). Lives that started in the last 5 minutes stay. At most one move every 10 minutes.</div>
+    <div class="muted small">When one VPS stays busy for about 1 minute (CPU <?= BAL_HOT ?> %+ or its lives get slow) and another VPS has less work, one live moves over by itself (about 20 s break) — only when both end up less busy. Then it checks again after 2–3 minutes and moves one more if still needed.</div>
     <?php $bn = json_decode((string) (setting_get('bal_note') ?? ''), true); if ($ab && is_array($bn) && time() - (int) $bn['t'] < 600): ?>
       <div class="small" style="margin-top:6px">Now: <b><?= e($bn['msg']) ?></b> <span class="muted">(<?= max(0, intdiv(time() - (int) $bn['t'], 60)) ?> min ago)</span></div>
     <?php endif; ?></div>
