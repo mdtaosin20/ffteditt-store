@@ -262,6 +262,7 @@ function schedule_in_window(array $s, int $now): bool
  */
 function auto_fix_tick(): void
 {
+    cam_tick();   // 📱 camera live links: time over / phone gone → stop (runs even when Auto Fix is off)
     if (!panel_opts()['auto_fix']) return;
     $now = time();
     if ($now - (int) (setting_get('autofix_at') ?? 0) < 15) return;

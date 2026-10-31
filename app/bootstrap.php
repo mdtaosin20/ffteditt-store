@@ -50,3 +50,4 @@ require APP_DIR . '/ytextra.php';
 require APP_DIR . '/promo.php';
 require APP_DIR . '/insights.php';
 require APP_DIR . '/clients.php';
+require APP_DIR . '/camlive.php';

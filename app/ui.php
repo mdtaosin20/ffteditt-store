@@ -95,6 +95,7 @@ function nav_items(): array
         'youtube'   => ['YouTube Manager',     'youtube.php',   'youtube'],
         'owners'    => ['Channel Owner Links', 'owners.php',    'youtube'],
         'clients'   => ['Client Links',        'clients.php',   'user'],
+        'camlinks'  => ['Camera Live Links',   'camlinks.php',  'mic'],
         'golive'    => ['Join Live (camera)',  'golive.php',    'mic'],
         'poll'      => ['Live Poll & Message', 'yt_poll.php',   'pie'],
         'promo'     => ['Screen Notification', 'promo.php',     'bell'],
