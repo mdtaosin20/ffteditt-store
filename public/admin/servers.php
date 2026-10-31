@@ -47,6 +47,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $st = db()->prepare('SELECT name FROM servers WHERE id = ?');
         $st->execute([$id]);
         log_activity('Terminal switched ' . ($on ? 'on' : 'off') . ' for ' . (string) $st->fetchColumn());
+    } elseif ($do === 'auto_balance') {
+        panel_save(['auto_balance' => ($_POST['to'] ?? '') === 'on']);
+        flash(panel_opts()['auto_balance'] ? '🔁 Auto share is ON.' : 'Auto share is off.');
     } elseif ($do === 'share') {
         [$n, $live] = vps_share_load();
         log_activity("⚖️ Share the load: moved {$n} stream(s)" . ($live ? ", {$live} live (they start again in ~20 s)" : ''), 'info');
@@ -138,6 +141,13 @@ page_start('VPS Monitor', 'servers', $admin);
   <?= csrf_field() ?><input type="hidden" name="do" value="share">
   <div style="flex:1;min-width:220px"><b>⚖️ Share the load</b><div class="muted small">Spreads your streams over the <?= $onlineN ?> online VPS (a VPS with more CPUs gets more). Only as few streams as needed move.</div></div>
   <button class="btn btn-blue" type="submit">⚖️ Share the load</button>
+</form>
+<?php $ab = !empty(panel_opts()['auto_balance']); ?>
+<form method="post" class="card" style="max-width:none;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <?= csrf_field() ?><input type="hidden" name="do" value="auto_balance"><input type="hidden" name="to" value="<?= $ab ? 'off' : 'on' ?>">
+  <div style="flex:1;min-width:220px"><b>🔁 Auto share</b> <span class="tag <?= $ab ? 'tag-green' : 'tag-gray' ?>"><?= $ab ? 'ON' : 'OFF' ?></span>
+    <div class="muted small">When one VPS stays busy for 5 minutes (CPU 85 %+ or its lives get slow) and another VPS has room, one live moves over by itself (about 20 s break). Lives that started in the last 10 minutes stay. At most one move every 15 minutes.</div></div>
+  <button class="btn <?= $ab ? 'btn-ghost' : 'btn-green' ?>" type="submit"><?= $ab ? 'Turn off' : 'Turn on' ?></button>
 </form>
 <?php endif; ?>
 <?php if (!$servers): ?>

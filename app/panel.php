@@ -14,6 +14,7 @@ function panel_defaults(): array
         'auto_start'   => true,    // streams start again by themselves after the VPS reboots
         'auto_stop'    => true,    // schedules stop streams at their end time
         'auto_fix'     => true,    // a stream that should be live but is not: fixed by itself (restart / move to a VPS that works)
+        'auto_balance' => true,    // 🔁 a VPS that stays busy gives one live to a VPS with room
         'notify'       => true,    // bell alerts
         'provider'     => 'InterServer',
         'location'     => '',
@@ -262,6 +263,7 @@ function schedule_in_window(array $s, int $now): bool
  */
 function auto_fix_tick(): void
 {
+    vps_balance_tick();   // 🔁 busy VPS → one live moves to a VPS with room (its own switch)
     cam_tick();   // 📱 camera live links: time over / phone gone → stop (runs even when Auto Fix is off)
     if (!panel_opts()['auto_fix']) return;
     $now = time();
