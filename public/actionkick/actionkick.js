@@ -7,7 +7,6 @@ import { setupRecorder } from '/game/recorder.js?v=3';
 import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=2';
 import { genStadium, genBall, newSeed, BALL_GROUPS } from '/game/variety.js?v=1';
 import { makeGrass } from '/game/grass.js?v=1';
-import { setupMyBg } from '/game/mybg.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
@@ -339,11 +338,8 @@ async function main() {
     sunset: { name: '🌅 Sunset stadium', sky: ['#2b1d5c', '#e0567a', '#ffb067'], fog: [40, 110], fogC: '#e78a7a', sun: ['#ffb36b', 2.2], hemi: ['#ffd2b0', '#3a4a2a', 0.8], exp: 0.95, ground: ['#3f8d36', '#367d2e', 'rgba(255,240,220,.9)'], stand: '#5a4560', roof: '#2a1d3a', stadium: true, lamps: true, extra: 'sunset' },
     beach: { name: '🏖 Beach', sky: ['#1f7fd6', '#7cc3f2', '#e6f6ff'], fog: [60, 160], fogC: '#cdeaf9', sun: ['#fffaf0', 2.7], hemi: ['#ffffff', '#c9a56a', 1.0], exp: 1.0, ground: ['#ecd29c', '#e4c88f', 'rgba(30,110,200,.85)', ['#d8bb80', '#f6e2b4']], stadium: false, extra: 'beach', wmc: 'rgba(90,60,20,.22)' },
     snow: { name: '❄️ Snow', sky: ['#7d8fa8', '#b9c6d6', '#e8eef5'], fog: [30, 80], fogC: '#dfe7f0', sun: ['#f2f6ff', 1.8], hemi: ['#f4f8ff', '#b0bccb', 1.1], exp: 1.0, ground: ['#f3f7fb', '#e6edf5', 'rgba(220,40,60,.85)', ['#ffffff', '#d4dee9', '#c5d9c0']], stand: '#7d8796', roof: '#5d6675', stadium: true, lamps: true, extra: 'snow', wmc: 'rgba(40,60,90,.18)' },
-    // 🖼 a picture from the owner's phone behind the field (lights like a day stadium)
-    mybg: { name: '🖼 My background', sky: ['#2f86e0', '#7fbcf2', '#cfe8fb'], fog: [60, 170], fogC: '#cfe6fa', sun: ['#fffaf0', 2.5], hemi: ['#ffffff', '#3c7a3c', 1.0], exp: 1.0, ground: ['#46a83c', '#3d9634', 'rgba(255,255,255,.95)'], stadium: false, mybg: true },
     street: { name: '🏙 Street court', sky: ['#141a3a', '#3b3f75', '#c06a6a'], fog: [40, 90], fogC: '#3b3f75', sun: ['#ffe6c2', 1.7], hemi: ['#c8d2ff', '#3d3d48', 0.8], exp: 0.95, ground: ['#7c818c', '#747984', 'rgba(255,214,58,.95)', ['#6b707a', '#8a8f99']], stadium: false, extra: 'street' },
   };
-  let myBg = null;   // 🖼 the owner's own background pictures (made below, with the menu)
   let randTh = null;   // 🎲 the made-up stadium (a new one at every START when "New stadium every START" is chosen)
   const applyTheme = (key) => {
     const th = key === 'rand' ? (randTh || (randTh = genStadium(newSeed()))) : (THEMES[key] || THEMES.night);
@@ -359,8 +355,6 @@ async function main() {
     if (th.stand) standMat.color.set(th.stand);
     if (th.roof) roof.material.color.set(th.roof);
     if (th.extra) props[th.extra]();
-    led.visible = !(th.mybg && myBg && myBg.apply(true));   // 🖼 with a picture behind, its own banner shows instead of ours
-    if (myBg && !th.mybg) myBg.apply(false);
     lastTh = th; paintGrass();
     const cc = th.crowd || crowdCols;   // the crowd's shirt colours
     for (let k = 0; k < ci; k++) crowd.setColorAt(k, col.set(cc[crowdSlot[k]]));
@@ -747,8 +741,6 @@ async function main() {
     const t = makeLed(); led.material.map.dispose(); led.material.map = t; led.material.emissiveMap = t; led.material.needsUpdate = true;
     if (!WM) { $('wm').textContent = ''; }
   };
-  myBg = setupMyBg({ game: 'actionkick', after: $('place').closest('label'), scene, stage, onChange: () => { if (themeNow === 'mybg') applyTheme('mybg'); } });
-  myBg.show(ctl().place === 'mybg');
   showCtl(); PS = ctl().size; setBall(ctl().ball);
   $('ball').addEventListener('change', () => setBall(ctl().ball)); themeNow = ctl().place; setChannel(ctl().chan); applyTheme(themeNow); setQuality(ctl().quality);
   // 🎲 unlimited looks: a new stadium and/or new ball colours (shown under the place)
@@ -763,7 +755,6 @@ async function main() {
     lookInfo();
   };
   const newLook = () => {   // at START
-    if (themeNow === 'mybg') myBg.next();
     if (themeNow === 'rand') { randTh = genStadium(newSeed()); applyTheme('rand'); }
     if ($('bcol').value === 'rand') applyBall(true);
     lookInfo();
@@ -772,7 +763,7 @@ async function main() {
   grassOn = $('grass3d').checked; paintGrass();
   $('grass3d').addEventListener('change', () => { grassOn = $('grass3d').checked; paintGrass(); });
   $('bcol').addEventListener('change', () => applyBall(true));
-  $('place').addEventListener('change', () => { themeNow = ctl().place; myBg.show(themeNow === 'mybg'); if (themeNow === 'rand') randTh = genStadium(newSeed()); applyTheme(themeNow); lookInfo(); });
+  $('place').addEventListener('change', () => { themeNow = ctl().place; if (themeNow === 'rand') randTh = genStadium(newSeed()); applyTheme(themeNow); lookInfo(); });
   setStyle(ctl().tstyle); setWords($('t1').value, $('t2').value, false);
   $('tstyle').addEventListener('change', () => { setStyle(ctl().tstyle); setWords($('t1').value, $('t2').value, false); });
   $('chan').addEventListener('change', () => setChannel(ctl().chan));
