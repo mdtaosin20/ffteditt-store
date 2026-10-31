@@ -21,8 +21,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $token = new_token();
             db()->prepare('INSERT INTO servers (name, token_hash, created_at) VALUES (?, ?, ?)')
                 ->execute([$name, hash('sha256', $token), time()]);
-            $_SESSION['new_token'] = ['id' => (int) db()->lastInsertId(), 'token' => $token];
-            log_activity("Server added: {$name}");
+            $nid = (int) db()->lastInsertId();
+            $_SESSION['new_token'] = ['id' => $nid, 'token' => $token];
+            $rep = (int) ($_POST['replaces'] ?? 0);
+            if ($rep > 0) {   // its streams move over when the new VPS checks in for the first time
+                setting_set('srv_replace_' . $nid, (string) $rep);
+                $_SESSION['new_token']['replaces'] = $rep;
+            }
+            log_activity("Server added: {$name}" . ($rep > 0 ? ' (replaces another VPS)' : ''));
         }
     } elseif ($do === 'rotate' && $id) {
         $token = new_token();
@@ -41,6 +47,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $st = db()->prepare('SELECT name FROM servers WHERE id = ?');
         $st->execute([$id]);
         log_activity('Terminal switched ' . ($on ? 'on' : 'off') . ' for ' . (string) $st->fetchColumn());
+    } elseif ($do === 'share') {
+        [$n, $live] = vps_share_load();
+        log_activity("⚖️ Share the load: moved {$n} stream(s)" . ($live ? ", {$live} live (they start again in ~20 s)" : ''), 'info');
+        flash($n ? "Done ✓ — moved {$n} stream(s)" . ($live ? ", {$live} of them live (back in about 20 seconds)" : '') . '.' : 'Already shared well — nothing to move.');
     } elseif ($do === 'rename' && $id) {
         $name = trim((string) ($_POST['name'] ?? ''));
         if ($name !== '' && mb_strlen($name) <= 40) {
@@ -101,6 +111,9 @@ page_start('VPS Monitor', 'servers', $admin);
     <button class="btn btn-gold" type="button" data-copy="install-cmd">Copy</button>
   </div>
   <p class="warn-text">This command contains a secret token and is shown only once. Don't share it. If you lose it, press “New token”.</p>
+  <?php if (!empty($newToken['replaces']) && isset($servers[(int) $newToken['replaces']])): ?>
+  <p>✅ When this VPS is online, all streams of <b><?= e($servers[(int) $newToken['replaces']]['name']) ?></b> move to it by themselves (live ones start again in about 20 seconds).</p>
+  <?php endif; ?>
 </section>
 <?php endif; ?>
 
@@ -110,9 +123,23 @@ page_start('VPS Monitor', 'servers', $admin);
   <label class="field grow"><span>New server name</span>
     <input name="name" required maxlength="40" placeholder="e.g. VPS 1 – New Jersey">
   </label>
+  <?php if ($servers): ?>
+  <label class="field"><span>This VPS replaces</span>
+    <select name="replaces">
+      <option value="0">Nothing — just an extra VPS</option>
+      <?php foreach ($servers as $sid => $s): ?><option value="<?= (int) $sid ?>"><?= e($s['name']) ?> (<?= (int) ($counts[$sid]['n'] ?? 0) ?> streams)</option><?php endforeach; ?>
+    </select></label>
+  <?php endif; ?>
   <button class="btn btn-blue" type="submit"><?= icon('plus') ?>Add server</button>
 </form>
 
+<?php $onlineN = count(array_filter($servers, 'server_online')); if ($onlineN >= 2): ?>
+<form method="post" class="card" style="max-width:none;display:flex;gap:12px;align-items:center;flex-wrap:wrap" onsubmit="return confirm('Share the streams over your online VPS? Live streams that move stop for about 20 seconds and start again on the other VPS.')">
+  <?= csrf_field() ?><input type="hidden" name="do" value="share">
+  <div style="flex:1;min-width:220px"><b>⚖️ Share the load</b><div class="muted small">Spreads your streams over the <?= $onlineN ?> online VPS (a VPS with more CPUs gets more). Only as few streams as needed move.</div></div>
+  <button class="btn btn-blue" type="submit">⚖️ Share the load</button>
+</form>
+<?php endif; ?>
 <?php if (!$servers): ?>
   <div class="card empty"><h2>No servers yet</h2><p class="muted">Add your VPS above, then run the install line on it.</p></div>
 <?php else: ?>
@@ -126,6 +153,8 @@ page_start('VPS Monitor', 'servers', $admin);
     <div class="stream-top">
       <h2><?= e($srv['name']) ?></h2>
       <span class="tag <?= $online ? 'tag-green' : 'tag-gray' ?>"><?= $online ? 'Online' : 'Offline' ?></span>
+      <?php $rpl = json_decode((string) (setting_get('srv_replaced_' . $sid) ?? ''), true); if (is_array($rpl) && (int) ($c['n'] ?? 0) === 0): ?><span class="tag tag-gray" style="background:#3a2a0a;color:#fbbf24">Replaced — you can remove it</span><?php endif; ?>
+      <?php if ((int) (setting_get('srv_replace_' . $sid) ?? 0) > 0): ?><span class="tag tag-gray">Waiting: will take over <?= e($servers[(int) setting_get('srv_replace_' . $sid)]['name'] ?? 'the old VPS') ?></span><?php endif; ?>
     </div>
     <dl class="meta">
       <div><dt>Last check-in</dt><dd><?= e(ago((int) $srv['last_seen'])) ?></dd></div>

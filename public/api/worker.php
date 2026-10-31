@@ -83,6 +83,7 @@ if ($clean['cpu_pct'] !== null) {
     record_metrics($sid, $prevInfo, $clean);
 }
 schedule_tick();
+vps_replace_tick($sid);   // 🖼 a new VPS that replaces an old one: take over its streams on the first check-in
 auto_fix_tick();
 
 // 2) Save what each stream on this server is doing right now.
