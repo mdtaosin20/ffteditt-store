@@ -19,6 +19,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['go'])) {
     exit;
 }
 
+// Back from Google after a Client Link (join.php, step 2 — the client has no admin login)
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && str_starts_with((string) ($_GET['state'] ?? ''), 'cli')) {
+    $cs = cli_state_take((string) $_GET['state']);
+    $link = $cs ? cli_find((string) $cs['t']) : null;
+    if (!$link || (int) $link['sid'] === 0) {
+        inv_page('Link not valid', '<h1>This link does not work any more</h1><div class="p">Ask the owner for a new link.</div>', 'bad');
+    }
+    $back = '/join.php?t=' . rawurlencode((string) $cs['t']);
+    $again = '<br><br><a style="color:#9fc0ff" href="' . e($back) . '">Back</a>';
+    if (isset($_GET['error'])) {
+        inv_page('Cancelled', '<h1>Google was not connected</h1><div class="p">' . ($_GET['error'] === 'access_denied'
+            ? 'Cancel was pressed — or Google blocked the login. Then send your Gmail address to the owner (he must add it first) and try again.' : 'Google said: ' . e(substr((string) $_GET['error'], 0, 80))) . $again . '</div>', 'bad');
+    }
+    try {
+        $tok = yt_exchange((string) ($_GET['code'] ?? ''));
+        $refresh = (string) ($tok['refresh_token'] ?? '');
+        if ($refresh === '') throw new RuntimeException('Google did not give a long-term key. Remove this app at myaccount.google.com/permissions and try again.');
+        if (!str_contains((string) ($tok['scope'] ?? YT_SCOPE), 'youtube')) throw new RuntimeException('Please tick the YouTube permission box on the Google page.');
+        try { $channel = yt_channel_title((string) $tok['access_token']); } catch (Throwable $e) { $channel = 'YouTube channel'; }
+        $sid = (int) $link['sid'];
+        db()->prepare("UPDATE streams SET yt_refresh = ?, yt_channel = ?, yt_msg = '', yt_done_start = 0, yt_fails = 0 WHERE id = ?")->execute([$refresh, $channel, $sid]);
+        setting_set('yt_at_' . $sid, json_encode(['t' => $tok['access_token'], 'exp' => time() + (int) ($tok['expires_in'] ?? 3600), 'rh' => md5($refresh)]));
+        $key = cli_fetch_key(cli_stream($sid));
+        log_activity("👥 Client “{$link['label']}” connected Google: “{$channel}”" . ($key !== '' ? ' · stream key ✓ — ready to start' : ' · no stream key yet'), 'ok');
+        header('Location: ' . $back . '&connected=1');
+        exit;
+    } catch (Throwable $e) {
+        inv_page('Not connected', '<h1>Google was not connected</h1><div class="p">' . e($e->getMessage()) . $again . '</div>', 'bad');
+    }
+}
+
 // Back from Google after a channel owner link (the friend has no admin login)
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && str_starts_with((string) ($_GET['state'] ?? ''), 'inv')) {
     $inv = inv_state_take((string) $_GET['state']);

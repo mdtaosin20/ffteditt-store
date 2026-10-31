@@ -49,3 +49,4 @@ require APP_DIR . '/ytpoll.php';
 require APP_DIR . '/ytextra.php';
 require APP_DIR . '/promo.php';
 require APP_DIR . '/insights.php';
+require APP_DIR . '/clients.php';

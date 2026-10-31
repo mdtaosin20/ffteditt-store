@@ -86,4 +86,4 @@ switch ($do) {
 }
 
 $back = (string) ($_POST['back'] ?? '');
-redirect(in_array($back, ['dashboard.php', 'streams.php', 'youtube.php'], true) ? $back : 'streams.php');
+redirect(in_array($back, ['dashboard.php', 'streams.php', 'youtube.php', 'clients.php'], true) ? $back : 'streams.php');
