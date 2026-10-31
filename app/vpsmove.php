@@ -70,21 +70,29 @@ function vps_share_load(): array
  * lives run slower than real time) and another online VPS has room (CPU under 55 %), ONE live stream moves over
  * (the youngest one that has run 10+ minutes, so long-running lives keep their viewers). Then 15 minutes of calm.
  */
+const BAL_HOT = 75;      // % CPU: a VPS is busy from here
+const BAL_CHECKS = 3;   // … for this many checks in a row (one a minute)
+const BAL_ROOM = 55;    // % CPU: a VPS has room under this
+const BAL_GAP = 600;    // seconds between two moves
+const BAL_YOUNG = 300;  // a live that started less than this ago stays where it is
+
 function vps_balance_tick(): void
 {
     if (empty(panel_opts()['auto_balance'])) return;
     $now = time();
     if ($now - (int) (setting_get('bal_tick_at') ?? 0) < 60) return;
     setting_set('bal_tick_at', (string) $now);
+    $note = fn (string $t) => setting_set('bal_note', json_encode(['t' => $now, 'msg' => $t], JSON_UNESCAPED_UNICODE));
     $srv = [];
     foreach (db()->query('SELECT id, name, last_seen, info_json FROM servers') as $r) {
         if ($now - (int) $r['last_seen'] > SERVER_OFFLINE_AFTER) continue;
         $i = json_decode($r['info_json'] ?: '{}', true) ?: [];
-        $cpu = isset($i['cpu_pct']) ? (float) $i['cpu_pct'] : 100 * (float) ($i['load1'] ?? 0) / max(1, (int) ($i['cpus'] ?? 1));
-        $srv[(int) $r['id']] = ['name' => $r['name'], 'cpu' => $cpu, 'slow' => false, 'live' => []];
+        $cpus = max(1, (int) ($i['cpus'] ?? 1));
+        $cpu = isset($i['cpu_pct']) ? (float) $i['cpu_pct'] : 100 * (float) ($i['load1'] ?? 0) / $cpus;
+        $srv[(int) $r['id']] = ['name' => $r['name'], 'cpu' => $cpu, 'cpus' => $cpus, 'slow' => false, 'live' => []];
     }
     $st = json_decode((string) (setting_get('bal_state') ?? ''), true) ?: [];
-    if (count($srv) < 2) { setting_set('bal_state', '{}'); return; }
+    if (count($srv) < 2) { setting_set('bal_state', '{}'); $note('Only one VPS is online — nothing to share with.'); return; }
     foreach (db()->query("SELECT id, name, server_id, started_at, speed_now, status FROM streams WHERE desired = 'on' AND stream_key <> ''") as $r) {
         $sid = (int) $r['server_id'];
         if (!isset($srv[$sid])) continue;
@@ -92,32 +100,50 @@ function vps_balance_tick(): void
         $sp = (float) $r['speed_now'];
         if ($r['status'] === 'running' && $sp > 0 && $sp < 0.95) $srv[$sid]['slow'] = true;
     }
+    // a VPS is busy when its CPU is 75 %+ (or a live is slow) for 3 checks in a row (about 3 minutes)
     $busy = null;
     foreach ($srv as $id => $s) {
-        $hot = $s['cpu'] >= 85 || $s['slow'];
+        $hot = $s['cpu'] >= BAL_HOT || $s['slow'];
         $st[$id] = $hot ? ($st[$id] ?? 0) + 1 : 0;
-        if ($hot && $st[$id] >= 5 && count($s['live']) >= 2 && ($busy === null || $s['cpu'] > $srv[$busy]['cpu'])) $busy = $id;
+        if ($hot && $st[$id] >= BAL_CHECKS && $s['live'] && ($busy === null || $s['cpu'] > $srv[$busy]['cpu'])) $busy = $id;
     }
     setting_set('bal_state', json_encode(array_intersect_key($st, $srv)));
-    if ($busy === null || $now - (int) (setting_get('bal_last') ?? 0) < 900) return;
-    $to = null;
-    foreach ($srv as $id => $s) if ($id !== $busy && $s['cpu'] < 55 && !$s['slow'] && ($to === null || $s['cpu'] < $srv[$to]['cpu'])) $to = $id;
-    if ($to === null) {
-        if ($now - (int) (setting_get('bal_full_said') ?? 0) > 3600) {
-            setting_set('bal_full_said', (string) $now);
-            log_activity("🔁 {$srv[$busy]['name']} is busy, but no other VPS has room — think about a bigger VPS or one more.", 'warn');
-        }
+    if ($busy === null) {
+        $hotNow = array_filter($srv, fn ($s, $id) => ($st[$id] ?? 0) > 0, ARRAY_FILTER_USE_BOTH);
+        $note($hotNow ? 'Watching: ' . implode(', ', array_map(fn ($id) => $srv[$id]['name'] . ' busy ' . $st[$id] . '/' . BAL_CHECKS . ' min', array_keys($hotNow)))
+                      : 'All VPS are fine (CPU under ' . BAL_HOT . ' %).');
         return;
     }
+    $B = $srv[$busy];
+    $wait = BAL_GAP - ($now - (int) (setting_get('bal_last') ?? 0));
+    if ($wait > 0) { $note("{$B['name']} is busy (CPU " . (int) $B['cpu'] . ' %) — the last move was a short time ago; next move possible in ' . ceil($wait / 60) . ' min.'); return; }
+    // where to: the VPS with the most free room (free CPU × number of CPUs)
+    $to = null;
+    foreach ($srv as $id => $s) {
+        if ($id === $busy || $s['cpu'] >= BAL_ROOM || $s['slow']) continue;
+        if (count($B['live']) < 2 && $s['cpus'] <= $B['cpus']) continue;   // only one live: moving it helps only on a bigger VPS (else it just bounces)
+        $room = (100 - $s['cpu']) * $s['cpus'];
+        if ($to === null || $room > $to[1]) $to = [$id, $room];
+    }
+    if ($to === null) {
+        $why = count($B['live']) < 2 ? "{$B['name']} has only one live and no other VPS is bigger — moving it would not help. Lower its quality / fps, or use a bigger VPS."
+                                     : "{$B['name']} is busy, but no other VPS has room (all " . BAL_ROOM . ' %+ CPU).';
+        $note($why);
+        if ($now - (int) (setting_get('bal_full_said') ?? 0) > 3600) { setting_set('bal_full_said', (string) $now); log_activity('🔁 ' . $why, 'warn'); }
+        return;
+    }
+    $to = $to[0];
     $pick = null;
-    foreach ($srv[$busy]['live'] as $r) {
-        if ($now - (int) $r['started_at'] < 600) continue;   // just started: leave it
+    foreach ($B['live'] as $r) {
+        if ($now - (int) $r['started_at'] < BAL_YOUNG) continue;   // just started: leave it
         if ($pick === null || (int) $r['started_at'] > (int) $pick['started_at']) $pick = $r;
     }
-    if ($pick === null) return;
+    if ($pick === null) { $note("{$B['name']} is busy — its lives started less than " . (BAL_YOUNG / 60) . ' min ago; waiting a little.'); return; }
     db()->prepare('UPDATE streams SET server_id = ?, rev = rev + 1, error = NULL, updated_at = ? WHERE id = ?')->execute([$to, $now, (int) $pick['id']]);
     setting_set('bal_last', (string) $now);
     $st[$busy] = 0; setting_set('bal_state', json_encode($st));
-    log_activity(sprintf('🔁 Auto share: %s was busy (CPU %d%%%s) — moved "%s" to %s (CPU %d%%). It is back in about 20 seconds.',
-        $srv[$busy]['name'], (int) $srv[$busy]['cpu'], $srv[$busy]['slow'] ? ', lives slow' : '', $pick['name'], $srv[$to]['name'], (int) $srv[$to]['cpu']), 'info');
+    $msg = sprintf('🔁 Auto share: %s was busy (CPU %d%%%s) — moved "%s" to %s (CPU %d%%). It is back in about 20 seconds.',
+        $B['name'], (int) $B['cpu'], $B['slow'] ? ', lives slow' : '', $pick['name'], $srv[$to]['name'], (int) $srv[$to]['cpu']);
+    $note($msg);
+    log_activity($msg, 'info');
 }
