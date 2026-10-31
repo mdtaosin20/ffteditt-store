@@ -7,6 +7,7 @@ import { setupRecorder } from '/game/recorder.js?v=3';
 import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=2';
 import { genStadium, genBall, newSeed, BALL_GROUPS } from '/game/variety.js?v=1';
 import { makeGrass } from '/game/grass.js?v=1';
+import { makeBigStadium } from '/game/bigstadium.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
@@ -338,8 +339,13 @@ async function main() {
     sunset: { name: '🌅 Sunset stadium', sky: ['#2b1d5c', '#e0567a', '#ffb067'], fog: [40, 110], fogC: '#e78a7a', sun: ['#ffb36b', 2.2], hemi: ['#ffd2b0', '#3a4a2a', 0.8], exp: 0.95, ground: ['#3f8d36', '#367d2e', 'rgba(255,240,220,.9)'], stand: '#5a4560', roof: '#2a1d3a', stadium: true, lamps: true, extra: 'sunset' },
     beach: { name: '🏖 Beach', sky: ['#1f7fd6', '#7cc3f2', '#e6f6ff'], fog: [60, 160], fogC: '#cdeaf9', sun: ['#fffaf0', 2.7], hemi: ['#ffffff', '#c9a56a', 1.0], exp: 1.0, ground: ['#ecd29c', '#e4c88f', 'rgba(30,110,200,.85)', ['#d8bb80', '#f6e2b4']], stadium: false, extra: 'beach', wmc: 'rgba(90,60,20,.22)' },
     snow: { name: '❄️ Snow', sky: ['#7d8fa8', '#b9c6d6', '#e8eef5'], fog: [30, 80], fogC: '#dfe7f0', sun: ['#f2f6ff', 1.8], hemi: ['#f4f8ff', '#b0bccb', 1.1], exp: 1.0, ground: ['#f3f7fb', '#e6edf5', 'rgba(220,40,60,.85)', ['#ffffff', '#d4dee9', '#c5d9c0']], stand: '#7d8796', roof: '#5d6675', stadium: true, lamps: true, extra: 'snow', wmc: 'rgba(40,60,90,.18)' },
+    // 🏟 the big round stadium (an extra: the places above stay as they were)
+    bigday: { name: '🏟 Big stadium — day', sky: ['#2f86e0', '#7fbcf2', '#cfe8fb'], fog: [60, 170], fogC: '#cfe6fa', sun: ['#fffaf0', 2.6], hemi: ['#ffffff', '#3c7a3c', 1.0], exp: 1.0, ground: ['#46a83c', '#3d9634', 'rgba(255,255,255,.95)'], stadium: false, big: 'day' },
+    bigsunset: { name: '🏟 Big stadium — sunset', sky: ['#3a2a6e', '#e9667a', '#ffb062'], fog: [60, 170], fogC: '#e78a7a', sun: ['#ffb36b', 2.3], hemi: ['#ffd2b0', '#3a4a2a', 0.85], exp: 0.95, ground: ['#3f8d36', '#367d2e', 'rgba(255,240,220,.9)'], stadium: false, big: 'sunset' },
+    bignight: { name: '🏟 Big stadium — night', sky: ['#040820', '#0b1748', '#1a2a6c'], fog: [60, 170], fogC: '#0b1748', sun: ['#eaf4ff', 2.3], hemi: ['#dfe8ff', '#2c5a2c', 0.8], exp: 0.95, ground: ['#2f8f34', '#287d2d', 'rgba(255,255,255,.9)'], stadium: false, big: 'night' },
     street: { name: '🏙 Street court', sky: ['#141a3a', '#3b3f75', '#c06a6a'], fog: [40, 90], fogC: '#3b3f75', sun: ['#ffe6c2', 1.7], hemi: ['#c8d2ff', '#3d3d48', 0.8], exp: 0.95, ground: ['#7c818c', '#747984', 'rgba(255,214,58,.95)', ['#6b707a', '#8a8f99']], stadium: false, extra: 'street' },
   };
+  let big = null;   // 🏟 the big round stadium (made the first time it is chosen)
   let randTh = null;   // 🎲 the made-up stadium (a new one at every START when "New stadium every START" is chosen)
   const applyTheme = (key) => {
     const th = key === 'rand' ? (randTh || (randTh = genStadium(newSeed()))) : (THEMES[key] || THEMES.night);
@@ -355,6 +361,8 @@ async function main() {
     if (th.stand) standMat.color.set(th.stand);
     if (th.roof) roof.material.color.set(th.roof);
     if (th.extra) props[th.extra]();
+    if (th.big && !big) big = makeBigStadium({ scene, tex, flags: () => ['br', 'ar', 'fr', 'de', 'es', 'pt', 'gb', 'it', 'nl', 'us', 'mx', 'jp', 'kr', 'ma', 'tr', 'bd', 'in', 'pk', 'sa', 'eg'], title: () => WM || 'ACTION KICK' });
+    if (big) big.show(th.big || null);
     lastTh = th; paintGrass();
     const cc = th.crowd || crowdCols;   // the crowd's shirt colours
     for (let k = 0; k < ci; k++) crowd.setColorAt(k, col.set(cc[crowdSlot[k]]));
@@ -737,7 +745,7 @@ async function main() {
   let themeNow = 'night';
   const setChannel = (name) => {
     name = name.trim().slice(0, 30); if (name === WM) return; WM = name;
-    applyTheme(themeNow);
+    applyTheme(themeNow); if (big) big.refresh();
     const t = makeLed(); led.material.map.dispose(); led.material.map = t; led.material.emissiveMap = t; led.material.needsUpdate = true;
     if (!WM) { $('wm').textContent = ''; }
   };
