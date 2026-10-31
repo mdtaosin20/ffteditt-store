@@ -13,7 +13,7 @@ const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const FAST = Math.max(1, Math.min(50, Number(QS.get('fast')) || 1));   // testing only
+const FAST = Math.max(0.1, Math.min(50, Number(QS.get('fast')) || 1));   // testing only
 const FRUITS = ['🍎', '🍊', '🍋', '🍉', '🍇', '🍓', '🍒', '🍑', '🍍', '🥝', '🍌', '🥭', '🍐', '🫐', '🥥'];
 const KEY = 'fft_snake';
 
@@ -55,10 +55,22 @@ if (musicBus) musicBus.connect(sfx.ctx.destination);
 const duckAll = (on) => { sfx.duck(on); if (musicBus) musicBus.gain.setTargetAtTime(on ? 0.25 : 1, sfx.ctx.currentTime, on ? 0.15 : 0.6); };
 const music = sfx.ok && !QS.has('nomusic') ? new Music(sfx.ctx, musicBus, { style: 'upbeat', volume: 0.2 }) : null;
 if (music && cfg.music) music.start();
-const chomp = (big) => {
-  if (!cfg.eat_sound) return;
-  sfx.tone({ freq: big ? 660 : 520, to: big ? 1320 : 880, type: 'square', dur: 0.08, vol: 0.06 });
-  sfx.tone({ freq: big ? 990 : 780, type: 'sine', dur: 0.12, vol: 0.07, delay: 0.06 });
+// "nom nom": two quick crunchy bites (a short noise burst + a low thump), then a little gulp
+let noiseBuf = null;
+const crunch = (at, vol) => {
+  if (!noiseBuf) {
+    noiseBuf = sfx.ctx.createBuffer(1, Math.round(sfx.ctx.sampleRate * 0.09), sfx.ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length) ** 2;
+  }
+  const t = sfx.ctx.currentTime + at, src = sfx.ctx.createBufferSource(), bp = sfx.ctx.createBiquadFilter(), g = sfx.ctx.createGain();
+  src.buffer = noiseBuf; bp.type = 'bandpass'; bp.frequency.value = 1700 + Math.random() * 600; bp.Q.value = 0.9; g.gain.value = vol;
+  src.connect(bp); bp.connect(g); g.connect(sfx.master || sfx.ctx.destination); src.start(t);
+  sfx.tone({ freq: 210, to: 90, type: 'sine', dur: 0.09, vol: vol * 0.9, delay: at });
+};
+const chomp = (big, at = 0) => {
+  if (!cfg.eat_sound || !sfx.running) return;
+  crunch(at, 0.5); crunch(at + 0.13, 0.42);
+  sfx.tone({ freq: big ? 700 : 420, to: big ? 1400 : 260, type: 'sine', dur: 0.16, vol: 0.06, delay: at + 0.27 });   // gulp
 };
 
 /* ---------- board picture (drawn once per size) ---------- */
@@ -173,8 +185,11 @@ const banner = (html, cls = '', ms = 2500) => {
 };
 const esc = (s) => String(s).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
 let newBestSaid = false;
+let stepNo = 0, eating = null;
 const step = () => {
   if (phase !== 'play') return;
+  stepNo++;
+  if (eating && eating.step < stepNo - 1) eating = null;
   const nxt = think();
   if (!nxt) return endRound(false);
   dir = [nxt[0] - body[0][0], nxt[1] - body[0][1]];
@@ -183,8 +198,10 @@ const step = () => {
   if (fi >= 0) {
     const f = fruits.splice(fi, 1)[0], plus = f.gold ? clamp(Math.round(cfg.gold) || 3, 1, 10) : 1;
     grow += plus - 1; ate += plus; S.today += plus; save();
-    chomp(f.gold);
-    pop(f.name ? `+${plus} ${f.name}` : `+${plus}`, f.x, f.y, f.gold);
+    const arrive = 0.85 / steps() / FAST;   // seconds until the head is on the fruit
+    chomp(f.gold, arrive);
+    eating = { ...f, step: stepNo };
+    setTimeout(() => { bite(f); pop(f.name ? `+${plus} ${f.name}` : `+${plus}`, f.x, f.y, f.gold); }, arrive * 1000);
     if (f.name) host([f.gold ? '🌟 GOLDEN FRUIT FROM ' : '', { name: f.name }, f.gold ? '' : pick([' FED THE SNAKE! 🍓', '\'S FRUIT IS GONE — YUMMY!', ' JUST MADE THE SNAKE LONGER!']), ` IT IS ${body.length} LONG NOW!`], 1);
     if (ate > S.best) {
       S.best = ate; save();
@@ -205,6 +222,36 @@ const endRound = (full) => {
 
 /* ---------- drawing ---------- */
 let t = 0;   // 0…1: how far between two moves (smooth movement)
+
+/* ---------- eating: open mouth, bite, juice drops, and the lump that goes down the body ---------- */
+const JUICE = { '🍎': '#ef4444', '🍊': '#fb923c', '🍋': '#facc15', '🍉': '#f43f5e', '🍇': '#8b5cf6', '🍓': '#e11d48', '🍒': '#dc2626', '🍑': '#fdba74',
+  '🍍': '#fbbf24', '🥝': '#84cc16', '🍌': '#fde047', '🥭': '#f59e0b', '🍐': '#a3e635', '🫐': '#6366f1', '🥥': '#f5f5f4', '🌟': '#ffd23a' };
+let drops = [], lumps = [], snap = 0;
+const bite = (f) => {
+  snap = 1;   // the jaws close hard
+  const col = JUICE[f.emo] || '#f43f5e', n = f.gold ? 18 : 11;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = (f.gold ? 260 : 170) * (0.5 + Math.random());
+    drops.push({ x: cc(f.x), y: cc(f.y), vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.45 + Math.random() * 0.3, r: CELL * (0.06 + Math.random() * 0.07), col: f.gold && i % 2 ? '#fff6c2' : col });
+  }
+  lumps.push({ d: 0.3, big: f.gold ? 1.25 : 1 }); if (lumps.length > 4) lumps.shift();
+};
+const pointAt = (pts, d) => {   // the point d cells behind the head, along the drawn body
+  for (let i = 1; i < pts.length; i++) {
+    const L = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]) / CELL;
+    if (d <= L || i === pts.length - 1) { const u = L ? Math.min(1, d / L) : 0; return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * u, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * u]; }
+    d -= L;
+  }
+  return pts[0];
+};
+const effects = (dt) => {   // move the drops and the lumps (once a frame)
+  snap = Math.max(0, snap - dt * 6);
+  for (const p of drops) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92; p.life -= dt; }
+  drops = drops.filter((p) => p.life > 0);
+  const len = body.length;
+  for (const l of lumps) l.d += dt * steps() * 0.55;   // slowly down the body
+  lumps = lumps.filter((l) => l.d < Math.min(len - 1, 22));
+};
 const cc = (v) => (v + 0.5) * CELL;
 const draw = (now) => {
   c.setTransform(1, 0, 0, 1, 0, 0);
@@ -235,20 +282,45 @@ const draw = (now) => {
   c.strokeStyle = red ? '#7f1d1d' : '#4c1d95'; c.lineWidth = CELL * 0.84; c.stroke();
   c.strokeStyle = red ? '#ef4444' : '#a855f7'; c.lineWidth = CELL * 0.64; c.stroke();
   c.strokeStyle = red ? '#fecaca' : 'rgba(233,213,255,.75)'; c.lineWidth = CELL * 0.13; c.setLineDash([CELL * 0.12, CELL * 0.42]); c.stroke(); c.setLineDash([]);
-  // head: eyes look where it goes, the mouth opens near a fruit
+  // the lumps of eaten fruit going down the body
+  if (!red) for (const l of lumps) {
+    const [lx, ly] = pointAt(pts, l.d), fade = Math.min(1, l.d / 0.8, (Math.min(body.length - 1, 22) - l.d) / 3), r = CELL * 0.5 * l.big * (0.75 + 0.25 * fade);
+    c.fillStyle = '#4c1d95'; c.beginPath(); c.arc(lx, ly, r, 0, 7); c.fill();
+    c.fillStyle = '#b26bff'; c.beginPath(); c.arc(lx, ly, r - CELL * 0.1, 0, 7); c.fill();
+    c.fillStyle = 'rgba(255,255,255,.35)'; c.beginPath(); c.arc(lx - r * 0.3, ly - r * 0.3, r * 0.28, 0, 7); c.fill();
+  }
+  // head: eyes look where it goes; the mouth opens wide when a fruit is close and bites it ("nom nom")
   const [hx, hy] = pts[0], [dx, dy] = dir, side = [-dy, dx];
-  c.fillStyle = red ? '#ef4444' : '#a855f7'; c.beginPath(); c.arc(hx, hy, CELL * 0.52, 0, 7); c.fill();
-  const near = fruits.some((f) => Math.abs(f.x - body[0][0]) + Math.abs(f.y - body[0][1]) <= 1);
-  if (near && phase === 'play') {
-    c.fillStyle = '#2e1065'; c.beginPath(); c.arc(hx + dx * CELL * 0.3, hy + dy * CELL * 0.3, CELL * 0.2, 0, 7); c.fill();
-    c.fillStyle = '#ff6b9a'; c.beginPath(); c.arc(hx + dx * CELL * 0.33, hy + dy * CELL * 0.33, CELL * 0.09, 0, 7); c.fill();
+  let open = 0;
+  if (phase === 'play') {
+    if (eating && eating.step === stepNo) {
+      open = t < 0.7 ? 1 : Math.max(0, (1 - t) / 0.3);
+      const sh = t < 0.55 ? 1 : Math.max(0.2, 1 - (t - 0.55) / 0.45), img = fruitSprite(eating.emo, eating.gold), w = img.width / k * sh;   // the fruit goes into the mouth
+      c.drawImage(img, cc(eating.x) - w / 2, cc(eating.y) - w / 2, w, w);
+    } else if (fruits.some((f) => Math.abs(f.x - body[0][0]) + Math.abs(f.y - body[0][1]) === 1)) open = Math.min(1, t * 1.2);
+  }
+  open *= 1 - snap;
+  const HR = CELL * 0.52 * (1 + snap * 0.12), ang = Math.atan2(dy, dx), gap = open * 1.05;
+  if (gap > 0.04) {   // inside of the mouth and the tongue
+    c.fillStyle = '#3b0a2a'; c.beginPath(); c.moveTo(hx, hy); c.arc(hx, hy, HR * 0.95, ang - gap, ang + gap); c.closePath(); c.fill();
+    c.fillStyle = '#ff6b9a'; c.beginPath(); c.ellipse(hx + dx * HR * 0.45, hy + dy * HR * 0.45, HR * 0.3, HR * 0.14 * (0.5 + open), ang, 0, 7); c.fill();
+  }
+  c.fillStyle = red ? '#ef4444' : '#a855f7'; c.beginPath();
+  if (gap > 0.04) { c.moveTo(hx, hy); c.arc(hx, hy, HR, ang + gap, ang - gap + Math.PI * 2); c.closePath(); } else c.arc(hx, hy, HR, 0, 7);
+  c.fill();
+  if (gap > 0.04) {   // little teeth
+    c.fillStyle = '#fff';
+    for (const sg of [-1, 1]) { const a = ang + sg * gap * 0.75, tx = hx + Math.cos(a) * HR * 0.86, ty = hy + Math.sin(a) * HR * 0.86;
+      c.beginPath(); c.arc(tx, ty, CELL * 0.055, 0, 7); c.fill(); }
   }
   for (const sgn of [-1, 1]) {
-    const ex = hx + side[0] * sgn * CELL * 0.25 - dx * CELL * 0.05, ey = hy + side[1] * sgn * CELL * 0.25 - dy * CELL * 0.05;
+    const back = CELL * (0.05 + 0.16 * open), ex = hx + side[0] * sgn * CELL * 0.27 - dx * back, ey = hy + side[1] * sgn * CELL * 0.27 - dy * back;
     c.fillStyle = '#fff'; c.beginPath(); c.arc(ex, ey, CELL * 0.17, 0, 7); c.fill();
     if (red) { c.strokeStyle = '#111'; c.lineWidth = 3; c.beginPath(); c.moveTo(ex - 5, ey - 5); c.lineTo(ex + 5, ey + 5); c.moveTo(ex + 5, ey - 5); c.lineTo(ex - 5, ey + 5); c.stroke(); }
     else { c.fillStyle = '#111'; c.beginPath(); c.arc(ex + dx * CELL * 0.06, ey + dy * CELL * 0.06, CELL * 0.085, 0, 7); c.fill(); }
   }
+  for (const p of drops) { c.globalAlpha = Math.min(1, p.life * 3); c.fillStyle = p.col; c.beginPath(); c.arc(p.x, p.y, p.r, 0, 7); c.fill(); }   // juice
+  c.globalAlpha = 1;
 };
 
 /* ---------- numbers on screen ---------- */
@@ -337,8 +409,9 @@ const frame = (now) => {
     t = Math.min(1, acc);
   } else {
     phaseT -= dt; flash = Math.max(0, flash - dt);
-    if (phaseT <= 0) { S.round++; save(); newRound(); acc = 0; }
+    if (phaseT <= 0) { S.round++; save(); newRound(); acc = 0; lumps = []; eating = null; }
   }
+  effects(dt);
   if (sizeOK()) draw(now);
   requestAnimationFrame(frame);
 };
