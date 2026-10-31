@@ -15,11 +15,8 @@ const css = `
 .mbg label.s{display:block;font-size:12px;color:#cfe6f5;margin-top:8px}
 .mbg label.s input{width:100%}
 .mbg .rnd{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;color:#fff}
-.mbg .rnd input{width:auto;flex:none;margin:0}
 `;
 const DB = 'fft_bg', ST = 'pics';
-// ready-made stadiums that come with the game (the owner's pictures; the screen shows FLAG CUP and a ball)
-const BUILTIN = ['day', 'sunset', 'night', 'rain', 'lights', 'snow'].map((k, i) => ({ id: 's_' + k, src: '/game/bg/' + k + '.jpg?v=1', builtin: true, t: i }));
 const db = () => new Promise((res, rej) => { const q = indexedDB.open(DB, 1); q.onupgradeneeded = () => q.result.createObjectStore(ST, { keyPath: 'id' }); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
 const tx = async (mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(ST, mode), s = t.objectStore(ST), r = fn(s); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); };
 const store = (k, v) => { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null'); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } };
@@ -27,11 +24,11 @@ const store = (k, v) => { try { if (v === undefined) return JSON.parse(localStor
 /** o = { game, after (element), scene, stage, onChange() } */
 export function setupMyBg(o) {
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
-  const K = 'fft_mbg_' + o.game, S = Object.assign({ pick: 's_day', zoom: 1, pos: -0.15, rnd: false }, store(K) || {});
+  const K = 'fft_mbg_' + o.game, S = Object.assign({ pick: '', zoom: 1, pos: -0.15, rnd: false }, store(K) || {});
   const save = () => store(K, S);
   const box = document.createElement('div'); box.className = 'mbg'; box.hidden = true;
   box.innerHTML = `<b style="color:#fff">🖼 My background</b>
-    <p>6 stadiums are ready. Tap one — or add your own pictures with + (best: tall 9:16, no players, ball, cup or text).</p>
+    <p>Add stadium pictures from your phone. Best: tall (9:16) pictures with no players, ball, cup or text.</p>
     <div class="list"></div><input type="file" accept="image/*" multiple hidden>
     <label class="s">Zoom <input type="range" data-k="zoom" min="0.8" max="2.2" step="0.05"></label>
     <label class="s">Move up / down <input type="range" data-k="pos" min="-0.6" max="0.6" step="0.01"></label>
@@ -40,13 +37,13 @@ export function setupMyBg(o) {
   const list = box.querySelector('.list'), file = box.querySelector('input[type=file]'), rnd = box.querySelector('.rnd input');
   let pics = [], tex = null, texId = '', active = false;
   const urls = new Map();
-  const url = (p) => { if (p.src) return p.src; if (!urls.has(p.id)) urls.set(p.id, URL.createObjectURL(p.blob)); return urls.get(p.id); };
+  const url = (p) => { if (!urls.has(p.id)) urls.set(p.id, URL.createObjectURL(p.blob)); return urls.get(p.id); };
 
   const draw = () => {
     list.innerHTML = '';
     for (const p of pics) {
       const d = document.createElement('div'); d.className = 'it' + (p.id === S.pick ? ' on' : ''); d.style.backgroundImage = `url(${url(p)})`;
-      d.innerHTML = p.builtin ? '' : '<b title="Remove">✕</b>';
+      d.innerHTML = '<b title="Remove">✕</b>';
       d.onclick = (e) => {
         if (e.target.tagName === 'B') { tx('readwrite', (s) => s.delete(p.id)).then(load); return; }
         S.pick = p.id; save(); draw(); use();
@@ -56,10 +53,8 @@ export function setupMyBg(o) {
     const a = document.createElement('div'); a.className = 'it add'; a.textContent = '+'; a.onclick = () => file.click(); list.appendChild(a);
   };
   const load = async () => {
-    let mine = [];
-    try { mine = (await tx('readonly', (s) => s.getAll())) || []; } catch (e) { mine = []; }
-    mine.sort((a, b) => a.t - b.t);
-    pics = [...BUILTIN, ...mine];   // the ready-made stadiums first, then the owner's own pictures
+    try { pics = (await tx('readonly', (s) => s.getAll())) || []; } catch (e) { pics = []; }
+    pics.sort((a, b) => a.t - b.t);
     if (!pics.some((p) => p.id === S.pick)) S.pick = pics.length ? pics[0].id : '';
     draw(); use();
   };
