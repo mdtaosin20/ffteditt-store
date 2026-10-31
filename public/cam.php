@@ -27,12 +27,13 @@ small{display:block;font-size:12px;color:#8e98b8;margin-top:5px;line-height:1.45
 .er{margin-top:12px;padding:10px;border-radius:10px;background:#f59e0b22;border:1px solid #f59e0b66;color:#fcd34d;font-size:14px}
 .er:empty{display:none}
 #live{position:fixed;inset:0;background:#000;display:none}
-#live video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#live video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
 #live video.mirror{transform:scaleX(-1)}
 .top{position:absolute;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top));display:flex;justify-content:space-between;gap:8px;font-weight:800;font-size:13px}
 .pill{padding:6px 11px;border-radius:99px;background:#000a;color:#fff}.pill.red{background:#dc2626}
 .bot{position:absolute;left:14px;right:14px;bottom:calc(16px + env(safe-area-inset-bottom))}
 .lvl{height:8px;border-radius:6px;background:#ffffff26;overflow:hidden}.lvl i{display:block;height:100%;width:0;background:linear-gradient(90deg,#22c55e,#facc15,#ef4444);transition:width .08s}
+.zm{display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px 12px;border-radius:12px;background:#0009;color:#fff;font-weight:700;font-size:13px}.zm[hidden]{display:none}.zm input{flex:1;margin:0;padding:0;accent-color:#3b82f6}.zm b{min-width:42px;text-align:right}
 .ctr{display:flex;gap:8px;margin-top:10px}.ctr button{flex:1;padding:11px 4px;border-radius:12px;border:0;background:#ffffff2b;color:#fff;font-weight:700;font-size:13px;backdrop-filter:blur(6px)}
 .ctr button.off{background:#991b1b}
 #go{display:block;width:100%;margin-top:10px;padding:16px;border:0;border-radius:15px;background:#dc2626;color:#fff;font-weight:900;font-size:17px}
@@ -55,6 +56,7 @@ small{display:block;font-size:12px;color:#8e98b8;margin-top:5px;line-height:1.45
   <div class="top"><span class="pill" id="st">● Not live</span><span class="pill" id="left">⏳</span></div>
   <div class="bot">
     <div class="lvl"><i id="lv"></i></div>
+    <div class="zm" id="zm" hidden>🔍 Zoom <input type="range" id="zoom"><b id="zv">1.0×</b></div>
     <div class="ctr"><button type="button" id="flip">🔄 Flip</button><button type="button" id="mic">🎤 Mic on</button><button type="button" id="torch">🔆 Light</button></div>
     <button type="button" id="go">● Go live</button>
     <div id="msg"></div>
@@ -83,7 +85,19 @@ small{display:block;font-size:12px;color:#8e98b8;margin-top:5px;line-height:1.45
   }).catch(() => {});
   document.querySelectorAll('[data-o]').forEach((b) => b.onclick = () => { orient = b.dataset.o; document.querySelectorAll('[data-o]').forEach((x) => x.classList.toggle('on', x === b)); });
 
-  const cam = () => navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: orient === 'v' ? 720 : 1280 }, height: { ideal: orient === 'v' ? 1280 : 720 }, frameRate: { ideal: 24, max: 30 } } });
+  // the whole picture of the camera, never cut: asking for a size it does not have made the phone cut the middle out
+  // (it looked zoomed in and blurry). resizeMode "none" = the camera's own size, about 720 lines.
+  const cam = () => navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 }, resizeMode: 'none' } })
+    .catch(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, frameRate: { ideal: 24, max: 30 } } }));
+  // 🔍 zoom: the camera's own zoom (Android Chrome and most phones); it starts at the widest normal view (1×, or less if the phone has a wide lens)
+  const zoomSetup = async (t) => {
+    const c = t.getCapabilities ? t.getCapabilities() : {};
+    if (!c.zoom || c.zoom.max <= c.zoom.min) { $('zm').hidden = true; return; }
+    const z = $('zoom'), start = Math.max(c.zoom.min, Math.min(1, c.zoom.max));
+    z.min = c.zoom.min; z.max = c.zoom.max; z.step = c.zoom.step || 0.1; z.value = start;
+    const set = async () => { try { await t.applyConstraints({ advanced: [{ zoom: Number(z.value) }] }); } catch (e) { /* not this time */ } $('zv').textContent = Number(z.value).toFixed(1) + '×'; };
+    z.oninput = set; await set(); $('zm').hidden = false;
+  };
   $('next').onclick = async () => {
     $('e1').textContent = '';
     const j = await api({ do: 'save', key: $('key').value.trim(), orient }).catch(() => ({ error: 'net', msg: 'No internet?' }));
@@ -93,6 +107,7 @@ small{display:block;font-size:12px;color:#8e98b8;margin-top:5px;line-height:1.45
     try {
       local = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       local.addTrack((await cam()).getVideoTracks()[0]);
+      zoomSetup(local.getVideoTracks()[0]);
     } catch (e) {
       $('e1').textContent = e.name === 'NotAllowedError' ? '⚠️ The camera or microphone is blocked. Allow them for this site (tap the 🔒 / ⓘ next to the address), then press Next again.'
         : e.name === 'NotFoundError' ? '⚠️ No camera or microphone found.' : e.name === 'NotReadableError' ? '⚠️ The camera is busy in another app. Close it and try again.' : '⚠️ ' + (e.message || e.name);
@@ -109,7 +124,7 @@ small{display:block;font-size:12px;color:#8e98b8;margin-top:5px;line-height:1.45
     pc = new RTCPeerConnection({ iceServers: ICE });
     pc.addTransceiver(local.getAudioTracks()[0], { direction: 'sendonly' });
     const vTx = pc.addTransceiver(local.getVideoTracks()[0], { direction: 'sendonly' });
-    try { const p = vTx.sender.getParameters(); p.encodings = p.encodings && p.encodings.length ? p.encodings : [{}]; p.encodings[0].maxBitrate = orient === 'v' ? 1200000 : 1800000; await vTx.sender.setParameters(p); } catch (e) { /* not supported */ }
+    try { const p = vTx.sender.getParameters(); p.encodings = p.encodings && p.encodings.length ? p.encodings : [{}]; p.encodings[0].maxBitrate = 2500000; await vTx.sender.setParameters(p); } catch (e) { /* not supported */ }
     pc.onconnectionstatechange = () => {
       const s = pc ? pc.connectionState : 'closed';
       if (s === 'connected') { badSince = 0; if (!liveAt) liveAt = Date.now(); $('st').classList.add('red'); msg('🔴 You are LIVE on your channel (YouTube shows it after a few seconds).'); }
@@ -156,6 +171,7 @@ small{display:block;font-size:12px;color:#8e98b8;margin-top:5px;line-height:1.45
   const swap = async () => {
     const t = (await cam()).getVideoTracks()[0];
     local.getVideoTracks().forEach((o) => { o.stop(); local.removeTrack(o); }); local.addTrack(t);
+    zoomSetup(t);
     $('pv').srcObject = local; $('pv').classList.toggle('mirror', facing === 'user');
     const tx = pc && pc.getTransceivers().find((x) => x.receiver.track && x.receiver.track.kind === 'video');
     if (tx) await tx.sender.replaceTrack(t);

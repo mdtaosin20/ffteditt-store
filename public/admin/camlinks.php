@@ -87,7 +87,7 @@ page_start('Camera Live Links', 'camlinks', $admin);
 
 <div class="card" style="max-width:none;margin-top:18px">
   <h3 style="margin-top:0">Good to know</h3>
-  <p class="muted small" style="margin:0">Each camera live uses your VPS like one game live. Standing (9:16) goes out at 480p, lying (16:9) at 720p. If he closes the page for more than 2 minutes, his live stops by itself. He should keep the page open and use earphones if he watches his own live.</p>
+  <p class="muted small" style="margin:0">Each camera live uses your VPS like one game live. It goes out at 720p (standing 9:16 or lying 16:9). If he closes the page for more than 2 minutes, his live stops by itself. He should keep the page open and use earphones if he watches his own live.</p>
 </div>
 <script>
 document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {

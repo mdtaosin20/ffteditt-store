@@ -7,14 +7,21 @@ const $ = (id) => document.getElementById(id);
 let pc = null, sess = '';
 const api = (body) => fetch('/api/golive.php', { method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ stream: Number(stream), sig, sess, ...body }) }).catch(() => {});
-const show = (on) => { $('v').classList.toggle('on', on); $('wait').style.display = on ? 'none' : 'flex'; };
-const close = () => { if (pc) { try { pc.close(); } catch (e) { /* closed */ } } pc = null; $('v').srcObject = null; $('a').srcObject = null; show(false); };
+const show = (on) => { $('v').classList.toggle('on', on); $('wait').style.display = on ? 'none' : 'flex'; fit(); };
+// same shape as the live (phone held the right way): fill the screen. Other shape: show all of it, with a soft blurred copy behind
+const fit = () => {
+  const v = $('v'), on = v.classList.contains('on') && v.videoWidth > 0;
+  const a = v.videoWidth / v.videoHeight, sa = innerWidth / innerHeight, same = on && Math.abs(a - sa) / sa < 0.2;
+  v.classList.toggle('fit', on && !same); $('bg').classList.toggle('on', on && !same);
+};
+$('v').addEventListener('resize', fit); $('v').addEventListener('loadedmetadata', fit);
+const close = () => { if (pc) { try { pc.close(); } catch (e) { /* closed */ } } pc = null; $('v').srcObject = null; $('bg').srcObject = null; $('a').srcObject = null; show(false); };
 
 const answer = async (offer) => {
   close();
   pc = new RTCPeerConnection({ iceServers: ICE });
   pc.ontrack = (e) => {
-    if (e.track.kind === 'video') { $('v').srcObject = new MediaStream([e.track]); $('v').play().catch(() => {}); return; }
+    if (e.track.kind === 'video') { const ms = new MediaStream([e.track]); $('v').srcObject = ms; $('bg').srcObject = ms; $('v').play().catch(() => {}); $('bg').play().catch(() => {}); return; }
     $('a').srcObject = new MediaStream([e.track]); $('a').volume = 1; $('a').play().catch(() => {});
   };
   pc.onconnectionstatechange = () => {

@@ -31,7 +31,7 @@ function cam_create(string $label, int $secs): array
     $label = mb_substr(trim($label), 0, 30) ?: 'Guest';
     $host = preg_replace('/[^a-z0-9.\-:]/i', '', (string) ($_SERVER['HTTP_HOST'] ?? 'ffteditt.store'));
     $now = time();
-    db()->prepare("INSERT INTO streams (name, stream_key, page_url, server_id, quality, fps, channel_name, created_at, updated_at) VALUES (?, '', ?, ?, '480p-v', 24, ?, ?, ?)")
+    db()->prepare("INSERT INTO streams (name, stream_key, page_url, server_id, quality, fps, channel_name, created_at, updated_at) VALUES (?, '', ?, ?, '720p-v', 24, ?, ?, ?)")
         ->execute([$label . ' (camera)', 'https://' . $host . '/camlive/', cli_pick_server(), $label, $now, $now]);
     $v = ['id' => bin2hex(random_bytes(4)), 'label' => $label, 't' => rtrim(strtr(base64_encode(random_bytes(18)), '+/', '-_'), '='),
           'made' => $now, 'exp' => $now + $secs, 'sid' => (int) db()->lastInsertId(), 'off' => false, 'seen' => 0];

@@ -26,7 +26,7 @@ if ($do === 'save') {
     if (!preg_match('/^[A-Za-z0-9_\-]{8,80}$/', $key)) $out(['error' => 'key', 'msg' => 'This does not look like a YouTube stream key. Copy it again from YouTube Studio.']);
     $d = db()->prepare("SELECT COUNT(*) FROM streams WHERE stream_key = ? AND id != ? AND desired = 'on'"); $d->execute([$key, $sid]);
     if ((int) $d->fetchColumn() > 0) $out(['error' => 'key', 'msg' => 'This stream key is live somewhere else right now. Stop that live first, or use another key.']);
-    $q = $orient === 'h' ? '720p-h' : '480p-v';
+    $q = $orient === 'h' ? '720p-h' : '720p-v';
     if ($key !== $s['stream_key'] || $q !== $s['quality']) {
         db()->prepare('UPDATE streams SET stream_key = ?, quality = ?, rev = rev + 1, updated_at = ? WHERE id = ?')->execute([$key, $q, $now, $sid]);
         if ($s['stream_key'] === '') log_activity("📱 {$link['label']} put his stream key in his camera link", 'info');
