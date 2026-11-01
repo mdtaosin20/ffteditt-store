@@ -268,7 +268,7 @@ export function setupRecorder(o) {
         enc.encode(f, { keyFrame: n % (fps * 2) === 0 }); f.close();
         if (encErr) throw encErr;
         n++; vnow += 1000 / fps;
-        if (stopAt < 0 && n > lead && driver.done()) stopAt = n + Math.round(TAIL * fps);
+        if (stopAt < 0 && n > lead && driver.done()) stopAt = n + Math.round((o.loop && o.loop() ? 0 : TAIL) * fps);   // 🔁 a loop video ends right on the first picture
         if ((stopAt >= 0 && n >= stopAt) || n > fps * 90) break;
         setBar(n <= lead ? 0 : Math.min(0.97, driver.progress() * 0.97));
         while (enc.encodeQueueSize > 3) await new Promise((r) => setTimeout(r, 4));
