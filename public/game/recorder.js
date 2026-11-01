@@ -256,7 +256,7 @@ export function setupRecorder(o) {
     for (const n of SOUNDS) { orig[n] = o.snd[n]; o.snd[n] = (...a) => { log.push([tNow, n, a]); }; }
     try {
       const dt = 1 / fps, lead = Math.round(LEAD * fps);
-      vnow = performance.now(); popAt = vnow;   // the first text pops in at the start of the video
+      vnow = performance.now(); popAt = o.loop && o.loop() ? vnow - 1000 : vnow;   // the first text pops in at the start of the video (a loop video: it is already there, like at the end)
       let n = 0, stopAt = -1;
       while (true) {
         tNow = n / fps;
