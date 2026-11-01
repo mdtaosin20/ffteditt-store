@@ -4,7 +4,8 @@
 // The owner picks the countries in the menu, presses START and records the screen. Tap the screen = menu again.
 import * as THREE from 'three';
 import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
-import { setupRecorder } from '/game/recorder.js?v=3';
+import { setupRecorder } from '/game/recorder.js?v=4';
+import { setupBgMusic } from '/game/bgmusic.js?v=1';
 import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=2';
 import { genStadium, genBall, newSeed, BALL_GROUPS } from '/game/variety.js?v=1';
 import { makeGrass } from '/game/grass.js?v=1';
@@ -177,6 +178,24 @@ class Sound {
     o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g).connect(this.out || c.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  // 🎵 the owner's background sound: the part from…to repeats under the game until bgStop (fades in / out)
+  bg(buf, from, to, vol, fade) {
+    if (!this.ctx || !this.on || !buf) return;
+    this.bgStop(0);
+    const c = this.ctx, t = this.at ?? c.currentTime, s = c.createBufferSource(), g = c.createGain();
+    s.buffer = buf; s.loop = true; s.loopStart = from; s.loopEnd = to;
+    g.gain.setValueAtTime(fade ? 0 : vol, t); if (fade) g.gain.linearRampToValueAtTime(vol, t + 0.6);
+    s.connect(g).connect(this.out || c.destination); s.start(t, from);
+    this.bgN = { s, g, vol };
+  }
+  bgStop(secs = 0.8) {
+    const b = this.bgN; if (!b || !this.ctx) return; this.bgN = null;
+    const t = this.at ?? this.ctx.currentTime, f = Math.max(0.03, secs), gn = b.g.gain;
+    try {
+      if (gn.cancelAndHoldAtTime) gn.cancelAndHoldAtTime(t); else { gn.cancelScheduledValues(t); gn.setValueAtTime(b.vol, t); }
+      gn.linearRampToValueAtTime(0, t + f); b.s.stop(t + f + 0.02);
+    } catch (e) { /* already stopped */ }
   }
   clip(buf) { if (!this.ctx || !this.on || !buf) return; const c = this.ctx, s = c.createBufferSource(); s.buffer = buf; s.connect(this.out || c.destination); s.start(this.at ?? c.currentTime); }   // 🗣 the owner's voice line
   kick() { if (this.kv <= 0) return; this.tone(140, 50, 0.18, 0.6 * this.kv); this.tone(900, 300, 0.05, 0.08 * this.kv, 'triangle'); }
@@ -490,6 +509,7 @@ async function main() {
   /* ---------- play ---------- */
   const snd = new Sound();
   let vr = null;   // 🗣 My Voice lines (made below)
+  let bgm = { play() {}, stop() {} };   // 🎵 background sound (made below)
   let play = null, simT = 0, last = 0, playing = false, lastStep = 0, doneKick = new Set(), doneBump = 0, doneLand = 0, clanked = false, dinged = false, endT = 0;
   const axis = new THREE.Vector3(), dq = new THREE.Quaternion();
   const w1 = $('w1'), w2 = $('w2'), words = $('words');
@@ -605,7 +625,7 @@ async function main() {
     if (play && playing) {
       const near = simT > play.touchT - 0.6 && simT < play.touchT + 0.4;
       simT += real * (near ? SLOW : 1);
-      if (simT >= endT) { simT = endT; if (vr.done()) { playing = false; rec.ended(); } }
+      if (simT >= endT) { simT = endT; if (vr.done()) { playing = false; rec.ended(); bgm.stop(rec.active() ? 0.7 : 1.2); } }
       // sounds at the right moments
       play.kicks.forEach((k, i) => { if (simT >= k.t && !doneKick.has(i)) { doneKick.add(i); snd.kick(); } });
       while (doneBump < play.bumps.length && play.bumps[doneBump] <= simT) { if (doneBump % 2 === 0) snd.bump(); doneBump++; }
@@ -777,6 +797,7 @@ async function main() {
     wm: () => { const el = $('wm'); return WM ? { text: WM, x: wmX, y: wmY, w: el.offsetWidth, h: el.offsetHeight, fs: parseFloat(getComputedStyle(el).fontSize) } : null; },
     onOpenMenu: () => { menu.hidden = false; },
   });
+  bgm = setupBgMusic({ game: 'cupkick', after: $('snd').closest('label'), snd });
   $('go').addEventListener('click', () => {
     const codes = selects.slice(0, NP).map((s) => s.value);
     if (new Set(codes).size !== codes.length) { $('answer').textContent = `⚠️ Pick ${NP} different countries.`; return; }
@@ -789,16 +810,17 @@ async function main() {
     menu.hidden = true; $('tap').hidden = true;
     simT = 0; playing = false;
     if (rec.on()) {   // 🎥 Auto record: starts now, stops by itself at the end
-      let went = false;
+      let went = false, bgOn = false;
       rec.start({
         go: () => { went = true; playing = true; },
-        tick: (now, dt) => tick(now, dt),
+        tick: (now, dt) => { if (!bgOn) { bgOn = true; bgm.play(); } tick(now, dt); },   // 🎵 from the first picture of the video
         redraw: () => renderer.render(scene, camera),
         done: () => went && !playing,
         progress: () => (play ? Math.min(1, simT / endT) : 0),
         finish: () => { last = 0; },
       });
-    } else setTimeout(() => { playing = true; }, 1200);   // a moment to start the screen recording
+      if (rec.mode() === 'live') bgm.play();
+    } else { bgm.play(); setTimeout(() => { playing = true; }, 1200); }   // a moment to start the screen recording
   });
   stage.addEventListener('click', () => { if (!playing && !rec.active()) menu.hidden = false; });
   // a still picture behind the menu
