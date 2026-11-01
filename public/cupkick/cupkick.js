@@ -19,7 +19,7 @@ let PS = 1;   // player size (menu → CONTROL): 1 = normal, 1.4 = bigger, 1.7 =
 let NP = 6;   // how many players (menu: 2 … 6)
 const PX = (i) => (i - (NP - 1) / 2) * (1.58 * PS + 0.2);   // a player is 1.58 wide (with arms): keep a small gap so they never touch
 const WALL = () => Math.max(6.2, PX(NP - 1) + 0.9);   // the side lines the balls bounce off
-const RET = 1.4;                         // 🔁 loop: seconds to go back to the first picture
+const UP = 1.0, DOWN = 1.1;              // 🔁 loop: seconds the camera looks up at the sky at the end / comes down at the start
 const SLOW = 1;                         // speed of the moment the cup is touched (1 = no slow motion)
 const KITS = {   // known shirts; other countries get colours from their flag
   fr: ['#1e3a8a', '#ffffff', '#ffffff', '#b91c1c'], br: ['#facc15', '#16a34a', '#1d4ed8', '#ffffff'], tr: ['#e30a17', '#ffffff', '#ffffff', '#e30a17'],
@@ -511,7 +511,7 @@ async function main() {
   const snd = new Sound();
   let vr = null;   // 🗣 My Voice lines (made below)
   let bgm = { play() {}, stop() {} };   // 🎵 background sound (made below)
-  let LOOP = false, endT0 = 0, back0 = null, backWords = false;   // 🔁 loop video (menu → Loop)
+  let LOOP = false, endT0 = 0, backWords = false, vt = 0;   // 🔁 loop video (menu → Loop); vt = seconds since START
   let play = null, simT = 0, last = 0, playing = false, lastStep = 0, doneKick = new Set(), doneBump = 0, doneLand = 0, clanked = false, dinged = false, endT = 0;
   const axis = new THREE.Vector3(), dq = new THREE.Quaternion();
   const w1 = $('w1'), w2 = $('w2'), words = $('words');
@@ -560,8 +560,10 @@ async function main() {
     simT = 0; lastStep = 0; doneKick = new Set(); doneBump = 0; doneLand = 0; clanked = false; dinged = false;
     vr.reset();
     endT = Math.max(play.touchT + 3.5, vr.minEnd(play.touchT));   // more time when My Voice still has something to say
-    endT0 = endT; back0 = null; backWords = false;
-    if (LOOP) endT += RET;   // 🔁 then everything goes back to the first picture, so the video can start again without a jump
+    endT0 = endT; backWords = false; vt = 0;
+    // 🔁 loop: at the end the camera turns up to the sky; while nobody sees the field everything is put back as at the
+    // start; the video starts in that same sky picture and comes down to the field — no jump, it never looks like an end
+    if (LOOP) endT += UP;
     play.q0 = quats.map((q) => q.clone());
     place(0);
     return true;
@@ -627,6 +629,7 @@ async function main() {
     tick(now, real);
   };
   const tick = (now, real) => {
+    if (play) vt += real;
     if (play && playing) {
       const near = simT > play.touchT - 0.6 && simT < play.touchT + 0.4;
       simT += real * (near ? SLOW : 1);
@@ -641,17 +644,10 @@ async function main() {
     const t = simT;
     if (play) {
       place(Math.min(play.steps - 2, Math.floor(Math.min(t, endT0) / DT)));
-      // 🔁 loop: the balls fly back to the players' feet, the cup stands up, everybody stands as at the start
-      var back = LOOP && t > endT0 ? (() => { const u = Math.min(1, (t - endT0) / RET); return u * u * (3 - 2 * u); })() : 0;
-      if (back > 0) {
-        if (!back0) back0 = meshes.map((m) => ({ p: m.position.clone(), q: m.quaternion.clone() }));
-        if (!backWords) { backWords = true; setWords($('t1').value, $('t2').value, false); }
-        meshes.forEach((m, k) => {
-          const T = play.track[k], e = back0[k].p;
-          m.position.set(e.x + (T[0] - e.x) * back, e.y + (T[1] - e.y) * back + Math.sin(back * Math.PI) * 1.2, e.z + (T[2] - e.z) * back);
-          m.quaternion.copy(back0[k].q).slerp(play.q0[k], back);
-        });
-      }
+      // 🔁 loop: in the last picture (camera up at the sky) everything is back as at the start
+      var back = LOOP && t >= endT - 1e-6 ? 1 : 0;
+      if (LOOP && !backWords && t > endT0 + UP * 0.6) { backWords = true; setWords($('t1').value, $('t2').value, false); }
+      if (back) meshes.forEach((m, k) => { const T = play.track[k]; m.position.set(T[0], T[1], T[2]); m.quaternion.copy(play.q0[k]); });
       players.forEach((pl, i) => {
         let a = 0;
         for (const k of pl.kicks) { const d = t - k; if (d > -0.3 && d < 0) a = -0.9 * Math.sin((d + 0.3) / 0.3 * Math.PI / 2); if (d >= 0 && d < 0.25) a = -0.9 * (1 - d / 0.25) + 1.1 * Math.sin(d / 0.25 * Math.PI); }
@@ -698,8 +694,11 @@ async function main() {
       for (let k = 0; k < ci; k++) { const [x, y, z, ph] = crowdPos[k]; m4.makeTranslation(x, y + Math.max(0, Math.sin(now / 140 + ph)) * jump, z); crowd.setMatrixAt(k, m4); }
       crowd.instanceMatrix.needsUpdate = true;
     }
-    const k = !play ? 0 : LOOP && simT > endT0 ? 1 - (() => { const u = Math.min(1, (simT - endT0) / RET); return u * u * (3 - 2 * u); })() : Math.min(1, simT / endT0);
-    camera.position.set(Math.sin(now / 3300) * 0.25, 3.2 - k * 0.5, 9.5 - k * 2.2); camera.lookAt(0, 2.6 - k * 0.6, -10);
+    const k = play ? Math.min(1, simT / endT0) : 0;
+    const sm = (u) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+    const sky = LOOP && play ? Math.max(1 - sm(vt / DOWN), sm((simT - endT0) / UP)) : 0;   // 🔁 0 = the field, 1 = up at the sky
+    const cx = Math.sin(now / 3300) * 0.25 * (1 - sky), cy = 3.2 - k * 0.5, cz = 9.5 - k * 2.2, ly = 2.6 - k * 0.6;
+    camera.position.set(cx, cy + (4.2 - cy) * sky, cz + (8.6 - cz) * sky); camera.lookAt(0, ly + (24 - ly) * sky, -10 + 4 * sky);
     if (CLOSE) { camera.position.set(0.2, 0.9, 1.4); camera.lookAt(0, 0.62, -1.5); }   // ?closeup=1: a close look at the trophy
     for (const o of extras.children) if (o.userData.fall) { const p = o.geometry.attributes.position; for (let i = 0; i < p.count; i++) { let y = p.getY(i) - 0.03; if (y < 0) y = 18; p.setY(i, y); p.setX(i, p.getX(i) + Math.sin(now / 900 + i) * 0.004); } p.needsUpdate = true; }
     updateEyes(now);
@@ -820,7 +819,7 @@ async function main() {
     if (new Set(codes).size !== codes.length) { $('answer').textContent = `⚠️ Pick ${NP} different countries.`; return; }
     try { localStorage.setItem('fft_cupkick', JSON.stringify(selects.map((s) => s.value))); } catch (e) { /* ignore */ }
     snd.on = $('snd').checked; snd.start();
-    LOOP = $('loop').checked;
+    LOOP = $('loop').checked; vt = 0;
     newLook();   // 🎲 a new stadium / new ball colours when chosen
     if (!prepare(codes, Number(winEl.value))) { $('answer').textContent = 'Could not make a play — press START again.'; return; }
     $('answer').textContent = `Answer for this play (only you see it here): ${NAME(codes[play.winner])}`;
