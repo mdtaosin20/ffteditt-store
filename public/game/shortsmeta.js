@@ -2,7 +2,7 @@
 // When Auto record has made a video, this box appears under "Video ready". It knows the play (who played, who won,
 // how hard it was, how long the video is), so it writes 4 hook titles that were never used before on this phone,
 // a description with a comment question and hashtags, and a 9:16 thumbnail (1080×1920) from the moment just before
-// the cup is hit — a red circle on the cup, a big hook and the question. ✨ AI (Admin → Settings key) is optional.
+// the cup is hit — a red circle on the cup, a big hook and the question. ✨ AI (the OpenAI key in YouTube Manager → AI Replies) is optional.
 const css = `
 .smeta{margin-top:12px;text-align:left;background:#0b1230;border:1px solid #2a4a9a;border-radius:14px;padding:12px}
 .smeta h4{font-size:15px;color:#fff;margin:0 0 6px}

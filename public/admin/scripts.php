@@ -1,7 +1,7 @@
 <?php
 // 🎬 Script Studio: voice-over scripts with a strong hook for the Shorts games (Cup Kick, Action Kick, Player Kick).
 // Each script: HOOK (0–2 s) · BUILD · HIT (the ball touches the cup) · END (comment call). Made from ready-made lines
-// (works without AI) or ✨ by the AI (Admin → Settings key). A script is never suggested twice (remembered here).
+// (works without AI) or ✨ by the AI (the OpenAI key saved in YouTube Manager → AI Replies). A script is never suggested twice (remembered here).
 // "Use in My Voice" puts it into the game's 🗣 My Voice on this phone / browser.
 require __DIR__ . '/../_boot.php';
 $admin = require_login();
@@ -25,7 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['ok' => true, 'saved' => array_slice($s, 0, 200)], JSON_UNESCAPED_UNICODE); exit;
     }
     if ($do === 'ai') {
-        if (!ai_ready()) { echo json_encode(['error' => 'Turn on the AI in Admin → Settings (AI key) first. The ready-made scripts work without it.']); exit; }
+        // uses the OpenAI (or Anthropic) key saved in YouTube Manager → 🤖 AI Replies — even when LUNA's AI answers are switched off
+        if (ai_key() === '') { echo json_encode(['error' => 'No AI key saved yet: YouTube Manager → 🤖 AI Replies → save your OpenAI key. The ready-made scripts work without it.']); exit; }
         $langs = ['en' => 'American English', 'es' => 'Spanish', 'pt' => 'Portuguese (Brazil)', 'fr' => 'French', 'de' => 'German', 'it' => 'Italian'];
         $lang = $langs[$j['lang'] ?? 'en'] ?? 'American English';
         $games = ['cupkick' => 'country flag balls (six countries)', 'actionkick' => 'players holding SUBSCRIBE / LIKE / COMMENT / SHARE / BELL / SAVE signs', 'playerkick' => 'famous football players'];
@@ -44,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = ($names !== '' ? "Names in this video: {$names}.\n" : '') . 'Do not reuse these hooks: ' . implode(' | ', $u);
         @set_time_limit(90);
         $txt = ai_call($system, $user, 1800, 45);
-        if ($txt === null) { echo json_encode(['error' => 'The AI did not answer. Check the AI key in Admin → Settings.']); exit; }
+        if ($txt === null) { echo json_encode(['error' => 'The AI did not answer. Check the key in YouTube Manager → 🤖 AI Replies.']); exit; }
         if (!preg_match('/\{.*\}/s', $txt, $m) || !is_array($r = json_decode($m[0], true)) || empty($r['scripts'])) { echo json_encode(['error' => 'The AI answer was not readable — press ✨ again.']); exit; }
         $out = [];
         foreach (array_slice($r['scripts'], 0, 8) as $s) {
@@ -94,7 +95,7 @@ page_start('Script Studio', 'scripts', $admin);
 .ss .ok{color:#4ade80}
 </style>
 <script>
-window.SS = { csrf: <?= json_encode(csrf_token()) ?>, saved: <?= json_encode($saved(), JSON_UNESCAPED_UNICODE) ?>, used: <?= json_encode(array_slice($used(), -3000), JSON_UNESCAPED_UNICODE) ?>, ai: <?= ai_ready() ? 'true' : 'false' ?> };
+window.SS = { csrf: <?= json_encode(csrf_token()) ?>, saved: <?= json_encode($saved(), JSON_UNESCAPED_UNICODE) ?>, used: <?= json_encode(array_slice($used(), -3000), JSON_UNESCAPED_UNICODE) ?>, ai: <?= ai_key() !== '' ? 'true' : 'false' ?> };
 </script>
 <script src="scripts.js?v=1"></script>
 <?php page_end();

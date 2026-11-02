@@ -10,7 +10,7 @@ $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
 $from = strtolower((string) parse_url((string) ($_SERVER['HTTP_ORIGIN'] ?? $_SERVER['HTTP_REFERER'] ?? ''), PHP_URL_HOST) ?: '');
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $from === '' || $from !== preg_replace('/:\d+$/', '', $host)) $out(['error' => 'not allowed'], 403);
 if (!owner_cookie_ok() && !current_admin()) $out(['error' => 'Open the admin panel once on this phone (log in), then try again.'], 403);
-if (!ai_ready()) $out(['error' => 'Turn on the AI in Admin → Settings (AI key) first.']);
+if (ai_key() === '') $out(['error' => 'No AI key saved yet: YouTube Manager → 🤖 AI Replies → save your OpenAI key.']);   // works even when LUNA's AI answers are off
 $in = json_decode((string) file_get_contents('php://input'), true) ?: [];
 $i = is_array($in['info'] ?? null) ? $in['info'] : [];
 $kind = in_array($i['kind'] ?? '', ['country', 'sign', 'player'], true) ? $i['kind'] : 'country';
@@ -26,7 +26,7 @@ $user = 'Names: ' . implode(', ', $names) . '. Difficulty: ' . (['calm', 'normal
     . (!empty($i['loop']) ? ', it loops' : '') . ".\nDo not use these titles again: " . implode(' | ', $used);
 @set_time_limit(60);
 $txt = ai_call($system, $user, 700, 30);
-if ($txt === null) $out(['error' => 'The AI did not answer. Check the AI key in Admin → Settings.']);
+if ($txt === null) $out(['error' => 'The AI did not answer. Check the key in YouTube Manager → 🤖 AI Replies.']);
 if (!preg_match('/\{.*\}/s', $txt, $m) || !is_array($j = json_decode($m[0], true))) $out(['error' => 'The AI answer was not readable — press ✨ AI again.']);
 $titles = array_values(array_filter(array_map(fn ($t) => mb_substr(trim((string) $t), 0, 100), is_array($j['titles'] ?? null) ? $j['titles'] : [])));
 $out(['titles' => array_slice($titles, 0, 4), 'description' => mb_substr(trim((string) ($j['description'] ?? '')), 0, 4500)]);
