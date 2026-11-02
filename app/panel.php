@@ -97,6 +97,11 @@ function games_list(): array
                     'tags' => ['football', 'arcade'], 'thumb' => '/assets/site/actionkick.jpg',
                     'desc' => 'Six players with SUBSCRIBE, LIKE, COMMENT, SHARE, BELL and SAVE signs kick at the cup — the one that touches it is what the viewers do!',
                     'autoplay' => true, 'pace' => 'normal', 'detail' => '3D · 6 signs · for short videos (not for 24/7 lives)'],
+        'playerkick' => ['id' => 12, 'key' => 'playerkick', 'name' => 'Player Kick', 'url' => '/playerkick/', 'settings' => '/playerkick/',
+                    'title' => 'Player Kick · Which Player Touches the Cup?', 'category' => 'football',
+                    'tags' => ['football', 'players', 'arcade'], 'thumb' => '/assets/site/playerkick.jpg',
+                    'desc' => 'Six football stars (your photos and their names) kick their balls at the cup — only one touches it. Can you see who it was?',
+                    'autoplay' => true, 'pace' => 'normal', 'detail' => '3D · 6 players with photos · for short videos (not for 24/7 lives)'],
         'race'  => ['id' => 7, 'key' => 'race', 'name' => 'Flag Race', 'url' => '/race/', 'settings' => 'race.php',
                     'title' => 'Flag Race', 'category' => 'countries',
                     'tags' => ['countries', 'race', 'chat'], 'thumb' => '/assets/site/race.jpg',
@@ -140,6 +145,7 @@ function game_of_url(string $url): string
     if (preg_match('#/lastflag/?(\?|$)#', $path)) return 'lastflag';
     if (preg_match('#/cupkick/?(\?|$)#', $path)) return 'cupkick';
     if (preg_match('#/actionkick/?(\?|$)#', $path)) return 'actionkick';
+    if (preg_match('#/playerkick/?(\?|$)#', $path)) return 'playerkick';
     if (preg_match('#/snake/?(\?|$)#', $path)) return 'snake';
     return preg_match('#/flags/?(\?|$)#', $path) ? 'flags' : 'ball';
 }

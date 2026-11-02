@@ -58,7 +58,7 @@ function cli_stream(int $sid): ?array
 /** The games a client may choose (24/7 lives only — not the short-video games). */
 function cli_games(): array
 {
-    return array_filter(games_list(), fn ($g) => !in_array($g['key'], ['cupkick', 'actionkick'], true));
+    return array_filter(games_list(), fn ($g) => !in_array($g['key'], ['cupkick', 'actionkick', 'playerkick'], true));
 }
 
 /** The VPS with the least work (online first). */
