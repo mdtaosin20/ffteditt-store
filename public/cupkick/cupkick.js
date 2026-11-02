@@ -124,7 +124,7 @@ function findPlay(n, want, o = PLAY) {
   // looks for a good play; if it takes long (rare settings), it asks for a little less mixing, so START never hangs
   const t0 = Date.now(); let easy = 0;
   for (let s = start; s < start + 60000; s++) {
-    if ((s & 63) === 0) { const ms = Date.now() - t0; easy = ms > 3000 ? 2 : ms > 1500 ? 1 : 0; if (ms > 9000) break; }
+    if ((s & 63) === 0) { const ms = Date.now() - t0, k = o.mess > 3 ? 3 : 1; easy = ms > 3000 * k ? 2 : ms > 1500 * k ? 1 : 0; if (ms > 9000 + 3000 * (k - 1)) break; }   // Extreme may look a little longer
     const p = simulate(s, n, { ...o, maxT, want });
     if (!p || p.touches.length !== 1) continue;
     const T = p.touches[0].t;
@@ -153,6 +153,27 @@ function findPlay(n, want, o = PLAY) {
       if (crowd < Math.min(2, p.balls.length - 2)) continue;   // (with few players there are fewer balls to crowd the cup)
       let decoy = false; for (let k = 0; k < p.balls.length; k++) if (k !== w.id && p.balls[k].t < T - 0.7 && at(k, T - 0.7) < at(w.id, T - 0.7)) decoy = true;
       if (!decoy) continue;
+    }
+    // Extreme: two other balls are right at the cup when it is hit, two others look closer just before the hit,
+    // another ball arrives at almost the same moment, the winner swaps places with others and was not kicked first
+    if (o.mess > 3 && easy < 1 && p.balls.length >= 4) {
+      const at = (k, tt) => { const st = Math.max(0, Math.floor(tt / DT)); return Math.hypot(p.track[k][st * 3] - CUP.x, p.track[k][st * 3 + 2] - CUP.z); };
+      let crowd = 0; for (let k = 0; k < p.balls.length; k++) if (k !== w.id && p.balls[k].t < T && at(k, T) < 1.7) crowd++;
+      if (crowd < 2) continue;
+      let closer = 0; for (let k = 0; k < p.balls.length; k++) if (k !== w.id && p.balls[k].t < T - 0.4 && at(k, T - 0.4) < at(w.id, T - 0.4)) closer++;
+      if (closer < 2) continue;
+      if (new Set(p.near.filter((x) => x.id !== w.id && Math.abs(x.t - T) < 0.45).map((x) => x.id)).size < 1) continue;
+      if (Math.min(...p.balls.map((b) => b.t)) === w.t) continue;
+      let mine = 0; const every = Math.round(0.05 / DT), last = Math.floor(T / DT);
+      for (let c = 0; c < p.balls.length; c++) {
+        if (c === w.id) continue; let side = 0;
+        for (let st = 0; st <= last; st += every) {
+          const A = p.track[w.id], C = p.track[c]; if (st * DT < w.t || st * DT < p.balls[c].t) continue;
+          if (Math.abs(A[st * 3 + 2] - C[st * 3 + 2]) > 4) continue;
+          const sd = Math.sign(A[st * 3] - C[st * 3]); if (side && sd && sd !== side) mine++; if (sd) side = sd;
+        }
+      }
+      if (mine < 2) continue;
     }
     return { ...p, touchT: T, winner: w.team };
   }
@@ -814,7 +835,9 @@ async function main() {
     onOpenMenu: () => { menu.hidden = false; },
   });
   bgm = setupBgMusic({ game: 'cupkick', after: $('snd').closest('label'), snd });
-  $('go').addEventListener('click', () => {
+  // START: first a word on the screen (a hard play can take a few seconds to find), then the play
+  $('go').addEventListener('click', () => { snd.on = $('snd').checked; snd.start(); $('answer').textContent = '⏳ Making the play…'; setTimeout(goNow, 30); });
+  const goNow = () => {
     const codes = selects.slice(0, NP).map((s) => s.value);
     if (new Set(codes).size !== codes.length) { $('answer').textContent = `⚠️ Pick ${NP} different countries.`; return; }
     try { localStorage.setItem('fft_cupkick', JSON.stringify(selects.map((s) => s.value))); } catch (e) { /* ignore */ }
@@ -838,7 +861,7 @@ async function main() {
       });
       if (rec.mode() === 'live') bgm.play();
     } else { bgm.play(); setTimeout(() => { playing = true; }, 1200); }   // a moment to start the screen recording
-  });
+  };
   stage.addEventListener('click', () => { if (!playing && !rec.active()) menu.hidden = false; });
   // a still picture behind the menu
   buildTeams(saved);
