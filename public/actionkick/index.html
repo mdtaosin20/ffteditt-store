@@ -13,7 +13,7 @@
 <link rel="manifest" href="/actionkick/manifest.json">
 <link rel="icon" href="/actionkick/icon-192.png">
 <link rel="apple-touch-icon" href="/actionkick/icon-180.png">
-<link rel="stylesheet" href="/actionkick/actionkick.css?v=7">
+<link rel="stylesheet" href="/actionkick/actionkick.css?v=8">
 </head>
 <body>
 <div id="stage">
@@ -49,7 +49,9 @@
       <label class="row"><span>Player size</span>
         <select id="size"><option value="1">Now (normal)</option><option value="1.4">Bigger (1.4×)</option><option value="1.7">Biggest (1.7×)</option></select></label>
       <div class="cam">
-        <div class="cam-h">📷 Camera &amp; field <button type="button" id="camReset" class="ghost">↺ Normal</button></div>
+        <label class="cam-h"><input type="checkbox" id="camOn"> 📷 Camera &amp; field <span class="cam-sw"></span></label>
+        <div id="camBody" hidden>
+        <div class="cam-r"><button type="button" id="camReset" class="ghost">↺ Normal</button></div>
         <label class="row"><span>See more of the sides (wider view): <b id="camfovV"></b></span>
           <input type="range" id="camfov" min="50" max="72" step="1" value="50">
           <span class="ends"><i>Normal</i><i>Much wider</i></span></label>
@@ -62,6 +64,22 @@
         <label class="row"><span>Space between players: <b id="gapV"></b></span>
           <input type="range" id="gap" min="0.2" max="1.4" step="0.1" value="0.2">
           <span class="ends"><i>Normal</i><i>Far apart</i></span></label>
+        </div>
+      </div>
+      <div class="cam">
+        <label class="cam-h"><input type="checkbox" id="cupOn"> 🏆 Trophy <span class="cam-sw"></span></label>
+        <div id="cupBody" hidden>
+        <div class="cam-r"><button type="button" id="cupReset" class="ghost">↺ Normal</button></div>
+        <label class="row"><span>Forward / back: <b id="cupzV"></b></span>
+          <input type="range" id="cupz" min="-6" max="2" step="0.5" value="0">
+          <span class="ends"><i>Nearer to the players</i><i>Nearer to you</i></span></label>
+        <label class="row"><span>Left / right: <b id="cupxV"></b></span>
+          <input type="range" id="cupx" min="-2.5" max="2.5" step="0.25" value="0">
+          <span class="ends"><i>⬅ Left</i><i>Right ➡</i></span></label>
+        <label class="row"><span>Size: <b id="cupsV"></b></span>
+          <input type="range" id="cups" min="0.7" max="2" step="0.1" value="1">
+          <span class="ends"><i>Smaller</i><i>Bigger (2×)</i></span></label>
+        </div>
       </div>
       <label class="row"><span>Ball size</span>
         <select id="ball"><option value="0.38">Small</option><option value="0.45" selected>A little bigger</option><option value="0.52">Big</option></select></label>
@@ -107,6 +125,6 @@
   </div>
 </div>
 <script type="importmap">{ "imports": { "three": "/game/vendor/three.module.js" } }</script>
-<script type="module" src="/actionkick/actionkick.js?v=18"></script>
+<script type="module" src="/actionkick/actionkick.js?v=19"></script>
 </body>
 </html>

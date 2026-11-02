@@ -137,5 +137,9 @@ button.ghost { flex: 0 0 auto; background: #1f2b5c; font-size: 15px; }
 }
 
 .cam { margin: 10px 0; padding: 10px 12px; border: 1px solid #2a4a9a; border-radius: 12px; background: #0f1838; }
-.cam-h { display: flex; align-items: center; gap: 8px; font-weight: 800; color: #fff; margin-bottom: 4px; }
-.cam-h button { margin-left: auto; width: auto; padding: 5px 10px; font-size: 12px; }
+.cam-h { display: flex; align-items: center; gap: 8px; font-weight: 800; color: #fff; cursor: pointer; position: relative; }
+.cam-h input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.cam-sw { margin-left: auto; width: 44px; height: 24px; border-radius: 99px; background: #3a4470; position: relative; transition: background .2s; flex: 0 0 auto; }
+.cam-sw:after { content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .2s; }
+.cam-h input:checked + .cam-sw { background: #22c55e; } .cam-h input:checked + .cam-sw:after { left: 23px; }
+.cam-r { display: flex; justify-content: flex-end; margin-top: 6px; } .cam-r button { width: auto; padding: 5px 10px; font-size: 12px; }

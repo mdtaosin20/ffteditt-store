@@ -14,7 +14,7 @@ const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
 const CLOSE = new URLSearchParams(location.search).has('closeup');
 let R = 0.45;   // ball size (menu → CONTROL → Ball size): 0.38 = small, 0.45 = a little bigger, 0.52 = big
-const CUP = { x: 0, z: -1.5, r: 0.32 }, PZ = -19;
+const CUP = { x: 0, z: -1.5, r: 0.32, s: 1 }, PZ = -19;   // the trophy: where it stands and how big (s) — menu → 🏆 Trophy
 let PS = 1;   // player size (menu → CONTROL): 1 = normal, 1.4 = bigger, 1.7 = biggest; bigger players stand further apart
 let NP = 6;   // how many players (menu: 2 … 6)
 let GAP = 0.2;   // space between two players (menu → CONTROL → 📷 Camera & field)
@@ -52,7 +52,7 @@ function simulate(seed, n, o = PLAY) {
     const sx = PX(i) + 0.25 * PS, sz = PZ + 0.3 * PS + R + 0.06;   // in front of his right (kicking) foot
     // messier = more balls are kicked across to the other side, so their paths cross and they swap places on the way
     const across = mess > 0 && rnd() < 0.35 + mess * 0.25;
-    let tx = across ? -Math.sign(sx || 1) * (0.3 + rnd() * aimX) : (rnd() * 2 - 1) * aimX; const tz = CUP.z + (rnd() * 2 - 1) * aimZ;
+    let tx = CUP.x + (across ? -Math.sign(sx || 1) * (0.3 + rnd() * aimX) : (rnd() * 2 - 1) * aimX); const tz = CUP.z + (rnd() * 2 - 1) * aimZ;
     const d = Math.hypot(tx - sx, tz - sz), sp = (6.6 + rnd() * 2.0) * o.speed;
     const curl = (rnd() * 2 - 1) * 0.9 * Math.min(mess, 2.5) * Math.min(1, o.speed);   // the ball bends left or right a little while it rolls
     balls.push({ team: i, t, x: sx, y: R, z: sz, vx: (tx - sx) / d * sp, vy: 0, vz: (tz - sz) / d * sp, curl, on: false, id: balls.length });
@@ -62,7 +62,7 @@ function simulate(seed, n, o = PLAY) {
   const steps = Math.ceil((t + 3 + 22 / (7.6 * o.speed)) / DT), track = balls.map(() => new Float32Array(steps * 3));
   const touches = [], near = [], bumps = [], lands = [];
   let simT = 0, cupUp = true, fall = null;
-  const lying = { ax: 0, az: 0, bx: 0, bz: 0, r: 0.3 };   // the fallen cup, as a fat stick on the grass
+  const lying = { ax: 0, az: 0, bx: 0, bz: 0, r: 0.3 * CUP.s };   // the fallen cup, as a fat stick on the grass
   for (let s = 0; s < steps; s++, simT += DT) {
     if (cupUp && o.maxT && simT > o.maxT) return null;   // (searching) nobody touched the cup in time: try the next play
     if (!cupUp && o.want >= 0 && balls[touches[0].id].team !== o.want) return null;   // (searching) the wrong country touched it
@@ -90,8 +90,8 @@ function simulate(seed, n, o = PLAY) {
             // the first touch knocks the cup over (it falls the way the ball was going)
             const sp = Math.hypot(b.vx, b.vz) || 1;
             fall = { t: simT, dx: b.vx / sp, dz: b.vz / sp }; cupUp = false;
-            lying.ax = CUP.x + fall.dx * 0.3; lying.az = CUP.z + fall.dz * 0.3;
-            lying.bx = CUP.x + fall.dx * (0.3 + CUP_H - 0.15); lying.bz = CUP.z + fall.dz * (0.3 + CUP_H - 0.15);
+            lying.ax = CUP.x + fall.dx * 0.3 * CUP.s; lying.az = CUP.z + fall.dz * 0.3 * CUP.s;
+            lying.bx = CUP.x + fall.dx * (0.3 + CUP_H - 0.15) * CUP.s; lying.bz = CUP.z + fall.dz * (0.3 + CUP_H - 0.15) * CUP.s;
             touches.push({ id: b.id, t: simT });
           } else bumps.push(simT);
           // bounce off it (a hard bounce, a bit to the side)
@@ -121,7 +121,7 @@ function simulate(seed, n, o = PLAY) {
 }
 // exactly ONE ball knocks the cup over, a little after the kicks, with other balls close by at that moment
 function findPlay(n, want, o = PLAY) {
-  const start = (Math.random() * 1e9) | 0, travel = 17.5 / (7.6 * o.speed);
+  const start = (Math.random() * 1e9) | 0, travel = Math.abs(CUP.z - PZ) / (7.6 * o.speed);
   const minT = 0.8 + travel + Math.min(1.5, o.within * 0.5), maxT = 0.8 + o.within + travel * 1.8 + 1;
   // looks for a good play; if it takes long (rare settings), it asks for a little less mixing, so START never hangs
   const t0 = Date.now(); let easy = 0;
@@ -479,6 +479,11 @@ async function main() {
   const fallAxis = new THREE.Vector3(), cupBase = 0.3;   // the cup tips over its base edge
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.05, 12, 64), new THREE.MeshBasicMaterial({ color: '#fff6b0', transparent: true, opacity: 0 }));
   ring.rotation.x = -Math.PI / 2; ring.position.set(CUP.x, 0.45, CUP.z); scene.add(ring);
+  const placeCup = () => {   // 🏆 the trophy moved or made bigger (menu): its stage, glow and ring go with it
+    stage3.position.set(CUP.x, 0.03, CUP.z); stage3.scale.set(CUP.s, 1, CUP.s);
+    glow.position.set(CUP.x, 0.04, CUP.z); glow.scale.setScalar(CUP.s);
+    ring.position.set(CUP.x, 0.45 * CUP.s, CUP.z); cupPivot.position.set(CUP.x, 0.06, CUP.z); cupPivot.scale.setScalar(CUP.s);
+  };
 
   /* ---------- players (our own blocky style), made again for each set of countries ---------- */
   const skin = ['#f1c7a3', '#c68a5c', '#e8b48a', '#f3d1b5', '#8d5a3b', '#d9a77c'];
@@ -708,11 +713,11 @@ async function main() {
       if (since > 0 && play.fall) {
         // falls over in ~0.5 s (faster and faster), a small bounce, then lies on the grass
         const f = play.fall, k = Math.min(1, since / 0.5), bounce = since > 0.5 && since < 0.75 ? Math.sin((since - 0.5) / 0.25 * Math.PI) * 0.12 : 0;
-        cupPivot.position.set(CUP.x + f.dx * cupBase, 0.06, CUP.z + f.dz * cupBase); cup.position.set(-f.dx * cupBase, 0, -f.dz * cupBase);
+        cupPivot.position.set(CUP.x + f.dx * cupBase * CUP.s, 0.06, CUP.z + f.dz * cupBase * CUP.s); cup.position.set(-f.dx * cupBase, 0, -f.dz * cupBase);
         fallAxis.set(f.dz, 0, -f.dx); cupPivot.quaternion.setFromAxisAngle(fallAxis, (k * k * (Math.PI / 2 - 0.12) - bounce) * (1 - back));
         if (since > 0.5 && !clanked) { clanked = true; snd.clank(); snd.win(); }
       } else { cupPivot.position.set(CUP.x, 0.06, CUP.z); cup.position.set(0, 0, 0); cupPivot.quaternion.identity(); }
-      ring.material.opacity = since > 0 && since < 0.6 ? 0.9 * (1 - since / 0.6) : 0; ring.scale.setScalar(since > 0 ? 1 + since * 3 : 1);
+      ring.material.opacity = since > 0 && since < 0.6 ? 0.9 * (1 - since / 0.6) : 0; ring.scale.setScalar((since > 0 ? 1 + since * 3 : 1) * CUP.s);
       const jump = since > 0 && since < 3 ? 0.25 : 0.06;
       for (let k = 0; k < ci; k++) { const [x, y, z, ph] = crowdPos[k]; m4.makeTranslation(x, y + Math.max(0, Math.sin(now / 140 + ph)) * jump, z); crowd.setMatrixAt(k, m4); }
       crowd.instanceMatrix.needsUpdate = true;
@@ -780,21 +785,35 @@ async function main() {
     const t = makeLed(); led.material.map.dispose(); led.material.map = t; led.material.emissiveMap = t; led.material.needsUpdate = true;
     if (!WM) { $('wm').textContent = ''; }
   };
-  // 📷 Camera & field: see more of the sides (wider), move the camera forward / back and up / down, more space between players
-  const camCtl = () => ({ fov: Number($('camfov').value) || 50, z: Number($('camz').value) || 0, y: Number($('camy').value) || 0, gap: Number($('gap').value) || 0.2 });
+  // 📷 Camera & field and 🏆 Trophy: each has its own switch; switched off = the normal picture
+  const camCtl = () => ({ on: $('camOn').checked, fov: Number($('camfov').value) || 50, z: Number($('camz').value) || 0, y: Number($('camy').value) || 0, gap: Number($('gap').value) || 0.2,
+    cup: $('cupOn').checked, cz: Number($('cupz').value) || 0, cx: Number($('cupx').value) || 0, cs: Number($('cups').value) || 1 });
+  const rebuild = () => { play = null; ballGroup.clear(); buildTeams(selects.slice(0, NP).map((x) => x.value)); };
   const showCam = () => {
-    const c = camCtl(); CAM.fov = c.fov; CAM.z = c.z; CAM.y = c.y;
+    const c = camCtl();
+    CAM.fov = c.on ? c.fov : 50; CAM.z = c.on ? c.z : 0; CAM.y = c.on ? c.y : 0;
+    const gap = c.on ? c.gap : 0.2, cz = -1.5 + (c.cup ? c.cz : 0), cx = c.cup ? c.cx : 0, cs = c.cup ? c.cs : 1;
+    const moved = gap !== GAP || cz !== CUP.z || cx !== CUP.x || cs !== CUP.s;
+    GAP = gap; CUP.z = cz; CUP.x = cx; CUP.s = cs; CUP.r = 0.32 * cs;
+    $('camBody').hidden = !c.on; $('cupBody').hidden = !c.cup;
     $('camfovV').textContent = c.fov <= 50 ? 'Normal' : `+${Math.round((c.fov - 50) / 22 * 100)}% wider`;
     $('camzV').textContent = c.z === 0 ? 'Normal' : c.z < 0 ? `${-c.z} closer` : `${c.z} further back`;
     $('camyV').textContent = c.y === 0 ? 'Normal' : c.y < 0 ? `${-c.y} lower` : `${c.y} higher`;
     $('gapV').textContent = c.gap <= 0.2 ? 'Normal' : `+${Math.round((c.gap - 0.2) * 100)}%`;
+    $('cupzV').textContent = c.cz === 0 ? 'Normal' : c.cz > 0 ? `${c.cz} nearer to you` : `${-c.cz} nearer to the players`;
+    $('cupxV').textContent = c.cx === 0 ? 'Middle' : c.cx < 0 ? `${-c.cx} left` : `${c.cx} right`;
+    $('cupsV').textContent = c.cs === 1 ? 'Normal' : `${c.cs.toFixed(1)}×`;
+    placeCup(); if (moved) rebuild();
     try { localStorage.setItem('fft_cupkick_cam', JSON.stringify(c)); } catch (e) { /* ignore */ }
   };
-  try { const c = JSON.parse(localStorage.getItem('fft_cupkick_cam') || 'null'); if (c) { $('camfov').value = c.fov; $('camz').value = c.z; $('camy').value = c.y; $('gap').value = c.gap; } } catch (e) { /* ignore */ }
-  GAP = camCtl().gap; showCam();
-  ['camfov', 'camz', 'camy'].forEach((id) => $(id).addEventListener('input', showCam));
-  $('gap').addEventListener('input', () => { showCam(); const v = camCtl().gap; if (v !== GAP) { GAP = v; play = null; ballGroup.clear(); buildTeams(selects.slice(0, NP).map((x) => x.value)); } });
-  $('camReset').addEventListener('click', () => { $('camfov').value = 50; $('camz').value = 0; $('camy').value = 0; $('gap').value = 0.2; GAP = 0.2; showCam(); play = null; ballGroup.clear(); buildTeams(selects.slice(0, NP).map((x) => x.value)); });
+  try {
+    const c = JSON.parse(localStorage.getItem('fft_cupkick_cam') || 'null');
+    if (c) { $('camOn').checked = c.on !== false; $('camfov').value = c.fov; $('camz').value = c.z; $('camy').value = c.y; $('gap').value = c.gap; $('cupOn').checked = !!c.cup; if (c.cz !== undefined) { $('cupz').value = c.cz; $('cupx').value = c.cx; $('cups').value = c.cs; } }
+  } catch (e) { /* ignore */ }
+  showCam();
+  ['camOn', 'camfov', 'camz', 'camy', 'gap', 'cupOn', 'cupz', 'cupx', 'cups'].forEach((id) => $(id).addEventListener(id.endsWith('On') ? 'change' : 'input', showCam));
+  $('camReset').addEventListener('click', () => { $('camfov').value = 50; $('camz').value = 0; $('camy').value = 0; $('gap').value = 0.2; showCam(); });
+  $('cupReset').addEventListener('click', () => { $('cupz').value = 0; $('cupx').value = 0; $('cups').value = 1; showCam(); });
   showCtl(); PS = ctl().size; setBall(ctl().ball);
   $('ball').addEventListener('change', () => setBall(ctl().ball)); themeNow = ctl().place; setChannel(ctl().chan); applyTheme(themeNow); setQuality(ctl().quality);
   // 🎲 unlimited looks: a new stadium and/or new ball colours (shown under the place)
