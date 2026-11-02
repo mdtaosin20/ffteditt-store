@@ -135,3 +135,7 @@ button.ghost { flex: 0 0 auto; background: #1f2b5c; font-size: 15px; }
   .ctl .row { margin-top: 14px; }
   .ctl-h { font-size: 18px; }
 }
+
+.cam { margin: 10px 0; padding: 10px 12px; border: 1px solid #2a4a9a; border-radius: 12px; background: #0f1838; }
+.cam-h { display: flex; align-items: center; gap: 8px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+.cam-h button { margin-left: auto; width: auto; padding: 5px 10px; font-size: 12px; }

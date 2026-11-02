@@ -13,7 +13,7 @@
 <link rel="manifest" href="/cupkick/manifest.json">
 <link rel="icon" href="/cupkick/icon-192.png">
 <link rel="apple-touch-icon" href="/cupkick/icon-180.png">
-<link rel="stylesheet" href="/cupkick/cupkick.css?v=7">
+<link rel="stylesheet" href="/cupkick/cupkick.css?v=8">
 </head>
 <body>
 <div id="stage">
@@ -48,6 +48,21 @@
         <select id="mess"><option value="0">Calm</option><option value="1">Normal</option><option value="2">Wild 🔥 (hard to guess)</option><option value="3">Very hard 🔥🔥 (watch it again!)</option><option value="4" selected>Extreme 🔥🔥🔥 (watch it 3–4 times!)</option></select></label>
       <label class="row"><span>Player size</span>
         <select id="size"><option value="1">Now (normal)</option><option value="1.4">Bigger (1.4×)</option><option value="1.7">Biggest (1.7×)</option></select></label>
+      <div class="cam">
+        <div class="cam-h">📷 Camera &amp; field <button type="button" id="camReset" class="ghost">↺ Normal</button></div>
+        <label class="row"><span>See more of the sides (wider view): <b id="camfovV"></b></span>
+          <input type="range" id="camfov" min="50" max="72" step="1" value="50">
+          <span class="ends"><i>Normal</i><i>Much wider</i></span></label>
+        <label class="row"><span>Camera forward / back: <b id="camzV"></b></span>
+          <input type="range" id="camz" min="-4" max="6" step="0.5" value="0">
+          <span class="ends"><i>⬆ Closer</i><i>Further back ⬇</i></span></label>
+        <label class="row"><span>Camera up / down: <b id="camyV"></b></span>
+          <input type="range" id="camy" min="-1.5" max="3" step="0.25" value="0">
+          <span class="ends"><i>Lower</i><i>Higher</i></span></label>
+        <label class="row"><span>Space between players: <b id="gapV"></b></span>
+          <input type="range" id="gap" min="0.2" max="1.4" step="0.1" value="0.2">
+          <span class="ends"><i>Normal</i><i>Far apart</i></span></label>
+      </div>
       <label class="row"><span>Ball size</span>
         <select id="ball"><option value="0.38">Small</option><option value="0.45" selected>A little bigger</option><option value="0.52">Big</option></select></label>
       <label class="row"><span>Ball colours</span>
@@ -92,6 +107,6 @@
   </div>
 </div>
 <script type="importmap">{ "imports": { "three": "/game/vendor/three.module.js" } }</script>
-<script type="module" src="/cupkick/cupkick.js?v=35"></script>
+<script type="module" src="/cupkick/cupkick.js?v=36"></script>
 </body>
 </html>

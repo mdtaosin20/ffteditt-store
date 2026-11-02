@@ -17,7 +17,9 @@ let R = 0.45;   // ball size (menu → CONTROL → Ball size): 0.38 = small, 0.4
 const CUP = { x: 0, z: -1.5, r: 0.32 }, PZ = -19;
 let PS = 1;   // player size (menu → CONTROL): 1 = normal, 1.4 = bigger, 1.7 = biggest; bigger players stand further apart
 let NP = 6;   // how many players (menu: 2 … 6)
-const PX = (i) => (i - (NP - 1) / 2) * (1.58 * PS + 0.2);   // a player is 1.58 wide (with arms): keep a small gap so they never touch
+let GAP = 0.2;   // space between two players (menu → CONTROL → 📷 Camera & field)
+const CAM = { fov: 50, z: 0, y: 0 };   // camera: wider view, forward / back, up / down (same menu)
+const PX = (i) => (i - (NP - 1) / 2) * (1.58 * PS + GAP);   // a player is 1.58 wide (with arms): keep a small gap so they never touch
 const WALL = () => Math.max(6.2, PX(NP - 1) + 0.9);   // the side lines the balls bounce off
 const UP = 1.0, DOWN = 1.1;              // 🔁 loop: seconds the camera looks up at the sky at the end / comes down at the start
 const SLOW = 1;                         // speed of the moment the cup is touched (1 = no slow motion)
@@ -718,7 +720,8 @@ async function main() {
     const k = play ? Math.min(1, simT / endT0) : 0;
     const sm = (u) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
     const sky = LOOP && play ? Math.max(1 - sm(vt / DOWN), sm((simT - endT0) / UP)) : 0;   // 🔁 0 = the field, 1 = up at the sky
-    const cx = Math.sin(now / 3300) * 0.25 * (1 - sky), cy = 3.2 - k * 0.5, cz = 9.5 - k * 2.2, ly = 2.6 - k * 0.6;
+    const cx = Math.sin(now / 3300) * 0.25 * (1 - sky), cy = 3.2 - k * 0.5 + CAM.y, cz = 9.5 - k * 2.2 + CAM.z, ly = 2.6 - k * 0.6 + CAM.y * 0.6;
+    if (camera.fov !== CAM.fov) { camera.fov = CAM.fov; camera.updateProjectionMatrix(); }
     camera.position.set(cx, cy + (4.2 - cy) * sky, cz + (8.6 - cz) * sky); camera.lookAt(0, ly + (24 - ly) * sky, -10 + 4 * sky);
     if (CLOSE) { camera.position.set(0.2, 0.9, 1.4); camera.lookAt(0, 0.62, -1.5); }   // ?closeup=1: a close look at the trophy
     for (const o of extras.children) if (o.userData.fall) { const p = o.geometry.attributes.position; for (let i = 0; i < p.count; i++) { let y = p.getY(i) - 0.03; if (y < 0) y = 18; p.setY(i, y); p.setX(i, p.getX(i) + Math.sin(now / 900 + i) * 0.004); } p.needsUpdate = true; }
@@ -777,6 +780,21 @@ async function main() {
     const t = makeLed(); led.material.map.dispose(); led.material.map = t; led.material.emissiveMap = t; led.material.needsUpdate = true;
     if (!WM) { $('wm').textContent = ''; }
   };
+  // 📷 Camera & field: see more of the sides (wider), move the camera forward / back and up / down, more space between players
+  const camCtl = () => ({ fov: Number($('camfov').value) || 50, z: Number($('camz').value) || 0, y: Number($('camy').value) || 0, gap: Number($('gap').value) || 0.2 });
+  const showCam = () => {
+    const c = camCtl(); CAM.fov = c.fov; CAM.z = c.z; CAM.y = c.y;
+    $('camfovV').textContent = c.fov <= 50 ? 'Normal' : `+${Math.round((c.fov - 50) / 22 * 100)}% wider`;
+    $('camzV').textContent = c.z === 0 ? 'Normal' : c.z < 0 ? `${-c.z} closer` : `${c.z} further back`;
+    $('camyV').textContent = c.y === 0 ? 'Normal' : c.y < 0 ? `${-c.y} lower` : `${c.y} higher`;
+    $('gapV').textContent = c.gap <= 0.2 ? 'Normal' : `+${Math.round((c.gap - 0.2) * 100)}%`;
+    try { localStorage.setItem('fft_cupkick_cam', JSON.stringify(c)); } catch (e) { /* ignore */ }
+  };
+  try { const c = JSON.parse(localStorage.getItem('fft_cupkick_cam') || 'null'); if (c) { $('camfov').value = c.fov; $('camz').value = c.z; $('camy').value = c.y; $('gap').value = c.gap; } } catch (e) { /* ignore */ }
+  GAP = camCtl().gap; showCam();
+  ['camfov', 'camz', 'camy'].forEach((id) => $(id).addEventListener('input', showCam));
+  $('gap').addEventListener('input', () => { showCam(); const v = camCtl().gap; if (v !== GAP) { GAP = v; play = null; ballGroup.clear(); buildTeams(selects.slice(0, NP).map((x) => x.value)); } });
+  $('camReset').addEventListener('click', () => { $('camfov').value = 50; $('camz').value = 0; $('camy').value = 0; $('gap').value = 0.2; GAP = 0.2; showCam(); play = null; ballGroup.clear(); buildTeams(selects.slice(0, NP).map((x) => x.value)); });
   showCtl(); PS = ctl().size; setBall(ctl().ball);
   $('ball').addEventListener('change', () => setBall(ctl().ball)); themeNow = ctl().place; setChannel(ctl().chan); applyTheme(themeNow); setQuality(ctl().quality);
   // 🎲 unlimited looks: a new stadium and/or new ball colours (shown under the place)
