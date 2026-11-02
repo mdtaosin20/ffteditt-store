@@ -91,6 +91,7 @@ function nav_items(): array
         'dashboard' => ['Dashboard',           'dashboard.php', 'home'],
         'assistant' => ['Ask Claude',          'assistant.php', 'spark'],
         'myvoice'   => ['My Voice',            'myvoice.php',   'mic'],
+        'scripts'   => ['Script Studio',       'scripts.php',   'pencil'],
         'servers'   => ['VPS Monitor',         'servers.php',   'server'],
         'games'     => ['Game Manager',        'games.php',     'gamepad'],
         'streams'   => ['Live Stream Manager', 'streams.php',   'live'],
