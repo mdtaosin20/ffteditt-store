@@ -467,6 +467,29 @@ async function main() {
     for (const [x, y, z] of v) { const l = Math.hypot(x, y, z), lat = Math.asin(y / l), lon = Math.atan2(z, x), cx = (lon / (2 * Math.PI) + 0.5) * w, cy = (0.5 - lat / Math.PI) * h, sx = 1 / Math.max(0.2, Math.cos(lat));
       for (const off of [-w, 0, w]) { g.beginPath(); for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + k * 2 * Math.PI / 5; g.lineTo(cx + off + Math.cos(a) * 44 * sx, cy + Math.sin(a) * 44); } g.closePath(); g.fill(); } }
   });
+  // the join between the stem and the ball holder (it was open: you could see the grass through it)
+  const NECK = new URLSearchParams(location.search).get('neck') || 'A';
+  add(new THREE.CylinderGeometry(0.3, 0.27, 0.05, 48), gold, 1.585);                                           // closes the top of the stem
+  add(new THREE.CylinderGeometry(0.14, 0.2, 0.08, 32), darkGold, 1.62);
+  if (NECK === 'A') {   // a golden knob with a ring of red gems
+    const gem = new THREE.MeshStandardMaterial({ color: '#e11d48', metalness: 0.2, roughness: 0.05, emissive: '#7f0b24', emissiveIntensity: 0.6 });
+    for (let q = 0; q < 10; q++) { const a = q * Math.PI / 5, g2 = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), gem); g2.position.set(Math.cos(a) * 0.27, 1.6, Math.sin(a) * 0.27); cup.add(g2); }
+    add(new THREE.TorusGeometry(0.29, 0.02, 10, 48), darkGold, 1.585, Math.PI / 2);
+  }
+  if (NECK === 'B') {   // two golden laurel wings
+    const leaf = new THREE.SphereGeometry(1, 16, 10);
+    for (const sd of [-1, 1]) for (let q = 0; q < 5; q++) {
+      const m = new THREE.Mesh(leaf, q % 2 ? darkGold : gold); m.scale.set(0.12, 0.035, 0.05);
+      m.position.set(sd * (0.2 + q * 0.07), 1.6 + q * 0.045, 0); m.rotation.z = sd * (0.35 + q * 0.12); m.castShadow = true; cup.add(m);
+    }
+  }
+  if (NECK === 'C') {   // an eight-pointed golden star with pearls on its points
+    const sh = new THREE.Shape(); for (let q = 0; q < 16; q++) { const a = q * Math.PI / 8, r = q % 2 ? 0.24 : 0.42; q ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(r, 0); }
+    const star = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.04, bevelEnabled: true, bevelSize: 0.01, bevelThickness: 0.01 }), gold);
+    star.rotation.x = -Math.PI / 2; star.position.y = 1.58; star.castShadow = true; cup.add(star);
+    const pearl = new THREE.MeshStandardMaterial({ color: '#fff7e6', metalness: 0.1, roughness: 0.15 });
+    for (let q = 0; q < 8; q++) { const a = q * Math.PI / 4, p2 = new THREE.Mesh(new THREE.SphereGeometry(0.04, 16, 12), pearl); p2.position.set(Math.cos(a) * 0.42, 1.63, -Math.sin(a) * 0.42); cup.add(p2); }
+  }
   const topBall = add(new THREE.SphereGeometry(0.4, 48, 32), new THREE.MeshStandardMaterial({ map: goldBallTex, metalness: 1, roughness: 0.2 }), 2.08);
   topBall.rotation.set(0.4, 0.6, 0);
   // the glowing stage on the grass (it stays when the trophy falls off it)
