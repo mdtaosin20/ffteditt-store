@@ -166,6 +166,12 @@ export function setupRecorder(o) {
   };
   const uiOff = () => { clearInterval(tmr); badge && badge.remove(); bar && bar.remove(); badge = bar = null; if (lock) { lock.release().catch(() => {}); lock = null; } };
   const setBar = (p) => { if (!bar) return; bar.querySelector('span').textContent = Math.round(p * 100) + '%'; bar.querySelector('i').style.width = (p * 100).toFixed(1) + '%'; };
+  let snap = null;   // 🖼 the picture for the thumbnail (just before the cup is hit), taken while the video is made
+  const takeSnap = () => {
+    if (snap || !o.snapNow || !comp) return;
+    const s = o.snapNow(); if (!s) return;
+    const c = document.createElement('canvas'); c.width = TW; c.height = TH; c.getContext('2d').drawImage(o.canvas, 0, 0, TW, TH); snap = { c, cup: s.cup };
+  };
   const done = (blob, info, msg) => {
     const ext = /mp4/.test(blob.type) ? 'mp4' : 'webm';
     const d = new Date(), pad = (n) => String(n).padStart(2, '0');
@@ -178,6 +184,8 @@ export function setupRecorder(o) {
       <button type="button" class="ghost" data-a="share" style="background:#1f2b5c">📤 Share (YouTube, gallery…)</button>
       <button type="button" class="ghost" data-a="again" style="background:transparent;border:1px solid #2a4a9a">🔁 Play again</button></div>`;
     document.body.appendChild(el);
+    if (o.meta) { try { o.meta(el.querySelector('.bx'), snap); } catch (e) { console.error(e); } }   // 📝 title, description, thumbnail
+    snap = null;
     const file = new File([blob], name, { type: blob.type });
     const shareBtn = el.querySelector('[data-a=share]');
     if (!(navigator.canShare && navigator.canShare({ files: [file] }))) shareBtn.hidden = true;
@@ -202,7 +210,7 @@ export function setupRecorder(o) {
     [TW, TH] = SIZES[q];
     comp = document.createElement('canvas'); comp.width = TW; comp.height = TH; g = comp.getContext('2d', { alpha: false });
     o.setSize(TW, TH);
-    wImg = null; popAt = clock(); wBusy = rasterWords().then(() => { wBusy = null; });
+    wImg = null; popAt = clock(); wBusy = rasterWords().then(() => { wBusy = null; }); snap = null;
   };
   const end = () => { o.fit(); comp = g = null; vnow = null; wImg = null; };
 
@@ -263,7 +271,7 @@ export function setupRecorder(o) {
         if (n === lead) driver.go();
         driver.tick(vnow, n === 0 ? 0 : dt);
         if (wBusy) { await wBusy; driver.redraw(); }   // new text: wait for its picture (and draw the 3D picture again, it is gone by then)
-        compose();
+        compose(); takeSnap();
         const f = new VideoFrame(comp, { timestamp: Math.round(n * 1e6 / fps), duration: Math.round(1e6 / fps) });
         enc.encode(f, { keyFrame: n % (fps * 2) === 0 }); f.close();
         if (encErr) throw encErr;
@@ -345,7 +353,7 @@ export function setupRecorder(o) {
     // the page changed the two lines of text
     words() { if (!comp) return; popAt = clock(); wBusy = rasterWords().then(() => { wBusy = null; }); },
     // live: after each picture of the game
-    frame() { if (mr && comp) compose(); if (mr && liveEnd && performance.now() > liveEnd) { liveEnd = 0; stopLive(); } },
+    frame() { if (mr && comp) { compose(); takeSnap(); } if (mr && liveEnd && performance.now() > liveEnd) { liveEnd = 0; stopLive(); } },
     ended() { if (mr && !liveEnd) liveEnd = performance.now() + TAIL * 1000; },
     async start(driver) {
       if (this.mode() === 'perfect') {

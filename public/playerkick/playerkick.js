@@ -4,7 +4,8 @@
 // The owner picks the countries in the menu, presses START and records the screen. Tap the screen = menu again.
 import * as THREE from 'three';
 import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
-import { setupRecorder } from '/game/recorder.js?v=4';
+import { setupRecorder } from '/game/recorder.js?v=5';
+import { setupMeta, flagEmoji } from '/game/shortsmeta.js?v=1';
 import { setupBgMusic } from '/game/bgmusic.js?v=1';
 import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=2';
 import { genStadium, genBall, newSeed, BALL_GROUPS } from '/game/variety.js?v=1';
@@ -1020,10 +1021,23 @@ async function main() {
   });
   const mv = setupMyVoice({ game: 'playerkick', after: $('snd').closest('label'), stage });
   vr = voiceRun(mv, snd);
+  const metaBox = setupMeta();
+  let lastCodes = null, snapDone = false;
   rec = setupRecorder({
     game: 'playerkick', renderer, canvas, stage, words, sub: () => mv.subNow(), Sound, snd, fit, after: $('snd').closest('label'),
     cssUrl: document.querySelector('link[href*="playerkick.css"]').href,
     loop: () => LOOP,
+    // 📝 after a recording: titles, description and a thumbnail from the moment just before the cup is hit
+    snapNow: () => {
+      if (!play || snapDone || simT < play.touchT - 0.25) return null;
+      snapDone = true; const v = new THREE.Vector3(CUP.x, 0.06 + 0.55 * CUP.s, CUP.z).project(camera);
+      return { cup: { x: (v.x + 1) / 2, y: (1 - v.y) / 2 } };
+    },
+    meta: (bx, snap) => {
+      if (!play || !lastCodes) return;
+      metaBox(bx, { kind: 'player', names: lastCodes.map((c) => NAME(c)), emojis: lastCodes.map((c) => flagEmoji(PL(c).c)), winner: NAME(lastCodes[play.winner]),
+        level: ctl().mess, secs: endT + 0.6, loop: LOOP }, snap);
+    },
     setSize: (w, h) => { renderer.setPixelRatio(1); renderer.setSize(w, h, false); },
     wm: () => { const el = $('wm'); return WM ? { text: WM, x: wmX, y: wmY, w: el.offsetWidth, h: el.offsetHeight, fs: parseFloat(getComputedStyle(el).fontSize) } : null; },
     onOpenMenu: () => { menu.hidden = false; },
@@ -1033,6 +1047,7 @@ async function main() {
   $('go').addEventListener('click', () => { snd.on = $('snd').checked; snd.start(); $('answer').textContent = '⏳ Making the play…'; setTimeout(goNow, 30); });
   const goNow = () => {
     const codes = selects.slice(0, NP).map((s) => s.value);
+    lastCodes = codes; snapDone = false;
     if (new Set(codes).size !== codes.length) { $('answer').textContent = `⚠️ Pick ${NP} different players.`; return; }
     try { localStorage.setItem('fft_playerkick', JSON.stringify(selects.map((s) => s.value))); } catch (e) { /* ignore */ }
     snd.on = $('snd').checked; snd.start();
