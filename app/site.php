@@ -72,6 +72,8 @@ function owner_cookie_ok(): bool
 function site_may_view(): bool
 {
     if (!site_private() || owner_cookie_ok() || dev_approved()) return true;
+    $a = (string) ($_GET['auto'] ?? '');   // 🏭 Auto Shorts: the VPS making a video
+    if ($a !== '' && preg_match('/^v[a-f0-9]{10}$/', $a) && hash_equals(aus_sig($a), (string) ($_GET['asig'] ?? ''))) return true;
     $id = (int) ($_GET['stream'] ?? 0);
     return $id > 0 && hash_equals(stream_sig($id), (string) ($_GET['sig'] ?? ''));
 }

@@ -234,7 +234,11 @@ if ($robotJobs || ($cc['enabled'] && $cc['robot'] && $cc['voice'] && array_filte
     $poll = min($poll, 2);
 }
 
-echo json_encode(['ok' => true, 'poll_seconds' => $poll, 'run' => $out, 'commands' => $cmds, 'voice_jobs' => $voiceJobs, 'robot_jobs' => $robotJobs]);
+// 🏭 Auto Shorts: a video to make on this VPS (only when it runs no live)
+$render = null;
+try { $render = aus_render_job($sid); } catch (Throwable $e) { /* never stops the check-in */ }
+
+echo json_encode(['ok' => true, 'poll_seconds' => $poll, 'run' => $out, 'commands' => $cmds, 'voice_jobs' => $voiceJobs, 'robot_jobs' => $robotJobs, 'render' => $render]);
 
 // 5) After answering the worker: set the YouTube title/description/thumbnail on new live videos.
 if (function_exists('fastcgi_finish_request')) {
@@ -261,3 +265,11 @@ if ($lk && flock($lk, LOCK_EX | LOCK_NB)) {
     flock($lk, LOCK_UN);
 }
 if ($lk) fclose($lk);
+
+// 🏭 Auto Shorts: send one ready video to YouTube (one upload at a time for the whole panel)
+$ak = @fopen(DATA_DIR . '/aus_upload.lock', 'c');
+if ($ak && flock($ak, LOCK_EX | LOCK_NB)) {
+    try { aus_upload_tick(); } catch (Throwable $e) { /* never break the worker check-in */ }
+    flock($ak, LOCK_UN);
+}
+if ($ak) fclose($ak);

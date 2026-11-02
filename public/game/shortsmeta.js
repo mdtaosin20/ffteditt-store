@@ -48,7 +48,7 @@ const QUESTION = { country: ['WHICH COUNTRY\nHIT THE CUP? 🏆', 'WHICH FLAG\nWO
 const TAGS = { country: ['#countries', '#flags', '#worldcup'], sign: ['#subscribe', '#like', '#challenge'], player: ['#messi', '#ronaldo', '#footballplayers'] };
 const THEMES = [['#ffd400', '#ff1f3d'], ['#00e5ff', '#ff2bd6'], ['#a3ff12', '#ff6a00'], ['#ffffff', '#ff1f3d']];
 
-const makeTitles = (info, n = 4) => {
+export const makeTitles = (info, n = 4) => {
   const u = used(), who = WHO[info.kind] || WHO.country, names = shuffle(info.names).map(cap), out = [];
   for (let tries = 0; tries < 400 && out.length < n; tries++) {
     const t = pick(TITLE_T).replaceAll('{who}', pick(who)).replaceAll('{hit}', pick(HIT)).replaceAll('{thing}', pick(THING)).replaceAll('{thingS}', pick(['Cup', 'Trophy']))
@@ -59,7 +59,7 @@ const makeTitles = (info, n = 4) => {
   }
   return out;
 };
-const makeDesc = (info) => {
+export const makeDesc = (info) => {
   const what = { country: `${info.names.length} countries kick at the golden cup`, sign: `${info.names.length} players with SUBSCRIBE, LIKE, COMMENT, SHARE… kick at the golden cup`, player: `${info.names.length} football stars kick at the golden cup` }[info.kind];
   const list = info.names.map((x, i) => `${info.emojis[i] || '⚽'} ${cap(x)}`).join('  ');
   const first = pick([`${what} — only ONE ball touches it 🏆`, `${what}… but only one ball really touches it 🏆`, `One cup, ${info.names.length} balls, only one winner 🏆`]);
@@ -70,7 +70,7 @@ const makeDesc = (info) => {
 };
 
 /* ---------- the thumbnail ---------- */
-const makeThumb = (snap, info) => {
+export const makeThumb = (snap, info) => {
   const W = 1080, H = 1920, c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d'), [main, accent] = pick(THEMES);
   g.fillStyle = '#0b1024'; g.fillRect(0, 0, W, H);

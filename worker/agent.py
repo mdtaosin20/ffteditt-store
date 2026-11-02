@@ -30,7 +30,7 @@ import urllib.request
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.9.0"
+VERSION = "1.10.0"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
@@ -1111,6 +1111,61 @@ def start_local_chat(readers):
         log("Local chat server not started (%s) - the game reads chat from the panel" % ex)
 
 
+class Renderer:
+    """🏭 Auto Shorts: a hidden Chrome opens a game page that plays one round, records it and sends the video to
+    the panel by itself. The panel only gives a job when this VPS runs no live; it takes the job back when done."""
+
+    def __init__(self):
+        self.proc = None
+        self.job = None
+        self.started = 0.0
+
+    def want(self, job):
+        jid = job.get("id") if isinstance(job, dict) else None
+        if not jid:
+            if self.proc:
+                self.stop("done")
+            return
+        alive = self.proc is not None and self.proc.poll() is None
+        if self.job == jid and alive:
+            if time.time() - self.started > 2700:   # 45 min: something hangs
+                self.stop("too long")
+            return
+        if self.job == jid and not alive and time.time() - self.started < 60:
+            return   # it just ended: wait for the panel to see the result
+        self.stop("new job")
+        self.start(jid, str(job.get("url", "")))
+
+    def start(self, jid, url):
+        if not url.startswith("https://"):
+            return
+        profile = os.path.join(STATE_DIR, "render")
+        shutil.rmtree(profile, ignore_errors=True)
+        os.makedirs(profile, exist_ok=True)
+        log("[shorts] making video %s" % jid)
+        try:
+            self.proc = subprocess.Popen(
+                [CHROME, "--headless=new", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
+                 "--disable-dev-shm-usage", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist",
+                 "--autoplay-policy=no-user-gesture-required", "--mute-audio", "--window-size=540,960",
+                 "--disable-background-timer-throttling", "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows",
+                 "--disable-extensions", "--disable-sync", "--disable-component-update", "--user-data-dir=" + profile, url],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            self.job, self.started = jid, time.time()
+        except Exception as ex:
+            log("[shorts] could not start Chrome: %s" % ex)
+            self.proc = None
+
+    def stop(self, why=""):
+        if self.proc is not None:
+            try:
+                os.killpg(self.proc.pid, signal.SIGKILL)
+            except Exception:
+                pass
+            log("[shorts] browser closed (%s)" % why)
+        self.proc, self.job = None, None
+
+
 def call_panel(panel, token, reports, cmd_results=None, voice_results=None, voice_error=None, chat=None, robot=None):
     body = json.dumps({"token": token, "info": machine_info(), "streams": reports,
                        "command_results": cmd_results or [], "voice_results": voice_results or [],
@@ -1142,6 +1197,7 @@ def main():
     voices = VoiceMaker()
     readers = {}        # id -> ChatReader
     robot = RobotVoice(voices)
+    renderer = Renderer()
     start_local_chat(readers)
 
     def shutdown(*_):
@@ -1171,6 +1227,7 @@ def main():
         try:
             resp = call_panel(panel, token, reports, results, vres, verr, chat, rres)
             robot.submit(resp.get("robot_jobs") or [])
+            renderer.want(resp.get("render"))
             runner.done([r["id"] for r in results])
             voices.submit(resp.get("voice_jobs") or [])
             poll = max(1, min(30, int(resp.get("poll_seconds", 5))))
@@ -1245,6 +1302,7 @@ def main():
         wake.wait(timeout=poll)
 
     log("Shutting down, stopping all streams")
+    renderer.stop("shutdown")
     for s in streams.values():
         s.stop()
 

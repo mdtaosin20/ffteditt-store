@@ -4,7 +4,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
 import { setupRecorder } from '/game/recorder.js?v=5';
-import { setupMeta, flagEmoji } from '/game/shortsmeta.js?v=1';
+import { setupMeta, flagEmoji } from '/game/shortsmeta.js?v=2';
+import { AUTO, autoPrep, autoStart, autoSend } from '/game/autorun.js?v=1';
 import { setupBgMusic } from '/game/bgmusic.js?v=1';
 import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=2';
 import { genStadium, genBall, newSeed, BALL_GROUPS } from '/game/variety.js?v=1';
@@ -915,6 +916,7 @@ async function main() {
   const mv = setupMyVoice({ game: 'actionkick', after: $('snd').closest('label'), stage });
   vr = voiceRun(mv, snd);
   const metaBox = setupMeta();
+  const metaInfo = () => (play && lastCodes ? { kind: 'sign', names: lastCodes.map((c) => NAME(c)), emojis: lastCodes.map((c) => ((ACT.get(c) || {}).icon || '⚽')), winner: NAME(lastCodes[play.winner]), level: ctl().mess, secs: endT + (LOOP ? 0.6 : 1.3), loop: LOOP } : null);
   let lastCodes = null, snapDone = false;
   rec = setupRecorder({
     game: 'actionkick', renderer, canvas, stage, words, sub: () => mv.subNow(), Sound, snd, fit, after: $('snd').closest('label'),
@@ -926,11 +928,9 @@ async function main() {
       snapDone = true; const v = new THREE.Vector3(CUP.x, 0.06 + 0.55 * CUP.s, CUP.z).project(camera);
       return { cup: { x: (v.x + 1) / 2, y: (1 - v.y) / 2 } };
     },
-    meta: (bx, snap) => {
-      if (!play || !lastCodes) return;
-      metaBox(bx, { kind: 'sign', names: lastCodes.map((c) => NAME(c)), emojis: lastCodes.map((c) => ((ACT.get(c) || {}).icon || '⚽')), winner: NAME(lastCodes[play.winner]),
-        level: ctl().mess, secs: endT + (LOOP ? 0.6 : 1.3), loop: LOOP }, snap);
-    },
+    meta: (bx, snap) => { const i = metaInfo(); if (i) metaBox(bx, i, snap); },
+    onVideo: (blob, snap) => { if (AUTO) autoSend(blob, snap, metaInfo()); },   // 🏭 Auto Shorts on the VPS
+    onProgress: (p) => { if (AUTO && autoStart.progress) autoStart.progress(p); },
     setSize: (w, h) => { renderer.setPixelRatio(1); renderer.setSize(w, h, false); },
     wm: () => { const el = $('wm'); return WM ? { text: WM, x: wmX, y: wmY, w: el.offsetWidth, h: el.offsetHeight, fs: parseFloat(getComputedStyle(el).fontSize) } : null; },
     onOpenMenu: () => { menu.hidden = false; },
@@ -967,7 +967,9 @@ async function main() {
   stage.addEventListener('click', () => { if (!playing && !rec.active()) menu.hidden = false; });
   // a still picture behind the menu
   buildTeams(saved);
+  autoStart();   // 🏭 Auto Shorts: plays and records one round by itself (only with ?auto=…)
 }
+autoPrep('actionkick');
 main();
 
 /* ---------------------------------------------------------------- the phone app (install on the home screen, opens full screen) */

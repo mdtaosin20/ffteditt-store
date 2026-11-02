@@ -165,7 +165,7 @@ export function setupRecorder(o) {
     if (navigator.wakeLock) navigator.wakeLock.request('screen').then((l) => { lock = l; }).catch(() => {});
   };
   const uiOff = () => { clearInterval(tmr); badge && badge.remove(); bar && bar.remove(); badge = bar = null; if (lock) { lock.release().catch(() => {}); lock = null; } };
-  const setBar = (p) => { if (!bar) return; bar.querySelector('span').textContent = Math.round(p * 100) + '%'; bar.querySelector('i').style.width = (p * 100).toFixed(1) + '%'; };
+  const setBar = (p) => { if (o.onProgress) o.onProgress(p); if (!bar) return; bar.querySelector('span').textContent = Math.round(p * 100) + '%'; bar.querySelector('i').style.width = (p * 100).toFixed(1) + '%'; };
   let snap = null;   // 🖼 the picture for the thumbnail (just before the cup is hit), taken while the video is made
   const takeSnap = () => {
     if (snap || !o.snapNow || !comp) return;
@@ -184,6 +184,7 @@ export function setupRecorder(o) {
       <button type="button" class="ghost" data-a="share" style="background:#1f2b5c">📤 Share (YouTube, gallery…)</button>
       <button type="button" class="ghost" data-a="again" style="background:transparent;border:1px solid #2a4a9a">🔁 Play again</button></div>`;
     document.body.appendChild(el);
+    if (o.onVideo) { try { o.onVideo(blob, snap); } catch (e) { console.error(e); } }   // 🏭 Auto Shorts: send it to the panel
     if (o.meta) { try { o.meta(el.querySelector('.bx'), snap); } catch (e) { console.error(e); } }   // 📝 title, description, thumbnail
     snap = null;
     const file = new File([blob], name, { type: blob.type });
