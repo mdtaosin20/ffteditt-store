@@ -163,7 +163,8 @@ function aus_upload_tick(): void
                               + ($publish ? ['publishAt' => gmdate('Y-m-d\TH:i:s\Z', $publish)] : [])];
         // 1) start a resumable upload
         $loc = '';
-        $c1 = curl_init('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status');
+        $base = getenv('YT_TEST_BASE') ?: 'https://www.googleapis.com';   // (local tests: a fake Google)
+        $c1 = curl_init($base . '/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status');
         curl_setopt_array($c1, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30,
             CURLOPT_POSTFIELDS => json_encode($meta, JSON_UNESCAPED_UNICODE),
             CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tok, 'Content-Type: application/json; charset=UTF-8', 'X-Upload-Content-Type: video/mp4', 'X-Upload-Content-Length: ' . filesize($file)],

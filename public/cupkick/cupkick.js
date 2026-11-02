@@ -889,7 +889,9 @@ async function main() {
   $('np').addEventListener('change', setNP);
   setNP();
   $('shuffle').addEventListener('click', () => {
-    const pool = sorted.slice(0, 40).sort(() => Math.random() - 0.5), pick = [];
+    // 🏭 Auto Shorts: countries with many football fans in the USA / Europe / Latin America (where Shorts earn most)
+    const FANS = ['us', 'gb', 'fr', 'de', 'es', 'it', 'pt', 'nl', 'br', 'ar', 'mx', 'ca', 'be', 'pl', 'se', 'no', 'hr', 'ch', 'dk', 'uy', 'co', 'jp'];
+    const pool = (AUTO ? FANS.filter((c) => idx.has(c)) : sorted.slice(0, 40)).sort(() => Math.random() - 0.5), pick = [];
     for (const c of pool) { if (pick.length >= 6) break; if (!pick.includes(c)) pick.push(c); }
     selects.forEach((s, i) => { s.value = pick[i]; s.dispatchEvent(new Event('change')); });
   });
