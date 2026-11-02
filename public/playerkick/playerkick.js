@@ -9,7 +9,7 @@ import { setupBgMusic } from '/game/bgmusic.js?v=1';
 import { setupMyVoice, voiceRun } from '/game/myvoice-game.js?v=2';
 import { genStadium, genBall, newSeed, BALL_GROUPS } from '/game/variety.js?v=1';
 import { makeGrass } from '/game/grass.js?v=1';
-import { PLAYERS, DEFAULT_SIX } from '/playerkick/players.js?v=1';
+import { PLAYERS, DEFAULT_SIX } from '/playerkick/players.js?v=2';
 
 const $ = (id) => document.getElementById(id);
 const DT = 1 / 120;
@@ -391,6 +391,7 @@ async function main() {
   /* ---------- 👥 the players (names, national team for the shirt) and their photos (kept on this phone) ---------- */
   let roster = PLAYERS.map((p) => ({ ...p }));
   try { const r = JSON.parse(localStorage.getItem('fft_pk_roster') || 'null'); if (Array.isArray(r) && r.length) roster = r.filter((p) => p && p.id && p.name && idx.has(p.c)); } catch (e) { /* ignore */ }
+  roster.forEach((p) => { if (!(p.n >= 1 && p.n <= 99)) p.n = (PLAYERS.find((q) => q.id === p.id) || {}).n || 10; });
   const saveRoster = () => { try { localStorage.setItem('fft_pk_roster', JSON.stringify(roster)); } catch (e) { /* ignore */ } };
   const PL = (id) => roster.find((p) => p.id === id) || { id, name: '?', c: 'fr' };
   const NAME = (id) => PL(id).name;
@@ -404,18 +405,42 @@ async function main() {
     const keys = await photoTx('readonly', (st) => st.getAllKeys());
     await Promise.all((keys || []).map(async (k) => { const b = await photoTx('readonly', (st) => st.get(k)); if (b) await loadPhoto(k, b); }));
   } catch (e) { /* no photos yet */ }
-  // the board above a player: his photo (or big letters when there is no photo yet) and his name under it
-  const drawCard = (g, id, w, h) => {
+  // the board above a player: his photo — or, without a photo, our own 3D-style player in his national shirt with his
+  // number — and his name under it
+  const shade = (hex, f) => { const n = parseInt(hex.slice(1), 16), c = (v) => Math.max(0, Math.min(255, Math.round(v * f))); return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`; };
+  const drawAvatar = (g, x0, y0, w, h, p, sk, hair) => {
+    const [a, trim, shorts] = flagKit(p.c), shirt = a === 'stripes' ? '#ffffff' : a;
+    const bg = a === 'stripes' ? '#74acdf' : a, gr = g.createLinearGradient(0, y0, 0, y0 + h);
+    gr.addColorStop(0, shade(bg, 1.05)); gr.addColorStop(1, shade(bg, 0.35)); g.fillStyle = gr; g.fillRect(x0, y0, w, h);
+    const rg = g.createRadialGradient(x0 + w / 2, y0 + h * 0.35, 4, x0 + w / 2, y0 + h * 0.35, w * 0.7);
+    rg.addColorStop(0, 'rgba(255,255,255,.35)'); rg.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = rg; g.fillRect(x0, y0, w, h);
+    const hs = h * 0.38, cx = x0 + w / 2, hy = y0 + h * 0.1, ty = hy + hs + h * 0.02, tw = hs * 1.3, aw = hs * 0.38;
+    // arms and body (shirt), collar, number
+    const arm = (ax) => { g.fillStyle = shirt; g.fillRect(ax, ty + 4, aw, h - (ty - y0) - 4); if (a === 'stripes') { g.fillStyle = '#7dd3fc'; g.fillRect(ax + aw * 0.35, ty + 4, aw * 0.3, h - (ty - y0) - 4); } };
+    arm(cx - tw / 2 - aw - 2); arm(cx + tw / 2 + 2);
+    g.fillStyle = shirt; g.fillRect(cx - tw / 2, ty, tw, h - (ty - y0));
+    if (a === 'stripes') { g.fillStyle = '#7dd3fc'; for (let k = 0; k < 5; k++) if (k % 2) g.fillRect(cx - tw / 2 + k * tw / 5, ty, tw / 5, h - (ty - y0)); }
+    g.fillStyle = trim === '#ffffff' && shirt === '#ffffff' ? '#1e3a8a' : trim; g.fillRect(cx - tw / 2, ty, tw, h * 0.03);
+    g.fillStyle = 'rgba(0,0,0,.14)'; g.fillRect(cx + tw * 0.18, ty, tw * 0.32, h - (ty - y0));   // a little shade on one side (3D look)
+    g.font = `bold ${Math.round(hs * 0.62)}px Arial`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = a === 'stripes' ? '#111827' : (trim === shirt ? (shirt === '#ffffff' ? '#111' : '#fff') : trim); g.fillText(String(p.n), cx, ty + (h - (ty - y0)) * 0.48);
+    // head: skin, hair, eyes, smile
+    g.fillStyle = sk; g.fillRect(cx - hs / 2, hy, hs, hs);
+    g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(cx + hs * 0.28, hy, hs * 0.22, hs);
+    g.fillStyle = hair; g.fillRect(cx - hs / 2 - 2, hy - hs * 0.06, hs + 4, hs * 0.26);
+    g.fillStyle = '#1b1b1b'; for (const ex of [-0.17, 0.17]) { g.beginPath(); g.ellipse(cx + ex * hs, hy + hs * 0.5, hs * 0.07, hs * 0.095, 0, 0, 7); g.fill(); }
+    g.fillStyle = '#fff'; for (const ex of [-0.17, 0.17]) { g.beginPath(); g.arc(cx + ex * hs + hs * 0.025, hy + hs * 0.46, hs * 0.025, 0, 7); g.fill(); }
+    g.strokeStyle = '#1b1b1b'; g.lineWidth = hs * 0.04; g.lineCap = 'round'; g.beginPath(); g.arc(cx, hy + hs * 0.62, hs * 0.13, 0.35, Math.PI - 0.35); g.stroke();
+    g.fillStyle = 'rgba(255,90,90,.25)'; for (const ex of [-0.3, 0.3]) { g.beginPath(); g.arc(cx + ex * hs, hy + hs * 0.64, hs * 0.07, 0, 7); g.fill(); }
+  };
+  const drawCard = (g, id, w, h, sk = '#f1c7a3', hair = '#2b1d14') => {
     const p = PL(id), ph = photos.get(id), PH = h - 70;
     g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
     if (ph) {   // fill the square, keep the top (faces are usually at the top)
-      const s = Math.max((w - 16) / ph.width, PH / ph.height), sw = (w - 16) / s, sh = PH / s;
+      const s = Math.max((w - 16) / ph.width, (PH - 8) / ph.height), sw = (w - 16) / s, sh = (PH - 8) / s;
       g.drawImage(ph, (ph.width - sw) / 2, Math.max(0, Math.min(ph.height - sh, (ph.height - sh) * 0.15)), sw, sh, 8, 8, w - 16, PH - 8);
     } else {
-      const [a, b] = flagKit(p.c); g.fillStyle = a === 'stripes' ? '#7dd3fc' : a; g.fillRect(8, 8, w - 16, PH - 8);
-      const ini = p.name.replace(/[^\p{L} ]/gu, '').split(' ').filter(Boolean).map((x) => x[0]).join('').slice(0, 2) || '?';
-      g.fillStyle = b === '#ffffff' && a === '#ffffff' ? '#111' : (a === '#ffffff' || a === 'stripes' ? '#111827' : '#ffffff');
-      g.font = 'bold 110px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ini, w / 2, PH / 2 + 6);
+      g.save(); g.beginPath(); g.rect(8, 8, w - 16, PH - 8); g.clip(); drawAvatar(g, 8, 8, w - 16, PH - 8, p, sk, hair); g.restore();
     }
     g.fillStyle = '#0a0e1e'; g.fillRect(8, PH + 4, w - 16, h - PH - 12);
     let fs = 40; g.font = `bold ${fs}px Arial`; while (g.measureText(p.name).width > w - 28 && fs > 18) { fs -= 2; g.font = `bold ${fs}px Arial`; }
@@ -511,7 +536,7 @@ async function main() {
       const shirtM = new THREE.MeshStandardMaterial({ roughness: 0.85, map: tex(256, 256, (g, w, h) => {
         if (sh === 'stripes') { for (let k = 0; k < 8; k++) { g.fillStyle = k % 2 ? '#7dd3fc' : '#ffffff'; g.fillRect(k * 32, 0, 32, h); } } else { g.fillStyle = sh; g.fillRect(0, 0, w, h); }
         g.fillStyle = trim; g.fillRect(0, 0, w, 22);
-        g.fillStyle = sh === 'stripes' ? '#111827' : trim; g.font = 'bold 120px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String([10, 7, 9, 11, 8, 5][i]), w / 2, h / 2 + 14);
+        g.fillStyle = sh === 'stripes' ? '#111827' : trim; g.font = 'bold 120px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(PL(code).n), w / 2, h / 2 + 14);
       }) });
       const leg = (sx) => { const g = new THREE.Group(); g.position.set(sx, 1.0, 0);
         const a = box(0.36, 0.62, 0.38, std(sk)); a.position.y = -0.31; g.add(a);
@@ -530,8 +555,9 @@ async function main() {
         const shine = new THREE.Mesh(eyeGeo, shineMat); shine.scale.set(0.019, 0.019, 1); shine.position.set(0.016, 0.026, 0.002); e.add(shine);
         p.add(e); return e;
       });
-      const hair = box(0.82, 0.2, 0.78, std(['#2b1d14', '#111', '#5b3a1e', '#111', '#c9a26b', '#111'][i])); hair.position.y = 3.15; p.add(hair);
-      const fl = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.95), new THREE.MeshBasicMaterial({ map: tex(260, 338, (g, w, h) => drawCard(g, code, w, h)) })); fl.position.set(0, 4.55, 0); p.add(fl);   // 📷 photo + name
+      const hairC = ['#2b1d14', '#111', '#5b3a1e', '#111', '#c9a26b', '#111'][i];
+      const hair = box(0.82, 0.2, 0.78, std(hairC)); hair.position.y = 3.15; p.add(hair);
+      const fl = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.95), new THREE.MeshBasicMaterial({ map: tex(260, 338, (g, w, h) => drawCard(g, code, w, h, sk, hairC)) })); fl.position.set(0, 4.55, 0); p.add(fl);   // 📷 photo + name
       team.add(p);
       return { p, legL, legR, armL, armR, eyes, kicks: [], blinkAt: 1 + Math.random() * 3, look: new THREE.Vector2() };
     });
@@ -786,7 +812,7 @@ async function main() {
     pm.querySelector('#pmCount').textContent = `(${photos.size} / ${roster.length} with photo)`;
     pm.querySelector('#pmList').innerHTML = roster.filter((p) => !q || p.name.toLowerCase().includes(q)).map((p) => `<div class="pm-r" data-id="${esc(p.id)}">
       <span class="pm-t" style='${thumbCss(p.id)}'>${photos.has(p.id) ? '' : '?'}</span>
-      <input class="pm-n" maxlength="20" value="${esc(p.name)}"><span class="pm-c">${esc(p.c.toUpperCase())}</span>
+      <input class="pm-n" maxlength="20" value="${esc(p.name)}"><input class="pm-num" type="number" min="1" max="99" value="${p.n}" title="Shirt number"><span class="pm-c">${esc(p.c.toUpperCase())}</span>
       <button type="button" data-a="photo">📷</button><button type="button" data-a="del" class="pm-x">🗑</button></div>`).join('');
   };
   pm.querySelector('#pmOpen').addEventListener('click', () => { const b = pm.querySelector('.pm-b'); b.hidden = !b.hidden; if (!b.hidden) drawList(); });
@@ -805,6 +831,8 @@ async function main() {
     }
   });
   pm.querySelector('#pmList').addEventListener('change', (e) => {
+    const nu = e.target.closest('.pm-num');
+    if (nu) { const p = PL(nu.closest('.pm-r').dataset.id), v = Math.round(Number(nu.value)); if (v >= 1 && v <= 99) { p.n = v; saveRoster(); refreshPicks(); } nu.value = p.n; return; }
     const inp = e.target.closest('.pm-n'); if (!inp) return;
     const p = PL(inp.closest('.pm-r').dataset.id), v = inp.value.trim().toUpperCase().slice(0, 20);
     if (v) { p.name = v; saveRoster(); refreshPicks(); } inp.value = p.name;
@@ -824,7 +852,7 @@ async function main() {
   pm.querySelector('#pmAdd').addEventListener('click', () => {
     const name = pm.querySelector('#pmName').value.trim().toUpperCase().slice(0, 20); if (!name) return;
     const id = 'u' + Date.now().toString(36);
-    roster.unshift({ id, name, c: pm.querySelector('#pmC').value, mine: true }); saveRoster();
+    roster.unshift({ id, name, c: pm.querySelector('#pmC').value, n: 10, mine: true }); saveRoster();
     pm.querySelector('#pmName').value = ''; pm.querySelector('#pmFind').value = ''; drawList(); refreshPicks();
   });
   // control: ball speed, all kicks within N seconds, how messy (remembered on this phone)

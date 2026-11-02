@@ -151,3 +151,4 @@ button.ghost { flex: 0 0 auto; background: #1f2b5c; font-size: 15px; }
 .pm-r .pm-x { background: #3a1d24; }
 .pm-add { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: end; }
 .pm-add button { width: auto; padding: 8px 12px; margin-top: 8px; }
+.pm-num { width: 46px; flex: 0 0 auto; padding: 6px 4px; border-radius: 6px; border: 1px solid #2a3a6a; background: #0d1230; color: #ffd84a; font-size: 13px; text-align: center; }
