@@ -909,7 +909,7 @@ async function main() {
     meta: (bx, snap) => {
       if (!play || !lastCodes) return;
       metaBox(bx, { kind: 'country', names: lastCodes.map((c) => NAME(c)), emojis: lastCodes.map((c) => flagEmoji(c)), winner: NAME(lastCodes[play.winner]),
-        level: ctl().mess, secs: endT + 0.6, loop: LOOP }, snap);
+        level: ctl().mess, secs: endT + (LOOP ? 0.6 : 1.3), loop: LOOP }, snap);
     },
     setSize: (w, h) => { renderer.setPixelRatio(1); renderer.setSize(w, h, false); },
     wm: () => { const el = $('wm'); return WM ? { text: WM, x: wmX, y: wmY, w: el.offsetWidth, h: el.offsetHeight, fs: parseFloat(getComputedStyle(el).fontSize) } : null; },
