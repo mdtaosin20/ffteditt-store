@@ -138,60 +138,76 @@ function aus_channel(): ?array
 /** One ready video → YouTube (resumable upload). Called after worker check-ins, at most one at a time. */
 function aus_upload_tick(): void
 {
+    // The video goes up in 8 MB pieces, one piece per worker check-in (a few seconds each), so the web server never
+    // has to keep one long request open (cPanel stops long PHP requests — that cut the first try).
     $now = time();
-    if ($now - (int) (setting_get('aus_up_at') ?? 0) < 20) return;
+    if ($now - (int) (setting_get('aus_up_at') ?? 0) < 4) return;
     setting_set('aus_up_at', (string) $now);
     $job = null;
     foreach (aus_jobs() as $j) {
-        if ($j['st'] === 'uploading' && $now - (int) ($j['up_at'] ?? 0) > 900) { aus_update($j['id'], ['st' => 'ready', 'err' => 'Upload was cut — trying again']); $j['st'] = 'ready'; }
-        if ($j['st'] === 'ready' && $now >= (int) ($j['retry_at'] ?? 0)) { $job = $j; break; }
+        if ($j['st'] === 'uploading') { $job = $j; break; }
+        if ($j['st'] === 'ready' && $now >= (int) ($j['retry_at'] ?? 0) && !$job) $job = $j;
     }
     if (!$job || yt_units_out()) return;
     $ch = aus_channel();
-    if (!$ch) { aus_update($job['id'], ['err' => 'Choose the YouTube channel in Auto Shorts (a connected channel)', 'retry_at' => $now + 600]); return; }
+    if (!$ch) { aus_update($job['id'], ['st' => 'ready', 'err' => 'Choose the YouTube channel in Auto Shorts (a connected channel)', 'retry_at' => $now + 600]); return; }
     $file = aus_file($job['id'], 'mp4');
     if (!is_file($file)) { aus_update($job['id'], ['st' => 'failed', 'err' => 'The video file is missing']); return; }
-    aus_update($job['id'], ['st' => 'uploading', 'up_at' => $now]);
-    @set_time_limit(900);
+    $size = filesize($file);
+    $base = getenv('YT_TEST_BASE') ?: 'https://www.googleapis.com';   // (local tests: a fake Google)
+    @set_time_limit(120);
     try {
         $tok = yt_token($ch);
-        $title = aus_pick_title($job);
-        $publish = (int) $job['at'] > $now + 900 ? (int) $job['at'] : 0;
-        $meta = ['snippet' => ['title' => $title, 'description' => mb_substr((string) $job['desc'], 0, 4900), 'categoryId' => '17',
-                               'tags' => ['shorts', 'football', 'challenge', 'puzzle', 'soccer']],
-                 'status'  => ['privacyStatus' => $publish ? 'private' : 'public', 'selfDeclaredMadeForKids' => false, 'embeddable' => true]
-                              + ($publish ? ['publishAt' => gmdate('Y-m-d\TH:i:s\Z', $publish)] : [])];
-        // 1) start a resumable upload
-        $loc = '';
-        $base = getenv('YT_TEST_BASE') ?: 'https://www.googleapis.com';   // (local tests: a fake Google)
-        $c1 = curl_init($base . '/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status');
-        curl_setopt_array($c1, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30,
-            CURLOPT_POSTFIELDS => json_encode($meta, JSON_UNESCAPED_UNICODE),
-            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tok, 'Content-Type: application/json; charset=UTF-8', 'X-Upload-Content-Type: video/mp4', 'X-Upload-Content-Length: ' . filesize($file)],
-            CURLOPT_HEADERFUNCTION => function ($ch, $h) use (&$loc) { if (stripos($h, 'location:') === 0) $loc = trim(substr($h, 9)); return strlen($h); }]);
-        $raw = curl_exec($c1); $code = (int) curl_getinfo($c1, CURLINFO_RESPONSE_CODE); curl_close($c1);
-        yt_units_count('POST', 'https://www.googleapis.com/upload/youtube/v3/videos', $code, json_decode((string) $raw, true) ?: null);
-        if ($code !== 200 || $loc === '') throw new RuntimeException(yt_err([$code, json_decode((string) $raw, true), (string) $raw]));
-        // 2) send the file
-        $fh = fopen($file, 'rb');
-        $c2 = curl_init($loc);
-        curl_setopt_array($c2, [CURLOPT_PUT => true, CURLOPT_INFILE => $fh, CURLOPT_INFILESIZE => filesize($file), CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 800,
-            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tok, 'Content-Type: video/mp4']]);
-        $raw = curl_exec($c2); $code = (int) curl_getinfo($c2, CURLINFO_RESPONSE_CODE); curl_close($c2); fclose($fh);
+        // 1) start a resumable upload (once): title, description, publish time
+        if (empty($job['up_url'])) {
+            $title = aus_pick_title($job);
+            $publish = (int) $job['at'] > $now + 900 ? (int) $job['at'] : 0;
+            $meta = ['snippet' => ['title' => $title, 'description' => mb_substr((string) $job['desc'], 0, 4900), 'categoryId' => '17',
+                                   'tags' => ['shorts', 'football', 'challenge', 'puzzle', 'soccer']],
+                     'status'  => ['privacyStatus' => $publish ? 'private' : 'public', 'selfDeclaredMadeForKids' => false, 'embeddable' => true]
+                                  + ($publish ? ['publishAt' => gmdate('Y-m-d\TH:i:s\Z', $publish)] : [])];
+            $loc = '';
+            $c1 = curl_init($base . '/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status');
+            curl_setopt_array($c1, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30,
+                CURLOPT_POSTFIELDS => json_encode($meta, JSON_UNESCAPED_UNICODE),
+                CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tok, 'Content-Type: application/json; charset=UTF-8', 'X-Upload-Content-Type: video/mp4', 'X-Upload-Content-Length: ' . $size],
+                CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$loc) { if (stripos($h, 'location:') === 0) $loc = trim(substr($h, 9)); return strlen($h); }]);
+            $raw = curl_exec($c1); $code = (int) curl_getinfo($c1, CURLINFO_RESPONSE_CODE); curl_close($c1);
+            yt_units_count('POST', 'https://www.googleapis.com/upload/youtube/v3/videos', $code, json_decode((string) $raw, true) ?: null);
+            if ($code !== 200 || $loc === '') throw new RuntimeException(yt_err([$code, json_decode((string) $raw, true), (string) $raw]));
+            aus_update($job['id'], ['st' => 'uploading', 'up_url' => $loc, 'up_off' => 0, 'prog' => 0, 'up_at' => $now, 'title' => $title, 'publish' => $publish, 'err' => '']);
+            return;
+        }
+        // 2) the next piece
+        $off = (int) ($job['up_off'] ?? 0);
+        $len = min(8 * 1048576, $size - $off);
+        $fh = fopen($file, 'rb'); fseek($fh, $off); $data = (string) fread($fh, $len); fclose($fh);
+        $range = 0;
+        $c2 = curl_init((string) $job['up_url']);
+        curl_setopt_array($c2, [CURLOPT_CUSTOMREQUEST => 'PUT', CURLOPT_POSTFIELDS => $data, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 100,
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tok, 'Content-Type: video/mp4', 'Content-Length: ' . strlen($data), 'Content-Range: bytes ' . $off . '-' . ($off + strlen($data) - 1) . '/' . $size],
+            CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$range) { if (preg_match('/^range:\s*bytes=0-(\d+)/i', $h, $m)) $range = (int) $m[1] + 1; return strlen($h); }]);
+        $raw = curl_exec($c2); $code = (int) curl_getinfo($c2, CURLINFO_RESPONSE_CODE); curl_close($c2);
+        if ($code === 308) {   // more to send
+            aus_update($job['id'], ['up_off' => $range ?: $off, 'up_at' => $now, 'prog' => (int) round(($range ?: $off) / $size * 100), 'err' => '']);
+            return;
+        }
+        if ($code === 404 || $code === 410) { aus_update($job['id'], ['st' => 'ready', 'up_url' => '', 'up_off' => 0, 'err' => 'YouTube closed the upload — starting it again']); return; }
         $r = json_decode((string) $raw, true) ?: [];
         if (!in_array($code, [200, 201], true) || empty($r['id'])) throw new RuntimeException(yt_err([$code, $r, (string) $raw]));
-        $vid = (string) $r['id'];
+        $vid = (string) $r['id']; $title = (string) $job['title']; $publish = (int) ($job['publish'] ?? 0);
         aus_mark_used($title);
         // 3) the thumbnail (YouTube may not take it for Shorts — then the video just keeps its own picture)
         $thumb = aus_file($job['id'], 'jpg');
         if (is_file($thumb)) { try { yt_set_thumb($tok, $vid, [$thumb, 'image/jpeg']); } catch (Throwable $e) { /* not important */ } }
         $priv = (string) ($r['status']['privacyStatus'] ?? '');
-        aus_update($job['id'], ['st' => $publish ? 'scheduled' : 'uploaded', 'vid' => $vid, 'title' => $title, 'err' => $priv === 'private' && !$publish ? 'YouTube kept it Private (API not approved yet) — set it to Public in YouTube Studio' : '']);
+        aus_update($job['id'], ['st' => $publish ? 'scheduled' : 'uploaded', 'vid' => $vid, 'up_url' => '', 'prog' => 100,
+            'err' => $priv === 'private' && !$publish ? 'YouTube kept it Private (API not approved yet) — set it to Public in YouTube Studio' : '']);
         @unlink($file);   // YouTube has it now: free the space
         log_activity("🏭 Auto Shorts: uploaded “{$title}”" . ($publish ? ' — goes public ' . date('d M h:i A', $publish) : ''), 'ok');
     } catch (Throwable $e) {
         $tries = (int) ($job['tries'] ?? 0) + 1;
-        aus_update($job['id'], ['st' => $tries >= 4 ? 'failed' : 'ready', 'tries' => $tries, 'retry_at' => $now + 600, 'err' => mb_substr($e->getMessage(), 0, 300)]);
+        aus_update($job['id'], ['st' => $tries >= 4 ? 'failed' : 'ready', 'tries' => $tries, 'retry_at' => $now + 300, 'up_url' => '', 'up_off' => 0, 'err' => mb_substr($e->getMessage(), 0, 300)]);
         log_activity('🏭 Auto Shorts: upload failed — ' . mb_substr($e->getMessage(), 0, 200), 'warn');
     }
 }
