@@ -114,7 +114,7 @@ function aus_pick_title(array $j): string
     if ($c['ai'] && ai_key() !== '') {
         $kind = in_array($info['kind'] ?? '', ['country', 'sign', 'player'], true) ? $info['kind'] : 'country';
         $what = ['country' => 'country flag balls', 'sign' => 'players holding SUBSCRIBE / LIKE / COMMENT / SHARE signs', 'player' => 'famous football players'][$kind];
-        $names = implode(', ', array_slice(array_map('strval', (array) ($info['names'] ?? [])), 0, 6));
+        $names = implode(', ', array_slice(array_values(array_filter(array_map('strval', (array) ($info['names'] ?? [])), fn ($n) => $n !== (string) ($info['winner'] ?? ''))), 0, 6));   // never the winner (it would give the answer away)
         $txt = ai_call('You write YouTube Shorts titles for a football puzzle video for viewers in the USA and Europe: ' . $what
             . ' kick balls at a golden trophy, only ONE touches it, viewers guess which. Strong curiosity hook, max 70 characters, 1-2 emojis, family-friendly, NEVER reveal the answer. Reply ONLY with JSON {"titles":["…","…","…"]}',
             "Names: {$names}.\nDo not reuse: " . implode(' | ', array_slice(array_keys($used), -30)), 300, 25);
