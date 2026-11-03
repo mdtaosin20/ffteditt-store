@@ -6,10 +6,20 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 $out = function (array $j, int $code = 200): void { http_response_code($code); echo json_encode($j, JSON_UNESCAPED_UNICODE); exit; };
 $id = (string) ($_GET['job'] ?? '');
-if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !preg_match('/^v[a-f0-9]{10}$/', $id) || !hash_equals(aus_sig($id), (string) ($_GET['sig'] ?? ''))) $out(['error' => 'not allowed'], 403);
+$do = (string) ($_GET['do'] ?? '');
+if (($_SERVER['REQUEST_METHOD'] !== 'POST' && $do !== 'song') || !preg_match('/^v[a-f0-9]{10}$/', $id) || !hash_equals(aus_sig($id), (string) ($_GET['sig'] ?? ''))) $out(['error' => 'not allowed'], 403);
 $job = aus_job($id);
 if (!$job || !in_array($job['st'], ['making', 'wait'], true)) $out(['error' => 'job not open', 'stop' => true]);
-$do = (string) ($_GET['do'] ?? '');
+
+if ($do === 'setup') { $out(aus_setup($job)); }   // 🎛 the look of this video (place, text, voice, music …)
+
+if ($do === 'song') {   // 🎵 a background song for this video
+    foreach (aus_songs() as $s) if ($s['id'] === (string) ($_GET['s'] ?? '') && is_file($f = aus_song_file($s))) {
+        $mime = ['mp3' => 'audio/mpeg', 'm4a' => 'audio/mp4', 'aac' => 'audio/aac', 'wav' => 'audio/wav', 'ogg' => 'audio/ogg'][$s['ext']] ?? 'application/octet-stream';
+        header('Content-Type: ' . $mime); header('Content-Length: ' . filesize($f)); header_remove('Cache-Control'); readfile($f); exit;
+    }
+    $out(['error' => 'no song'], 404);
+}
 
 if ($do === 'progress') { aus_update($id, ['prog' => max(0, min(100, (int) ($_GET['p'] ?? 0)))]); $out(['ok' => true]); }
 

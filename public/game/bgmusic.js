@@ -123,7 +123,10 @@ export function setupBgMusic(o) {
   const load = async (id) => {
     stopPrev(); buf = null; peaks = null; $('bgm-edit').hidden = true;
     if (!id) return;
-    const v = await getSound(id); if (!v) { msg('This sound is not on this phone any more.', 'bad'); return; }
+    const v = id.startsWith('url:')   // 🏭 Auto Shorts: a song kept on the panel
+      ? await fetch(id.slice(4)).then((r) => (r.ok ? r.blob() : null)).then((b) => b && { name: '🎵 Auto Shorts song', blob: b }).catch(() => null)
+      : await getSound(id);
+    if (!v) { msg('This sound is not on this phone any more.', 'bad'); return; }
     try {
       buf = await decodeCtx().decodeAudioData(await v.blob.arrayBuffer());
     } catch (e) { msg('Could not read this sound. Try an mp3 or m4a file.', 'bad'); return; }
@@ -138,6 +141,7 @@ export function setupBgMusic(o) {
   };
   const fill = async (sel) => {
     const l = await listSounds();
+    if (sel && sel.startsWith('url:')) l.unshift({ id: sel, name: '🎵 Auto Shorts song' });
     $('bgm-pick').innerHTML = l.length ? l.map((v) => `<option value="${v.id}">${v.name.replace(/</g, '&lt;')}</option>`).join('') : '<option value="">(no sounds yet — press ➕ Add a sound)</option>';
     $('bgm-del').hidden = !l.length;
     const id = sel && l.some((v) => v.id === sel) ? sel : (l[0] ? l[0].id : '');

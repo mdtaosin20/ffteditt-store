@@ -11,13 +11,24 @@ const api = (what, body, type) => fetch(`/api/autoshorts.php?do=${what}&job=${AU
   method: 'POST', body, headers: type ? { 'Content-Type': type } : {} });
 const fail = (msg) => { try { api('fail', JSON.stringify({ msg: String(msg).slice(0, 200) }), 'application/json'); } catch (e) { /* ignore */ } };
 
-/** Before the game sets up its menu: Auto record on, ⚡ Perfect, the size and frame rate of the job. */
+let SETUP = null;   // 🎛 the look of this video (Admin → Auto Shorts → Video look)
+
+/** Before the game sets up its menu: Auto record on, ⚡ Perfect, the size and frame rate of the job — and the
+ *  video's look, written where the game itself keeps its menu choices, so the game starts with exactly them. */
 export function autoPrep(game) {
   if (!AUTO) return;
   try {
     localStorage.setItem('fft_rec_' + game, JSON.stringify({ on: true, q: AUTO.q, fps: AUTO.fps, mode: 'perfect' }));
     localStorage.removeItem('fft_bgm_' + game);   // (the phone's own sounds are not on the VPS)
+    localStorage.setItem('fft_mvg_' + game, JSON.stringify({ on: false }));
   } catch (e) { /* ignore */ }
+  try {   // asked once, before the game reads its settings (the voice-over may take a few seconds to make)
+    const x = new XMLHttpRequest();
+    x.open('POST', `/api/autoshorts.php?do=setup&job=${AUTO.id}&sig=${encodeURIComponent(AUTO.sig)}`, false);
+    x.send('{}');
+    const s = x.status === 200 ? JSON.parse(x.responseText) : null;
+    if (s && s.ls) { SETUP = s; Object.entries(s.ls).forEach(([k, v]) => localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v))); }
+  } catch (e) { /* the game's normal look */ }
   addEventListener('error', (e) => fail('page error: ' + (e.message || e)));
   addEventListener('unhandledrejection', (e) => fail('page error: ' + (e.reason && e.reason.message || e.reason)));
 }
@@ -28,14 +39,16 @@ export function autoStart(click) {
   const $ = (id) => document.getElementById(id);
   setTimeout(() => {
     try {
-      if ($('snd')) $('snd').checked = true;
+      const d = (SETUP && SETUP.dom) || {};
+      if ($('snd')) $('snd').checked = d.snd !== false;
       if ($('mess')) { $('mess').value = String(AUTO.lv); $('mess').dispatchEvent(new Event('input')); }
       if ($('loop')) $('loop').checked = AUTO.loop;
-      if ($('np')) { $('np').value = '6'; $('np').dispatchEvent(new Event('change')); }
+      if ($('np')) { $('np').value = String((SETUP && SETUP.np) || 6); $('np').dispatchEvent(new Event('change')); }
+      ['t1', 't2', 't3'].forEach((k) => { if ($(k) && typeof d[k] === 'string') $(k).value = d[k]; });
       if ($('shuffle')) $('shuffle').click();
       setTimeout(() => (click || (() => $('go').click()))(), 800);
     } catch (e) { fail(e.message); }
-  }, 2500);
+  }, SETUP && (SETUP.music || (SETUP.ls && Object.keys(SETUP.ls).some((k) => k.startsWith('fft_bgm_')))) ? 6000 : 4000);   // time to load the voice / the song
   let last = -1;
   autoStart.progress = (p) => { const v = Math.round(p * 100); if (v >= last + 5) { last = v; api('progress&p=' + v).catch(() => {}); } };
 }
