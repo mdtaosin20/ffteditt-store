@@ -122,14 +122,14 @@ page_start('Auto Shorts', 'autoshorts', $admin);
     <div style="flex:1;min-width:220px">
       <div><b><?= e($j['title'] ?: (($j['titles'] ?? [])[0] ?? '—')) ?></b></div>
       <div class="muted small"><?= e(aus_games()[$j['game']] ?? $j['game']) ?><?= !empty($j['info']['names']) ? ' · ' . e(implode(', ', array_slice($j['info']['names'], 0, 6))) : '' ?><?= !empty($j['info']['winner']) ? ' · answer: <b>' . e($j['info']['winner']) . '</b>' : '' ?></div>
-      <?php if ($j['st'] === 'making'): ?><div style="height:8px;border-radius:9px;background:#1b2350;margin-top:6px;overflow:hidden"><i style="display:block;height:100%;width:<?= (int) $j['prog'] ?>%;background:linear-gradient(90deg,#7c5cff,#22c55e)"></i></div><?php endif; ?>
+      <?php if (in_array($j['st'], ['making', 'uploading'], true)): ?><div style="height:8px;border-radius:9px;background:#1b2350;margin-top:6px;overflow:hidden"><i style="display:block;height:100%;width:<?= (int) $j['prog'] ?>%;background:linear-gradient(90deg,#7c5cff,#22c55e)"></i></div><?php endif; ?>
       <?php if ($j['err']): ?><div class="small" style="color:#fbbf24;margin-top:4px"><?= e($j['err']) ?></div><?php endif; ?>
       <?php if (in_array($j['st'], ['wait', 'making', 'ready'], true)): ?>
       <form method="post" style="display:flex;gap:6px;margin-top:6px"><?= csrf_field() ?><input type="hidden" name="do" value="title"><input type="hidden" name="id" value="<?= e($j['id']) ?>"><input name="title" maxlength="100" placeholder="✏️ Your own title (optional)" style="flex:1"><button class="btn btn-ghost btn-sm" type="submit">Save</button></form>
       <?php endif; ?>
     </div>
     <div style="text-align:right;min-width:170px">
-      <div style="font-weight:800;color:<?= $col ?>"><?= $ic ?> <?= e($lb) ?><?= $j['st'] === 'making' ? ' ' . (int) $j['prog'] . '%' : '' ?></div>
+      <div style="font-weight:800;color:<?= $col ?>"><?= $ic ?> <?= e($lb) ?><?= in_array($j['st'], ['making', 'uploading'], true) ? ' ' . (int) $j['prog'] . '%' : '' ?></div>
       <div class="muted small"><?= $j['st'] === 'uploaded' ? 'public now' : 'public: ' . e(date('d M, h:i A', (int) $j['at'])) ?></div>
       <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap">
         <?php if ($j['vid']): ?><a class="btn btn-ghost btn-sm" href="https://studio.youtube.com/video/<?= e($j['vid']) ?>/edit" target="_blank" rel="noopener">YouTube Studio ↗</a><?php endif; ?>
