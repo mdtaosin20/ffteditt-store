@@ -49,7 +49,8 @@ const TAGS = { country: ['#countries', '#flags', '#worldcup'], sign: ['#subscrib
 const THEMES = [['#ffd400', '#ff1f3d'], ['#00e5ff', '#ff2bd6'], ['#a3ff12', '#ff6a00'], ['#ffffff', '#ff1f3d']];
 
 export const makeTitles = (info, n = 4) => {
-  const u = used(), who = WHO[info.kind] || WHO.country, names = shuffle(info.names).map(cap), out = [];
+  const u = used(), who = WHO[info.kind] || WHO.country, out = [];
+  const names = shuffle(info.names.filter((x) => x !== info.winner)).map(cap);   // never the winner's name in a title (it would give the answer away)
   for (let tries = 0; tries < 400 && out.length < n; tries++) {
     const t = pick(TITLE_T).replaceAll('{who}', pick(who)).replaceAll('{hit}', pick(HIT)).replaceAll('{thing}', pick(THING)).replaceAll('{thingS}', pick(['Cup', 'Trophy']))
       .replaceAll('{a}', names[0] || '').replaceAll('{b}', names[1] || '').replaceAll('{c}', names[2] || '').replaceAll('{n}', String(info.names.length));
