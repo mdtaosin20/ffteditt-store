@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('Removed.');
     }
     if ($j && $do === 'retry') { aus_update($id, ['st' => is_file(aus_file($id, 'mp4')) ? 'ready' : 'wait', 'tries' => 0, 'err' => '', 'retry_at' => 0]); flash('Trying again ✓'); }
-    if ($j && $do === 'title') { $t = mb_substr(trim((string) ($_POST['title'] ?? '')), 0, 100); if ($t !== '') { aus_update($id, ['titles' => array_merge([$t], (array) $j['titles'])]); flash('Title saved ✓ (used when it is uploaded)'); } }
+    if ($j && $do === 'title') { $t = mb_substr(trim((string) ($_POST['title'] ?? '')), 0, 100); if ($t !== '') { aus_update($id, ['titles' => array_merge([$t], (array) $j['titles'])] + (empty($j['up_url']) ? ['title_lock' => $t, 'title' => $t] : [])); flash('Title saved ✓ (used when it is uploaded)'); } }
     if ($do === 'clear') { aus_jobs_save(array_filter(aus_jobs(), fn ($x) => !in_array($x['st'], ['uploaded', 'scheduled', 'failed'], true) || ((int) $x['at'] > time() && $x['st'] === 'scheduled'))); flash('Finished ones cleared from the list.'); }
     redirect('autoshorts.php');
 }

@@ -140,6 +140,8 @@ function aus_upload_tick(): void
 {
     // The video goes up in 8 MB pieces, one piece per worker check-in (a few seconds each), so the web server never
     // has to keep one long request open (cPanel stops long PHP requests — that cut the first try).
+    // ONE video = ONE upload on YouTube: the same upload is always continued where it stopped (same title too), and if
+    // YouTube ever forgets it, the half-finished copy on the channel is found and removed (or, if it is fine, kept) first.
     $now = time();
     if ($now - (int) (setting_get('aus_up_at') ?? 0) < 4) return;
     setting_set('aus_up_at', (string) $now);
@@ -158,9 +160,13 @@ function aus_upload_tick(): void
     @set_time_limit(120);
     try {
         $tok = yt_token($ch);
-        // 1) start a resumable upload (once): title, description, publish time
+        // 1) no open upload: start one (only once per video — a video that was started before is checked on the channel first)
         if (empty($job['up_url'])) {
-            $title = aus_pick_title($job);
+            $title = (string) ($job['title_lock'] ?? '') ?: aus_pick_title($job);   // the same title on every try
+            if (!empty($job['tried'])) {
+                $vid = aus_old_copy($tok, (array) $job['tried']);
+                if ($vid !== '') { aus_done($job, $tok, $vid, '', 'The first try reached YouTube after all — kept that one (no second copy)'); return; }
+            }
             $publish = (int) $job['at'] > $now + 900 ? (int) $job['at'] : 0;
             $meta = ['snippet' => ['title' => $title, 'description' => mb_substr((string) $job['desc'], 0, 4900), 'categoryId' => '17',
                                    'tags' => ['shorts', 'football', 'challenge', 'puzzle', 'soccer']],
@@ -174,47 +180,100 @@ function aus_upload_tick(): void
                 CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$loc) { if (stripos($h, 'location:') === 0) $loc = trim(substr($h, 9)); return strlen($h); }]);
             $raw = curl_exec($c1); $code = (int) curl_getinfo($c1, CURLINFO_RESPONSE_CODE); curl_close($c1);
             yt_units_count('POST', 'https://www.googleapis.com/upload/youtube/v3/videos', $code, json_decode((string) $raw, true) ?: null);
-            if ($code !== 200 || $loc === '') throw new RuntimeException(yt_err([$code, json_decode((string) $raw, true), (string) $raw]));
-            aus_update($job['id'], ['st' => 'uploading', 'up_url' => $loc, 'up_off' => 0, 'prog' => 0, 'up_at' => $now, 'title' => $title, 'publish' => $publish, 'err' => '']);
+            if ($code !== 200 || $loc === '') { aus_update($job['id'], ['title_lock' => $title]); throw new RuntimeException(yt_err([$code, json_decode((string) $raw, true), (string) $raw])); }
+            $tried = array_values(array_unique(array_merge((array) ($job['tried'] ?? []), [$title])));
+            aus_update($job['id'], ['st' => 'uploading', 'up_url' => $loc, 'up_off' => 0, 'up_check' => 0, 'prog' => 0, 'up_at' => $now,
+                                    'title' => $title, 'title_lock' => $title, 'tried' => $tried, 'publish' => $publish, 'err' => '']);
             return;
         }
-        // 2) the next piece
-        $off = (int) ($job['up_off'] ?? 0);
-        $len = min(8 * 1048576, $size - $off);
-        $fh = fopen($file, 'rb'); fseek($fh, $off); $data = (string) fread($fh, $len); fclose($fh);
-        $range = 0;
-        $c2 = curl_init((string) $job['up_url']);
-        curl_setopt_array($c2, [CURLOPT_CUSTOMREQUEST => 'PUT', CURLOPT_POSTFIELDS => $data, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 100,
-            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tok, 'Content-Type: video/mp4', 'Content-Length: ' . strlen($data), 'Content-Range: bytes ' . $off . '-' . ($off + strlen($data) - 1) . '/' . $size],
-            CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$range) { if (preg_match('/^range:\s*bytes=0-(\d+)/i', $h, $m)) $range = (int) $m[1] + 1; return strlen($h); }]);
-        $raw = curl_exec($c2); $code = (int) curl_getinfo($c2, CURLINFO_RESPONSE_CODE); curl_close($c2);
+        // 2) after any stop: first ask YouTube how much of THIS upload it already has, then go on from there
+        if (!empty($job['up_check'])) {
+            [$code, $raw, $range] = aus_put((string) $job['up_url'], $tok, '', 'bytes */' . $size);
+        } else {
+            $off = (int) ($job['up_off'] ?? 0);
+            $fh = fopen($file, 'rb'); fseek($fh, $off); $data = (string) fread($fh, min(8 * 1048576, $size - $off)); fclose($fh);
+            [$code, $raw, $range] = aus_put((string) $job['up_url'], $tok, $data, 'bytes ' . $off . '-' . ($off + strlen($data) - 1) . '/' . $size);
+        }
         if ($code === 308) {   // more to send
-            aus_update($job['id'], ['up_off' => $range ?: $off, 'up_at' => $now, 'prog' => (int) round(($range ?: $off) / $size * 100), 'err' => '']);
+            aus_update($job['id'], ['st' => 'uploading', 'up_off' => $range, 'up_check' => 0, 'up_at' => $now, 'prog' => (int) round($range / $size * 100), 'err' => '']);
             return;
         }
-        if ($code === 404 || $code === 410) { aus_update($job['id'], ['st' => 'ready', 'up_url' => '', 'up_off' => 0, 'err' => 'YouTube closed the upload — starting it again']); return; }
+        if ($code === 404 || $code === 410) {   // YouTube forgot this upload: next time the channel is checked for the half copy first
+            aus_update($job['id'], ['st' => 'ready', 'up_url' => '', 'up_off' => 0, 'up_check' => 0, 'err' => 'YouTube closed the upload — checking the channel, then starting it again']);
+            return;
+        }
         $r = json_decode((string) $raw, true) ?: [];
         if (!in_array($code, [200, 201], true) || empty($r['id'])) throw new RuntimeException(yt_err([$code, $r, (string) $raw]));
-        $vid = (string) $r['id']; $title = (string) $job['title']; $publish = (int) ($job['publish'] ?? 0);
-        aus_mark_used($title);
-        // 3) the thumbnail (YouTube may not take it for Shorts — then the video just keeps its own picture)
-        $thumb = aus_file($job['id'], 'jpg');
-        if (is_file($thumb)) { try { yt_set_thumb($tok, $vid, [$thumb, 'image/jpeg']); } catch (Throwable $e) { /* not important */ } }
         $priv = (string) ($r['status']['privacyStatus'] ?? '');
-        aus_update($job['id'], ['st' => $publish ? 'scheduled' : 'uploaded', 'vid' => $vid, 'up_url' => '', 'prog' => 100,
-            'err' => $priv === 'private' && !$publish ? 'YouTube kept it Private (API not approved yet) — set it to Public in YouTube Studio' : '']);
-        @unlink($file);   // YouTube has it now: free the space
-        log_activity("🏭 Auto Shorts: uploaded “{$title}”" . ($publish ? ' — goes public ' . date('d M h:i A', $publish) : ''), 'ok');
+        aus_done($job, $tok, (string) $r['id'], $priv, '');
     } catch (Throwable $e) {
+        // keep the open upload: the next try continues the SAME upload (no second copy on YouTube)
+        $keep = !empty($job['up_url']) ? ['up_check' => 1] : [];
         if (stripos($e->getMessage(), 'exceeded the number of videos') !== false) {
             // YouTube's daily upload limit for this channel: not a real failure — wait some hours and try again
-            aus_update($job['id'], ['st' => 'ready', 'retry_at' => $now + 6 * 3600, 'up_url' => '', 'up_off' => 0, 'prog' => 0,
+            aus_update($job['id'], $keep + ['st' => 'ready', 'retry_at' => $now + 6 * 3600, 'prog' => 0,
                 'err' => 'YouTube daily upload limit for this channel reached — trying again at ' . date('h:i A', $now + 6 * 3600) . '. Tip: verify the channel by phone (youtube.com/verify).']);
             log_activity('🏭 Auto Shorts: YouTube upload limit reached for today — will try again later', 'warn');
             return;
         }
         $tries = (int) ($job['tries'] ?? 0) + 1;
-        aus_update($job['id'], ['st' => $tries >= 4 ? 'failed' : 'ready', 'tries' => $tries, 'retry_at' => $now + 300, 'up_url' => '', 'up_off' => 0, 'err' => mb_substr($e->getMessage(), 0, 300)]);
-        log_activity('🏭 Auto Shorts: upload failed — ' . mb_substr($e->getMessage(), 0, 200), 'warn');
+        aus_update($job['id'], $keep + ['st' => $tries >= 6 ? 'failed' : 'ready', 'tries' => $tries, 'retry_at' => $now + 120 * $tries, 'err' => mb_substr($e->getMessage(), 0, 300)]);
+        log_activity('🏭 Auto Shorts: upload stopped — will continue the same upload: ' . mb_substr($e->getMessage(), 0, 200), 'warn');
     }
+}
+
+/** PUT a piece (or, with an empty body and "bytes *\/size", just ask how much YouTube has). → [code, body, bytes YouTube has] */
+function aus_put(string $url, string $tok, string $data, string $range): array
+{
+    $have = 0;
+    $c = curl_init($url);
+    curl_setopt_array($c, [CURLOPT_CUSTOMREQUEST => 'PUT', CURLOPT_POSTFIELDS => $data, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 100, CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tok, 'Content-Type: video/mp4', 'Content-Length: ' . strlen($data), 'Content-Range: ' . $range],
+        CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$have) { if (preg_match('/^range:\s*bytes=0-(\d+)/i', $h, $m)) $have = (int) $m[1] + 1; return strlen($h); }]);
+    $raw = curl_exec($c); $code = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE); $err = curl_error($c); curl_close($c);
+    if ($raw === false) throw new RuntimeException('Connection to YouTube broke: ' . $err);
+    return [$code, (string) $raw, $have];
+}
+
+/** An earlier try of this video on the channel (same title): a good, complete one → its id (keep it, upload nothing);
+ *  a broken / half one → removed from the channel, so it never stays there as a second copy. */
+function aus_old_copy(string $tok, array $titles): string
+{
+    $ask = function (string $path, array $q) use ($tok): array {   // a failed check stops the upload (better wait than make a copy)
+        $r = yt_get($tok, $path, $q);
+        if ($r[0] !== 200) throw new RuntimeException('Could not check the channel for an earlier copy: ' . yt_err($r));
+        return (array) $r[1];
+    };
+    $r = $ask('channels', ['part' => 'contentDetails', 'mine' => 'true']);
+    $pl = (string) ($r['items'][0]['contentDetails']['relatedPlaylists']['uploads'] ?? '');
+    if ($pl === '') return '';
+    $r = $ask('playlistItems', ['part' => 'snippet', 'playlistId' => $pl, 'maxResults' => 50]);
+    $ids = [];
+    foreach ((array) ($r['items'] ?? []) as $it) if (in_array((string) ($it['snippet']['title'] ?? ''), $titles, true)) $ids[] = (string) ($it['snippet']['resourceId']['videoId'] ?? '');
+    $ids = array_values(array_filter($ids));
+    if (!$ids) return '';
+    $v = $ask('videos', ['part' => 'status,processingDetails', 'id' => implode(',', $ids)]);
+    $keep = '';
+    foreach ((array) ($v['items'] ?? []) as $it) {
+        $up = (string) ($it['status']['uploadStatus'] ?? '');
+        $pr = (string) ($it['processingDetails']['processingStatus'] ?? '');
+        $good = $up === 'processed' || ($up === 'uploaded' && in_array($pr, ['processing', 'succeeded'], true));
+        if ($good && $keep === '') { $keep = (string) $it['id']; continue; }
+        yt_http('DELETE', 'https://www.googleapis.com/youtube/v3/videos?id=' . rawurlencode((string) $it['id']), ['Authorization: Bearer ' . $tok]);
+    }
+    return $keep;
+}
+
+/** The video is on YouTube: thumbnail, status, free the space. */
+function aus_done(array $job, string $tok, string $vid, string $priv, string $note): void
+{
+    $title = (string) ($job['title_lock'] ?? $job['title']); $publish = (int) ($job['publish'] ?? 0);
+    aus_mark_used($title);
+    // the thumbnail (YouTube may not take it for Shorts — then the video just keeps its own picture)
+    $thumb = aus_file($job['id'], 'jpg');
+    if (is_file($thumb)) { try { yt_set_thumb($tok, $vid, [$thumb, 'image/jpeg']); } catch (Throwable $e) { /* not important */ } }
+    aus_update($job['id'], ['st' => $publish ? 'scheduled' : 'uploaded', 'vid' => $vid, 'up_url' => '', 'up_check' => 0, 'prog' => 100, 'title' => $title,
+        'err' => $note !== '' ? $note : ($priv === 'private' && !$publish ? 'YouTube kept it Private (API not approved yet) — set it to Public in YouTube Studio' : '')]);
+    @unlink(aus_file($job['id'], 'mp4'));   // YouTube has it now: free the space
+    log_activity("🏭 Auto Shorts: uploaded “{$title}”" . ($publish ? ' — goes public ' . date('d M h:i A', $publish) : ''), 'ok');
 }
