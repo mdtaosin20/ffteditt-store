@@ -106,7 +106,8 @@ page_start('Auto Shorts', 'autoshorts', $admin);
     <label class="check" style="margin-top:8px"><input type="checkbox" name="loop" <?= $c['loop'] ? 'checked' : '' ?>> 🔁 Loop videos</label>
     <label class="check"><input type="checkbox" name="ai" <?= $c['ai'] ? 'checked' : '' ?>> ✨ AI titles (the OpenAI key in YouTube Manager → AI Replies; else the ready-made ones) — never the same title twice</label>
     <div class="form-actions"><button class="btn btn-ghost" type="submit" name="do" value="save">Save settings</button>
-      <button class="btn btn-green" type="submit" name="do" value="make">▶ Make <?= (int) $c['count'] ?> videos &amp; schedule them</button></div>
+      <button class="btn btn-green" type="submit" name="do" value="make" id="mkBtn">▶ Make <?= (int) $c['count'] ?> videos &amp; schedule them</button></div>
+    <script>document.querySelector('input[name=count]').addEventListener('input', (e) => { const n = Math.max(1, Number(e.target.value) || 1); document.getElementById('mkBtn').textContent = `▶ Make ${n} video${n > 1 ? 's' : ''} & schedule ${n > 1 ? 'them' : 'it'}`; });</script>
   </section>
 </form>
 
