@@ -206,6 +206,13 @@ function aus_upload_tick(): void
         @unlink($file);   // YouTube has it now: free the space
         log_activity("🏭 Auto Shorts: uploaded “{$title}”" . ($publish ? ' — goes public ' . date('d M h:i A', $publish) : ''), 'ok');
     } catch (Throwable $e) {
+        if (stripos($e->getMessage(), 'exceeded the number of videos') !== false) {
+            // YouTube's daily upload limit for this channel: not a real failure — wait some hours and try again
+            aus_update($job['id'], ['st' => 'ready', 'retry_at' => $now + 6 * 3600, 'up_url' => '', 'up_off' => 0, 'prog' => 0,
+                'err' => 'YouTube daily upload limit for this channel reached — trying again at ' . date('h:i A', $now + 6 * 3600) . '. Tip: verify the channel by phone (youtube.com/verify).']);
+            log_activity('🏭 Auto Shorts: YouTube upload limit reached for today — will try again later', 'warn');
+            return;
+        }
         $tries = (int) ($job['tries'] ?? 0) + 1;
         aus_update($job['id'], ['st' => $tries >= 4 ? 'failed' : 'ready', 'tries' => $tries, 'retry_at' => $now + 300, 'up_url' => '', 'up_off' => 0, 'err' => mb_substr($e->getMessage(), 0, 300)]);
         log_activity('🏭 Auto Shorts: upload failed — ' . mb_substr($e->getMessage(), 0, 200), 'warn');
