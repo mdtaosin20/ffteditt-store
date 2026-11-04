@@ -207,10 +207,11 @@ export function setupRecorder(o) {
     document.body.appendChild(el);
   };
 
+  let bufLow = 0;
   const begin = (q) => {
     [TW, TH] = SIZES[q];
     comp = document.createElement('canvas'); comp.width = TW; comp.height = TH; g = comp.getContext('2d', { alpha: false });
-    o.setSize(TW, TH);
+    const r = o.setSize(TW, TH); bufLow = typeof r === 'number' && r < 0.98 ? r : 0;   // the phone drew a smaller 3D picture than the video
     wImg = null; popAt = clock(); wBusy = rasterWords().then(() => { wBusy = null; }); snap = null;
   };
   const end = () => { o.fit(); comp = g = null; vnow = null; wImg = null; };
@@ -291,7 +292,8 @@ export function setupRecorder(o) {
       setBar(1);
       const blob = new Blob([target.buffer], { type: 'video/mp4' });
       uiOff(); end();
-      done(blob, `${SIZE_NAME[pv.q]} · ${fps} fps · ${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')}`, msg + (wantSound && !pa ? ' (No sound: this browser cannot add sound to the video.)' : ''));
+      const mbps = (blob.size * 8 / secs / 1e6).toFixed(1);
+      done(blob, `${SIZE_NAME[pv.q]} · ${fps} fps · ${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')} · ${mbps} Mbit/s · ${pv.mux === 'avc' ? 'H.264' : 'VP9'}`, msg + (bufLow ? ` This phone could draw the 3D picture only ${Math.round(bufLow * 100)}% as big — choose a smaller size for a sharper video.` : '') + (wantSound && !pa ? ' (No sound: this browser cannot add sound to the video.)' : ''));
     } finally {
       for (const nm of SOUNDS) o.snd[nm] = orig[nm];
       if (comp) { uiOff(); end(); }

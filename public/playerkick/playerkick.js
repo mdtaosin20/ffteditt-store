@@ -4,7 +4,7 @@
 // The owner picks the countries in the menu, presses START and records the screen. Tap the screen = menu again.
 import * as THREE from 'three';
 import { RoomEnvironment } from '/game/vendor/RoomEnvironment.js';
-import { setupRecorder } from '/game/recorder.js?v=5';
+import { setupRecorder } from '/game/recorder.js?v=6';
 import { setupMeta, flagEmoji } from '/game/shortsmeta.js?v=2';
 import { AUTO, autoPrep, autoStart, autoSend } from '/game/autorun.js?v=2';
 import { setupBgMusic } from '/game/bgmusic.js?v=2';
@@ -272,7 +272,8 @@ async function main() {
   sun.position.set(6, 14, 8); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.05;   // no flickering stripes of shadow on the players' arms and bodies
   Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 50 }); sun.target.position.set(0, 0, -8); scene.add(sun, sun.target);
-  const tex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
+  // pictures on the 3D things are made 2–3× sharper than their size in the code (clear in 2K / 4K videos too)
+  const tex = (w, h, draw) => { const S = w < 64 ? 1 : w * h <= 120000 ? 3 : w <= 1024 ? 2 : 1; const c = document.createElement('canvas'); c.width = w * S; c.height = h * S; const cx = c.getContext('2d'); cx.scale(S, S); draw(cx, w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
   const R2 = rng(7);
 
   // the ground of each place: stripes in two colours, painted lines, and some speckles (sand, snow, concrete)
@@ -397,11 +398,11 @@ async function main() {
   applyTheme('night');
 
   // flags
-  const atlas = await new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.src = '/flags/flags.png?v=2'; });
+  const atlas = await new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => { im.onerror = null; im.src = '/flags/flags.png?v=2'; }; im.src = '/flags/flags_hd.webp?v=1'; });   // sharp flags (320×240 each)
   const info = await (await fetch('/flags/flags.json?v=2')).json();
   const C = info.countries, idx = new Map(C.map((c, i) => [c.code, i]));
   const CNAME = (code) => C[idx.get(code)].name;
-  const drawFlag = (g, code, x, y, w, h) => { const i = idx.get(code); g.drawImage(atlas, (i % info.cols) * info.w, Math.floor(i / info.cols) * info.h, info.w, info.h, x, y, w, h); };
+  const drawFlag = (g, code, x, y, w, h) => { const i = idx.get(code); const fw = atlas.naturalWidth / info.cols, fh = fw * info.h / info.w; g.drawImage(atlas, (i % info.cols) * fw, Math.floor(i / info.cols) * fh, fw, fh, x, y, w, h); };
   // a shirt for any country: the two main colours of its flag
   const flagKit = (code) => {
     if (KITS[code]) return KITS[code];
@@ -1038,7 +1039,9 @@ async function main() {
     meta: (bx, snap) => { const i = metaInfo(); if (i) metaBox(bx, i, snap); },
     onVideo: (blob, snap) => { if (AUTO) autoSend(blob, snap, metaInfo()); },   // 🏭 Auto Shorts on the VPS
     onProgress: (p) => { if (AUTO && autoStart.progress) autoStart.progress(p); },
-    setSize: (w, h) => { renderer.setPixelRatio(1); renderer.setSize(w, h, false); },
+    setSize: (w, h) => { renderer.setPixelRatio(1); renderer.setSize(w, h, false);
+      const big = w >= 1440 ? 4096 : 0; if (big && sun.shadow.mapSize.x < big) { sun.shadow.mapSize.set(big, big); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }   // sharp shadows in 2K / 4K
+      const gl = renderer.getContext(); return gl.drawingBufferWidth / w; },   // < 1: the phone could not draw this big
     wm: () => { const el = $('wm'); return WM ? { text: WM, x: wmX, y: wmY, w: el.offsetWidth, h: el.offsetHeight, fs: parseFloat(getComputedStyle(el).fontSize) } : null; },
     onOpenMenu: () => { menu.hidden = false; },
   });
