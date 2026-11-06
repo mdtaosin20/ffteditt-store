@@ -19,22 +19,22 @@
       [3, "I bet you can't tell which {who} hits the trophy."], [4, 'This is the hardest one yet. Prove me wrong.']],
     shock: [[3, 'I watched this five times and still got it wrong.'], [4, 'This one broke my brain. Watch closely.'], [2, 'Wait for it… this one is tricky.'],
       [4, 'Your eyes are going to trick you in three seconds.'], [3, 'I was so sure… and I was so wrong.'], [3, 'Everyone in my family picked a different answer.']],
-    countdown: [[2, 'Ten seconds. One winner. Go!'], [3, 'You have ten seconds to find the winner.'], [4, 'Ten seconds. Six balls. Zero mistakes allowed.'], [3, 'Three… two… one… eyes on the cup!']],
+    countdown: [[2, 'Ten seconds. One winner. Go!'], [3, 'You have ten seconds to find the winner.'], [4, 'Ten seconds. {N} balls. Zero mistakes allowed.'], [3, 'Three… two… one… eyes on the cup!']],
     question: [[2, 'Quick question — which {who} touches the golden cup?'], [3, 'Be honest… did you see it the first time?'], [3, 'Which ball hits the trophy? Most people pick wrong.'],
       [4, 'Can your eyes beat this? Only one ball touches the cup.']],
-    story: [[2, 'Six balls, one dream — the golden cup.'], [3, 'My whole family argued about this one for ten minutes.'], [3, 'Yesterday nobody I showed this to got it right.'],
+    story: [[2, '{N} balls, one dream — the golden cup.'], [3, 'My whole family argued about this one for ten minutes.'], [3, 'Yesterday nobody I showed this to got it right.'],
       [4, 'This video started the biggest argument in the comments.']],
     secret: [[3, "Here's a secret: don't watch the fastest ball."], [4, 'The trick is hiding in the last second. Watch.'], [2, 'Pro tip: keep your eyes on the trophy.'], [3, 'Here is how the pros do it — watch the cup, not the players.']],
     rivalry: [[3, '{A} fans versus {B} fans — who is right?'], [4, '{A} or {B}? This one decides it.'], [2, 'Team {A} or team {B}? Let us see.'], [4, '{A} fans always say they see it first. Do they?']],
     funny: [[2, "Okay, this one is actually hard. Don't laugh."], [3, 'Me thinking I am a genius… then this happens.'], [3, 'Grab your glasses — you are going to need them.'], [4, 'Even my grandma got this before me. Can you?']],
   };
-  const BUILD = ['{N} balls, one golden {thing}. Keep your eyes on it…', '{A}, {B}, {C}… they all kick at once.', 'Watch the {thing} — not the players.',
+  const BUILD = ['{N} balls, one golden trophy. Keep your eyes on it…', '{A}, {B}, {C}… they all kick at once.', 'Watch the {thing} — not the players.',
     'Every ball is fast, but only one is the winner.', 'Here they come… stay focused.', "Don't blink now…", 'Look how close they all get…', 'Some balls crash, some fly past… watch carefully.'];
   const HIT = ['THERE! Did you see it?', 'Boom — the {thing} is down!', 'Wait… which one was that?!', 'Look closely… right… THERE!', 'Did your eyes catch it?', 'Was that the one you picked?'];
   const END = ['Comment your answer — the first right one gets pinned.', 'Watch it again and tell me in the comments.', 'Too fast? Watch again. Answer below.',
     'Type the {who} you saw. Let us see who is right.', 'Follow for a new challenge every day!', 'Show this to a friend and see who wins.', 'Write your answer below — no cheating!'];
 
-  const S = { game: 'cupkick', lang: 'en', secs: 12, styles: new Set(['challenge', 'shock', 'rivalry']), power: 2, names: '', aud: 'all', tab: 'new' };
+  const S = { game: 'cupkick', lang: 'en', secs: 12, np: 6, styles: new Set(['challenge', 'shock', 'rivalry']), power: 2, names: '', aud: 'all', tab: 'new' };
   try { Object.assign(S, JSON.parse(localStorage.getItem('fft_ss') || '{}')); S.styles = new Set(S.styles || ['challenge']); } catch (e) { /* ignore */ }
   const keep = () => { try { localStorage.setItem('fft_ss', JSON.stringify({ ...S, styles: [...S.styles] })); } catch (e) { /* ignore */ } };
   let list = [], saved = SS.saved || [];
@@ -45,23 +45,28 @@
   };
   const fill = (t, names) => {
     const g = GAMES[S.game], n = names.length ? names : shuffle(g[2]);
-    return t.replaceAll('{who}', g[1]).replaceAll('{thing}', pick(['cup', 'trophy', 'golden cup'])).replaceAll('{N}', 'Six')
+    return t.replaceAll('{who}', g[1]).replaceAll('{thing}', pick(['cup', 'trophy', 'golden cup'])).replaceAll('{N}', NUMW[S.np] || 'Six')
       .replaceAll('{A}', n[0] || 'Brazil').replaceAll('{B}', n[1] || 'Argentina').replaceAll('{C}', n[2] || 'France');
   };
+  const NUMW = { 2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five', 6: 'Six' };
   const words = (s) => [s.hook, s.build, s.hit, s.end].join(' ').split(/\s+/).filter(Boolean).length;
   const score = (s, p) => Math.min(99, 70 + p * 6 + (/\b(you|your)\b/i.test(s.hook) ? 4 : 0) + (/\d|one in|percent|nobody/i.test(s.hook) ? 4 : 0) + (/\?/.test(s.hook) ? 2 : 0) + Math.floor(Math.random() * 3));
-  const make = () => {   // 6 new scripts from the ready-made lines, fitted to the length
-    const names = S.names.split(',').map((x) => x.trim()).filter(Boolean), styles = [...S.styles].length ? [...S.styles] : ['challenge'], target = S.secs * 2.5, out = [];
-    for (let tries = 0; tries < 300 && out.length < 6; tries++) {
-      const st = tries < 60 ? styles[out.length % styles.length] : pick(styles);
+  const make = () => {   // 6 new scripts from the ready-made lines — never longer than the length (about 2.5 words a second)
+    const names = S.names.split(',').map((x) => x.trim()).filter(Boolean), styles = [...S.styles].length ? [...S.styles] : ['challenge'], target = Math.round(S.secs * 2.5), out = [];
+    const nw = (t) => String(t).split(/\s+/).filter(Boolean).length;
+    const short = (arr, max) => { const ok = shuffle(arr).map((x) => fill(x, names)).filter((x) => nw(x) <= max); return ok.length ? ok[0] : null; };
+    for (let tries = 0; tries < 400 && out.length < 6; tries++) {
+      const st = tries < 80 ? styles[out.length % styles.length] : pick(styles);
       const hs = HOOKS[st].filter(([p]) => Math.abs(p - (S.power + 1)) <= 1); if (!hs.length) continue;
       const [p, h] = pick(hs), hook = fill(h, names);
       if (usedSet.has(norm(hook)) || out.some((x) => x.hook === hook)) continue;
-      const s = { id: 's' + Date.now().toString(36) + tries, style: st, hook, build: '', hit: fill(pick(HIT), names), end: fill(pick(END), names) };
-      const b = shuffle(BUILD).map((x) => fill(x, names)), parts = [];
-      for (const x of b) { if (words({ ...s, build: [...parts, x].join(' ') }) > target + 3) continue; parts.push(x); if (words({ ...s, build: parts.join(' ') }) >= target - 4) break; }
-      if (!parts.length) parts.push(b.sort((x, y) => x.length - y.length)[0]);   // always a little build-up
-      s.build = parts.join(' '); s.score = score(s, p); out.push(s);
+      const left = target - nw(hook); if (left < 6) continue;   // the hook alone is too long for this length
+      const hit = short(HIT, Math.min(6, left - 4)); if (!hit) continue;
+      const end = short(END, left - nw(hit)); if (!end) continue;
+      const s = { id: 's' + Date.now().toString(36) + tries, style: st, hook, build: '', hit, end };
+      const parts = [];
+      for (const x of shuffle(BUILD).map((y) => fill(y, names))) { if (words({ ...s, build: [...parts, x].join(' ') }) > target) continue; parts.push(x); if (words({ ...s, build: parts.join(' ') }) >= target - 3) break; }
+      s.build = parts.join(' '); s.score = score(s, p); out.push(s);   // (short videos may have no build-up: it does not fit)
     }
     return out.sort((a, b) => b.score - a.score);
   };
@@ -78,6 +83,8 @@
       <div class="l">🌍 Language</div><select id="la">${Object.entries(LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
       <div class="l">👨‍👩‍👧 Audience</div><select id="au"><option value="all">Everyone — family-friendly (USA & Europe)</option><option value="adult">Teens & adults (USA & Europe)</option></select>
       <div class="l">⏱ Length</div><div class="seg" id="len">${[8, 12, 16, 20].map((x) => `<button type="button" data-v="${x}">${x} s</button>`).join('')}</div>
+      <div class="l">👥 Players in the video <span style="font-weight:400;color:#8fa6d6">(balls / ${g[1] === 'player' ? 'players' : g[1] === 'one' ? 'signs' : 'flags'})</span></div><div class="seg" id="np" style="grid-template-columns:repeat(5,1fr)">${[2, 3, 4, 5, 6].map((x) => `<button type="button" data-v="${x}">${x}</button>`).join('')}</div>
+      <div class="small" style="margin-top:4px">The scripts say the right number (“${NUMW[S.np]} flags, one golden cup…”) and fit the length.</div>
       <div class="l">🪝 Hook style (pick any)</div><div class="chips" id="sty">${Object.entries(STYLES).map(([k, v]) => `<button type="button" class="chip" data-v="${k}">${v}</button>`).join('')}</div>
       <div class="l">🔥 Hook power</div><div class="seg" id="pow">${['Soft', 'Strong', '200%', 'Crazy'].map((x, i) => `<button type="button" data-v="${i}">${x}</button>`).join('')}</div>
       <div class="l">🏳 ${g[1] === 'player' ? 'Players' : g[1] === 'one' ? 'Signs' : 'Countries'} in the video (optional, with commas)</div><input type="text" id="nm" maxlength="120" placeholder="${g[2].slice(0, 3).join(', ')}">
@@ -88,6 +95,7 @@
     <div><div class="tabs"><button type="button" data-t="new">✨ New</button><button type="button" data-t="saved">⭐ Saved (${saved.length})</button></div><div class="note" id="note"></div><div class="list" id="list"></div></div>`;
     root.querySelector('#g').value = S.game; root.querySelector('#la').value = S.lang; root.querySelector('#au').value = S.aud; root.querySelector('#nm').value = S.names;
     root.querySelectorAll('#len button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === S.secs));
+    root.querySelectorAll('#np button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === S.np));
     root.querySelectorAll('#pow button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === S.power));
     root.querySelectorAll('#sty button').forEach((b) => b.classList.toggle('on', S.styles.has(b.dataset.v)));
     root.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === S.tab));
@@ -112,6 +120,7 @@
   root.addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.closest('#len')) { S.secs = Number(b.dataset.v); keep(); render(); return; }
+    if (b.closest('#np')) { S.np = Number(b.dataset.v); keep(); render(); return; }
     if (b.closest('#pow')) { S.power = Number(b.dataset.v); keep(); render(); return; }
     if (b.closest('#sty')) { S.styles.has(b.dataset.v) ? S.styles.delete(b.dataset.v) : S.styles.add(b.dataset.v); keep(); b.classList.toggle('on'); return; }
     if (b.dataset.t) { S.tab = b.dataset.t; keep(); render(); return; }
@@ -124,7 +133,7 @@
     if (b.id === 'ai') {
       S.names = root.querySelector('#nm').value; keep(); b.disabled = true; note('🤖 Writing… (about 10–20 seconds)');
       try {
-        const r = await post({ do: 'ai', data: { game: S.game, lang: S.lang, secs: S.secs, styles: [...S.styles], power: S.power, names: S.names, aud: S.aud } });
+        const r = await post({ do: 'ai', data: { game: S.game, lang: S.lang, secs: S.secs, np: S.np, styles: [...S.styles], power: S.power, names: S.names, aud: S.aud } });
         if (r.error) note('⚠️ ' + r.error);
         else { list = r.scripts.filter((s) => !usedSet.has(norm(s.hook))).map((s, i) => ({ ...s, id: 'a' + Date.now().toString(36) + i, lang: S.lang, score: score(s, S.power + 1) })).sort((x, y) => y.score - x.score); S.tab = 'new'; render(); note('🤖 New scripts from the AI.', true); }
       } catch (err) { note('⚠️ Could not reach the AI.'); }

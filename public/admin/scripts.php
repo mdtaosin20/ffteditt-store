@@ -32,6 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $games = ['cupkick' => 'country flag balls (six countries)', 'actionkick' => 'players holding SUBSCRIBE / LIKE / COMMENT / SHARE / BELL / SAVE signs', 'playerkick' => 'famous football players'];
         $what = $games[$j['game'] ?? 'cupkick'] ?? $games['cupkick'];
         $secs = max(6, min(25, (int) ($j['secs'] ?? 12)));
+        $np = max(2, min(6, (int) ($j['np'] ?? 6)));
+        $budget = (int) round($secs * 2.5);   // spoken words that fit (about 2.5 a second)
+        $cap = ['hook' => max(5, (int) round($budget * 0.35)), 'build' => $budget <= 22 ? 0 : (int) round($budget * 0.3), 'hit' => min(5, max(2, (int) round($budget * 0.15))), 'end' => max(5, (int) round($budget * 0.3))];
         $styles = implode(', ', array_slice(array_map(fn ($x) => preg_replace('/[^a-z]/', '', (string) $x), is_array($j['styles'] ?? null) ? $j['styles'] : ['challenge']), 0, 8));
         $power = ['soft', 'strong', 'very strong (200%)', 'crazy strong but honest'][max(0, min(3, (int) ($j['power'] ?? 2)))];
         $names = mb_substr(preg_replace('/[^\p{L}\p{N} ,.\'\-]/u', '', (string) ($j['names'] ?? '')), 0, 120);
@@ -40,8 +43,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $system = "You write voice-over scripts for 9:16 YouTube Shorts of a football puzzle game: {$what} kick balls at a golden trophy and only ONE ball touches it; viewers must guess which one. "
             . "Audience: viewers in the USA and Europe, {$aud}. Never mention kids or ask children for anything; no personal data, no scary or violent words. "
             . "Each script has 4 parts spoken in order: hook (first 2 seconds, must make people stop scrolling), build (keeps them watching), hit (said exactly when the ball touches the trophy), end (asks to comment the answer / follow). "
-            . "Never reveal the answer. Write in {$lang}. Whole script about {$secs} seconds when spoken (about " . round($secs * 2.5) . " words). Hook strength: {$power}. Styles to use: {$styles}. No emojis, no hashtags. "
-            . 'Reply ONLY with JSON: {"scripts":[{"style":"…","hook":"…","build":"…","hit":"…","end":"…"}]} with 6 scripts, each a different hook.';
+            . "There are exactly {$np} balls in the video — if you say a number, say {$np}, never another number. "
+            . "Never reveal the answer. Write in {$lang}. The WHOLE script must fit in {$secs} seconds when spoken: at most {$budget} words in total. "
+            . "Word limits per part: hook max {$cap['hook']} words, build max {$cap['build']} words" . ($cap['build'] === 0 ? ' (leave build empty "")' : '') . ", hit max {$cap['hit']} words, end max {$cap['end']} words. Count the words. Short and punchy beats long. "
+            . "Hook strength: {$power}. Styles to use: {$styles}. No emojis, no hashtags. "
+            . 'Reply ONLY with JSON: {"scripts":[{"style":"…","hook":"…","build":"…","hit":"…","end":"…"}]} with 8 scripts, each a different hook.';
         $user = ($names !== '' ? "Names in this video: {$names}.\n" : '') . 'Do not reuse these hooks: ' . implode(' | ', $u);
         @set_time_limit(90);
         $txt = ai_call($system, $user, 1800, 45);
@@ -51,9 +57,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach (array_slice($r['scripts'], 0, 8) as $s) {
             if (!is_array($s) || empty($s['hook'])) continue;
             $c = fn ($k) => mb_substr(trim(strip_tags((string) ($s[$k] ?? ''))), 0, 300);
-            $out[] = ['style' => preg_replace('/[^a-z]/', '', strtolower($c('style'))) ?: 'challenge', 'hook' => $c('hook'), 'build' => $c('build'), 'hit' => $c('hit'), 'end' => $c('end')];
+            $x = ['style' => preg_replace('/[^a-z]/', '', strtolower($c('style'))) ?: 'challenge', 'hook' => $c('hook'), 'build' => $c('build'), 'hit' => $c('hit'), 'end' => $c('end')];
+            $wc = fn ($a) => count(preg_split('/\s+/u', trim(implode(' ', [$a['hook'], $a['build'], $a['hit'], $a['end']])), -1, PREG_SPLIT_NO_EMPTY));
+            if ($wc($x) > $budget + 2) $x['build'] = '';   // too long: the build-up goes first
+            if ($wc($x) > $budget + 2) continue;            // still too long for this length: not shown
+            $out[] = $x;
         }
-        echo json_encode(['scripts' => $out], JSON_UNESCAPED_UNICODE); exit;
+        if (!$out) { echo json_encode(['error' => 'The AI wrote scripts that are too long for ' . $secs . ' seconds — press 🤖 again, or choose a longer length.']); exit; }
+        echo json_encode(['scripts' => array_slice($out, 0, 6)], JSON_UNESCAPED_UNICODE); exit;
     }
     echo json_encode(['error' => 'unknown']); exit;
 }
@@ -97,5 +108,5 @@ page_start('Script Studio', 'scripts', $admin);
 <script>
 window.SS = { csrf: <?= json_encode(csrf_token()) ?>, saved: <?= json_encode($saved(), JSON_UNESCAPED_UNICODE) ?>, used: <?= json_encode(array_slice($used(), -3000), JSON_UNESCAPED_UNICODE) ?>, ai: <?= ai_key() !== '' ? 'true' : 'false' ?> };
 </script>
-<script src="scripts.js?v=1"></script>
+<script src="scripts.js?v=2"></script>
 <?php page_end();

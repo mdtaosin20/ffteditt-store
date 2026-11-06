@@ -85,7 +85,7 @@ function aus_song_add(array $f): string
 }
 
 /* ---------------------------------------------------------------- 🗣 a new voice-over script for each video */
-function aus_script(string $game, string $lang): array
+function aus_script(string $game, string $lang, int $np = 6): array
 {
     $used = json_decode((string) (setting_get('aus_scr_used') ?? ''), true) ?: [];
     $mark = function (string $k) use ($used): void { $used[] = $k; setting_set('aus_scr_used', json_encode(array_slice(array_values(array_unique($used)), -2000), JSON_UNESCAPED_UNICODE)); };
@@ -94,6 +94,8 @@ function aus_script(string $game, string $lang): array
     foreach (json_decode((string) (setting_get('scr_saved') ?? ''), true) ?: [] as $s) {
         if (!$ok($s) || in_array('s:' . ($s['id'] ?? ''), $used, true) || (($s['game'] ?? $game) !== $game && ($s['game'] ?? '') !== '')) continue;
         if (($s['lang'] ?? 'en') !== $lang) continue;
+        $all = implode(' ', [(string) $s['hook'], (string) ($s['build'] ?? ''), (string) ($s['hit'] ?? ''), (string) ($s['end'] ?? '')]);
+        if (preg_match_all('/\b(two|three|four|five|six)\s+(balls|flags|players|signs|stars)\b/i', $all, $mm) && array_diff(array_map('strtolower', $mm[1]), [[2 => 'two', 3 => 'three', 4 => 'four', 5 => 'five', 6 => 'six'][$np] ?? 'six'])) continue;   // made for another number of balls
         if (aus_has_names(implode('. ', [(string) $s['hook'], (string) ($s['build'] ?? ''), (string) ($s['hit'] ?? ''), (string) ($s['end'] ?? '')]))) continue;   // made for other names (e.g. “Germany or USA?”)
         $mark('s:' . ($s['id'] ?? ''));
         return $s;
@@ -102,6 +104,7 @@ function aus_script(string $game, string $lang): array
     if (ai_key() !== '') {
         $what = ['cupkick' => 'country flag balls', 'actionkick' => 'players holding SUBSCRIBE / LIKE / COMMENT / SHARE signs', 'playerkick' => 'famous football players'][$game] ?? 'balls';
         $sys = "You write a voice-over for a 9:16 YouTube Short of a football puzzle: {$what} kick balls at a golden trophy and only ONE touches it; viewers guess which. "
+             . "There are exactly {$np} balls — if you say a number, say {$np}. "
              . 'Audience: USA and Europe, families and adults; friendly, no scary words, never mention kids. Never reveal the answer. Write in ' . (AUS_VLANG[$lang] ?? 'English') . '. '
              . 'Parts: hook (max 9 words, makes people stop scrolling), hit (max 5 words, said when the ball hits the trophy), end (max 10 words, asks to comment the answer). No emojis, no hashtags. '
              . 'Reply ONLY with JSON {"hook":"…","hit":"…","end":"…"}.';
@@ -158,7 +161,7 @@ function aus_setup(array $job): array
         if (!function_exists('mv_ready') || !mv_ready()) $out['note'] = 'Voice-over skipped: set up Admin → 🗣 My Voice first';
         else {
             @set_time_limit(150);
-            $s = aus_script($g, $lk['vlang']);
+            $s = aus_script($g, $lk['vlang'], (int) $lk['np']);
             $lines = ['start' => trim((string) $s['hook']), 'hit' => trim((string) ($s['hit'] ?? '')), 'end' => trim((string) ($s['end'] ?? ''))];
             $made = []; $bad = '';
             foreach ($lines as $k => $t) {
