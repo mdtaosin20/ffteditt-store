@@ -99,7 +99,7 @@ page_start('Script Studio', 'scripts', $admin);
 .ss .pt{display:flex;gap:8px;margin-top:7px;font-size:14px;line-height:1.4}
 .ss .pt b{flex:0 0 70px;font-size:10.5px;padding:3px 0;border-radius:6px;text-align:center;height:fit-content;color:#fff}
 .ss .h b{background:#ff1f3d}.ss .u b{background:#2563eb}.ss .x b{background:#f59e0b;color:#111}.ss .e b{background:#16a34a}
-.ss .pt div[contenteditable]{flex:1;outline:none;border-radius:6px;padding:1px 3px}.ss .pt div[contenteditable]:focus{background:#0b1230}
+.ss .pt div[contenteditable]{flex:1;outline:none;border-radius:6px;padding:1px 3px}.ss .pt div[contenteditable]:empty::before{content:'— (not needed for this length · tap to add)';color:#5f74a6;font-size:12px}.ss .pt div[contenteditable]:focus{background:#0b1230}
 .ss .meta{font-size:12px;color:#8fa6d6;margin-top:8px}
 .ss .bt{display:flex;gap:6px;margin-top:10px}.ss .bt button{flex:1;padding:8px 0;border-radius:9px;border:0;background:#1f2b5c;color:#fff;font-size:13px;font-weight:700;cursor:pointer}.ss .bt .v{background:#7c5cff}.ss .bt .st{flex:0 0 44px}.ss .bt .st.on{background:#a16207}
 .ss .note{font-size:13px;color:#fbbf24;margin-bottom:10px;min-height:16px}
