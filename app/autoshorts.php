@@ -92,6 +92,7 @@ function aus_render_job(int $serverId): ?array
     $st = db()->prepare("SELECT COUNT(*) FROM streams WHERE server_id = ? AND desired = 'on'");
     $st->execute([$serverId]);
     if ((int) $st->fetchColumn() > 0) return null;   // a live runs here: never slow it down
+    if (cycle_breaks_on($serverId)) return null;   // ⏱ a live takes a short break here and comes back soon
     foreach ($l as $j) {
         if ($j['st'] !== 'wait') continue;
         aus_update($j['id'], ['st' => 'making', 'start' => $now, 'prog' => 0, 'server' => $serverId, 'err' => '']);

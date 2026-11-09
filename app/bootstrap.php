@@ -32,6 +32,7 @@ require APP_DIR . '/lastflag.php';
 require APP_DIR . '/snake.php';
 require APP_DIR . '/autoshorts.php';
 require APP_DIR . '/auslook.php';
+require APP_DIR . '/vlive.php';
 require APP_DIR . '/keeper.php';
 require APP_DIR . '/music.php';
 require APP_DIR . '/voice.php';

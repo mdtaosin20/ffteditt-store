@@ -16,6 +16,7 @@ if ($id) {
         flash('Stream not found.', 'error');
         redirect('streams.php');
     }
+    if (($stream['source'] ?? 'page') === 'video') redirect('videolive.php#v' . $id);   // 🎞 a Video Live is set up there
 }
 
 $defaults = [
@@ -129,6 +130,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             log_activity("Stream added: {$v['name']}");
             flash("Added \"{$v['name']}\". Press Start when you are ready.");
         }
+        // ⏱ Run time (no restart needed: it only decides when the live takes a break)
+        $sid2 = $stream ? $id : (int) db()->lastInsertId();
+        $cOn = isset($_POST['cycle_on']) ? 1 : 0;
+        $cH = max(0.5, min(11.5, round((float) ($_POST['cycle_hours'] ?? 6), 2)));
+        $cM = max(1, min(180, (int) ($_POST['cycle_off_min'] ?? 5)));
+        db()->prepare('UPDATE streams SET cycle_on = ?, cycle_hours = ?, cycle_off_min = ?' . ($cOn ? '' : ', cycle_resume_at = 0') . ' WHERE id = ?')->execute([$cOn, $cH, $cM, $sid2]);
         redirect('streams.php');
     }
 }
@@ -226,6 +233,32 @@ page_start($stream ? 'Edit stream' : 'Add stream', 'streams', $admin);
     <input type="checkbox" name="auto_restart" <?= $v['auto_restart'] ? 'checked' : '' ?>>
     Restart automatically if the stream drops
   </label>
+
+  <?php
+    $cOn = (int) ($v['cycle_on'] ?? 0); $cH = (float) ($v['cycle_hours'] ?? 6); $cM = (int) ($v['cycle_off_min'] ?? 5);
+    $cNext = '';
+    if ($stream && $cOn) {
+        if (($stream['status'] ?? '') === 'live' && $stream['started_at']) { $stop = (int) $stream['started_at'] + (int) round($cH * 3600); $cNext = 'Next break: <b>' . date('d M h:i A', $stop) . '</b> · back on: <b>' . date('h:i A', $stop + $cM * 60) . '</b>'; }
+        elseif ((int) ($stream['cycle_resume_at'] ?? 0) > time() && (int) $stream['updated_at'] === (int) $stream['cycle_off_at']) $cNext = '⏸ On a break now — back on at <b>' . date('h:i A', (int) $stream['cycle_resume_at']) . '</b>';
+    }
+    $onW = max(1, (int) round($cH * 12)); $offW = max(1, (int) round($cM / 5));
+  ?>
+  <div class="cyc">
+    <div class="cyc-h">⏱ Run time <span class="muted">— off for a while, then on again by itself</span></div>
+    <label class="check"><input type="checkbox" name="cycle_on" <?= $cOn ? 'checked' : '' ?>> On</label>
+    <div class="cyc-row">Live for <input name="cycle_hours" type="number" min="0.5" max="11.5" step="0.5" value="<?= e((string) $cH) ?>"> hours, then off for
+      <input name="cycle_off_min" type="number" min="1" max="180" step="1" value="<?= $cM ?>"> minutes, then start again</div>
+    <div class="cyc-tl"><span style="flex:<?= $onW ?>">🔴 LIVE <?= e((string) $cH) ?> h</span><i style="flex:<?= $offW ?>"></i><span style="flex:<?= $onW ?>">🔴 LIVE <?= e((string) $cH) ?> h</span><i style="flex:<?= $offW ?>"></i></div>
+    <small class="muted">Every restart = a <b>new YouTube live</b> (title / thumbnail from YouTube Manager). YouTube keeps lives up to 12 hours as videos, so keep it under 12 h. Pressing Stop ends the cycle until you press Start again.<?= $cNext !== '' ? '<br>' . $cNext : '' ?></small>
+  </div>
+  <style>
+  .cyc{border:1px solid #2a3a6a;border-radius:14px;padding:12px;margin:10px 0}
+  .cyc-h{font-weight:800;margin-bottom:6px}
+  .cyc-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
+  .cyc-row input{width:72px;text-align:center}
+  .cyc-tl{display:flex;height:24px;border-radius:8px;overflow:hidden;margin:6px 0 8px;font-size:11px;font-weight:700}
+  .cyc-tl span{display:grid;place-items:center;background:#16a34a;color:#fff}.cyc-tl i{background:#475569;min-width:6px}
+  </style>
 
   <div class="form-actions">
     <button class="btn btn-blue" type="submit"><?= $stream ? 'Save changes' : 'Add stream' ?></button>

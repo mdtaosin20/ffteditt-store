@@ -133,6 +133,14 @@ function migrate(PDO $pdo): void
     $add('streams', 'run_id', 'INTEGER NOT NULL DEFAULT 0');   // new number on every Start = games begin fresh
     $add('streams', 'yt_vary', 'INTEGER NOT NULL DEFAULT 1');   // small changes to title/description/thumbnail on every start
     $add('streams', 'yt_badges', "TEXT NOT NULL DEFAULT ''");
+    // 🎞 Video Live (source = 'video', the list in vlist) and ⏱ Run time — see app/vlive.php
+    $add('streams', 'source', "TEXT NOT NULL DEFAULT 'page'");
+    $add('streams', 'vlist', "TEXT NOT NULL DEFAULT ''");
+    $add('streams', 'cycle_on', 'INTEGER NOT NULL DEFAULT 0');
+    $add('streams', 'cycle_hours', 'REAL NOT NULL DEFAULT 6');
+    $add('streams', 'cycle_off_min', 'INTEGER NOT NULL DEFAULT 5');
+    $add('streams', 'cycle_off_at', 'INTEGER NOT NULL DEFAULT 0');
+    $add('streams', 'cycle_resume_at', 'INTEGER NOT NULL DEFAULT 0');
     if ($pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='robot_tts'")->fetchColumn()) {
         $add('robot_tts', 'voice', "TEXT NOT NULL DEFAULT 'ryan'");
         $add('robot_tts', 'keep', 'INTEGER NOT NULL DEFAULT 0');   // announcer lines ("Spain is out!") are kept for every round

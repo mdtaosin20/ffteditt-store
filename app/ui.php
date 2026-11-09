@@ -93,6 +93,7 @@ function nav_items(): array
         'myvoice'   => ['My Voice',            'myvoice.php',   'mic'],
         'scripts'   => ['Script Studio',       'scripts.php',   'pencil'],
         'autoshorts' => ['Auto Shorts',        'autoshorts.php', 'live'],
+        'videolive' => ['Video Live',          'videolive.php', 'live'],
         'servers'   => ['VPS Monitor',         'servers.php',   'server'],
         'games'     => ['Game Manager',        'games.php',     'gamepad'],
         'streams'   => ['Live Stream Manager', 'streams.php',   'live'],

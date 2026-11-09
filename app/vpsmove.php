@@ -140,6 +140,7 @@ function vps_balance_tick(): void
     $pick = null;
     foreach ($B['live'] as $r) {
         if ($now - (int) $r['started_at'] < BAL_YOUNG) continue;   // just started: leave it
+        if ($r['status'] !== 'live' || preg_match('/^(dl|prep) /', (string) $r['speed_now'])) continue;   // not live yet (🎞 preparing videos): leave it
         if ($pick === null || (int) $r['started_at'] > (int) $pick['started_at']) $pick = $r;
     }
     if ($pick === null) { $note("{$B['name']} is busy — its lives started less than " . (BAL_YOUNG / 60) . ' min ago; waiting a little.'); return; }

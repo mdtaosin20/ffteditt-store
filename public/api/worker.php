@@ -83,6 +83,7 @@ if ($clean['cpu_pct'] !== null) {
     record_metrics($sid, $prevInfo, $clean);
 }
 schedule_tick();
+cycle_tick();   // ⏱ Run time
 vps_replace_tick($sid);   // 🖼 a new VPS that replaces an old one: take over its streams on the first check-in
 auto_fix_tick();
 
@@ -121,6 +122,11 @@ foreach ((array) ($in['streams'] ?? []) as $r) {
         if ($status === 'stopped' && $old === 'live') log_activity("Stream '{$name}' ended", 'warn');
     }
     $mine[$id]['status'] = $status;
+    if (!empty($r['ended']) && $mine[$id]['desired'] === 'on') {   // 🎞 a Video Live without loop played its last video
+        db()->prepare("UPDATE streams SET desired = 'off', updated_at = ? WHERE id = ?")->execute([$now, $id]);
+        $mine[$id]['desired'] = 'off';
+        log_activity("🎞 Video Live '{$mine[$id]['name']}' played all its videos and stopped", 'info');
+    }
 }
 // Streams the worker no longer runs count as stopped.
 foreach ($mine as $id => $row) {
@@ -196,7 +202,7 @@ foreach ($mine as $id => $row) {
         'fps'          => (int) $row['fps'],
         'auto_restart' => (bool) $row['auto_restart'] || panel_opts()['auto_fix'],
         'chat'         => $row['status'] === 'live' ? chat_target($row) : null,
-    ];
+    ] + (($row['source'] ?? 'page') === 'video' ? vl_worker_cfg($row) : []);   // 🎞 Video Live: the videos instead of a page
 }
 
 // 4) Terminal commands waiting for this server.

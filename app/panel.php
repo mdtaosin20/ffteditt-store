@@ -296,6 +296,7 @@ function auto_fix_tick(): void
         foreach ($rows as $r) {
             $id = (int) $r['id'];
             $f = $st[$id] ?? ['bad' => 0, 'tries' => 0, 'next' => 0];
+            if ($r['status'] === 'starting' && preg_match('/^(dl|prep) /', (string) $r['speed_now'])) { $keep[$id] = ['bad' => 0, 'tries' => 0, 'next' => 0]; continue; }   // 🎞 the VPS is downloading / preparing videos (can take long)
             $sid = (int) $r['server_id'];
             $srv = $servers[$sid] ?? null;
             if (!isset($online[$sid])) {

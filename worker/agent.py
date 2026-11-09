@@ -30,10 +30,11 @@ import urllib.request
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.10.0"
+VERSION = "1.11.0"
 CONF_FILE = os.environ.get("FFT_CONF", "/etc/ffteditt-worker.json")
 STATE_DIR = os.environ.get("FFT_STATE", "/var/lib/ffteditt-worker")
 CHROME = os.environ.get("FFT_CHROME", "google-chrome")
+VL_DIR = os.path.join(STATE_DIR, "vlive")   # 🎞 Video Live: downloaded videos and their live-ready copies
 X264_PRESET = os.environ.get("FFT_X264_PRESET", "superfast")   # less CPU per live
 X264_THREADS = os.environ.get("FFT_X264_THREADS", "2")          # more threads only add overhead on a VPS
 
@@ -403,6 +404,7 @@ class Stream:
         self.last_err_line = ""
         self.sink = None
         self.sink_module = None
+        self.ended = False   # 🎞 a Video Live without loop played its last video
 
     # ---- lifecycle -------------------------------------------------------
     def start(self):
@@ -458,6 +460,8 @@ class Stream:
 
     def _run(self):
         c = self.cfg
+        if c.get("source") == "video":
+            return self._run_video()
         w, h, fps, kbps = int(c["width"]), int(c["height"]), int(c["fps"]), int(c["kbps"])
         disp_num = self.display[1:]
         env = dict(os.environ, DISPLAY=self.display)
@@ -590,6 +594,202 @@ class Stream:
             if self.stopping:
                 self.status = "stopped"
 
+    # ---- 🎞 Video Live: the owner's recorded videos instead of a game page ------------------
+    def _vl_download(self, v, i, n):
+        """Download a video once (resumes after a break). Returns the file, or None when stopped."""
+        os.makedirs(VL_DIR, exist_ok=True)
+        vid = re.sub(r"[^a-z0-9]", "", v["id"])
+        src = os.path.join(VL_DIR, vid + ".src")
+        if os.path.exists(src + ".ok") and os.path.exists(src):
+            os.utime(src, None)
+            return src
+        part = src + ".part"
+        for attempt in range(4):
+            have = os.path.getsize(part) if os.path.exists(part) else 0
+            headers = {"User-Agent": "FFTEditWorker/" + VERSION}
+            if have:
+                headers["Range"] = "bytes=%d-" % have
+            try:
+                with urllib.request.urlopen(urllib.request.Request(v["url"], headers=headers), timeout=60) as r:
+                    if have and getattr(r, "status", 200) != 206:
+                        have = 0
+                    total = have + int(r.headers.get("Content-Length") or 0)
+                    with open(part, "ab" if have else "wb") as f:
+                        last = 0
+                        while True:
+                            if self.stopping:
+                                return None
+                            b = r.read(1 << 20)
+                            if not b:
+                                break
+                            f.write(b)
+                            have += len(b)
+                            if total and time.time() - last > 2:
+                                last = time.time()
+                                self.speed = "dl %d/%d %d%%" % (i, n, min(99, have * 100 // total))
+                if total and have < total:
+                    raise IOError("download cut at %d of %d bytes" % (have, total))
+                break
+            except Exception as ex:
+                log("[stream %d] video download try %d: %s" % (self.id, attempt + 1, ex))
+                if attempt == 3:
+                    raise RuntimeError("Could not download the video \u201c%s\u201d (%s)" % (v.get("name", ""), ex))
+                if not self._sleep(10):
+                    return None
+        os.replace(part, src)
+        if not self._vl_probe(src)[2]:
+            os.remove(src)
+            raise RuntimeError("\u201c%s\u201d is not a video file (for Google Drive: share it as \u201cAnyone with the link\u201d)" % v.get("name", ""))
+        open(src + ".ok", "w").close()
+        return src
+
+    @staticmethod
+    def _vl_probe(path):
+        """-> (seconds, has_sound, has_picture)"""
+        r = run(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type", "-of", "json", path], timeout=60)
+        try:
+            j = json.loads(r.stdout or "{}")
+        except ValueError:
+            j = {}
+        kinds = [x.get("codec_type") for x in j.get("streams", [])]
+        try:
+            dur = float(j.get("format", {}).get("duration") or 0)
+        except ValueError:
+            dur = 0.0
+        return dur, "audio" in kinds, "video" in kinds
+
+    def _vl_prepare(self, src, v, i, n):
+        """Make the video ready for live once: this stream's size, frame rate and bitrate, a key frame every
+        2 seconds and stereo sound (silence if it has none). Kept, so a live after that needs almost no CPU."""
+        c = self.cfg
+        w, h, fps, kbps = int(c["width"]), int(c["height"]), int(c["fps"]), int(c["kbps"])
+        out = os.path.join(VL_DIR, "%s_%dx%d_%d_%d.mp4" % (re.sub(r"[^a-z0-9]", "", v["id"]), w, h, fps, kbps))
+        if os.path.exists(out):
+            os.utime(out, None)
+            return out
+        dur, sound, _ = self._vl_probe(src)
+        gop = str(fps * 2)
+        cmd = ["nice", "-n", "15", "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-y", "-i", src]
+        if not sound:
+            cmd += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
+        cmd += ["-map", "0:v:0", "-map", "0:a:0" if sound else "1:a:0",
+                "-vf", "scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2:color=black,fps=%d,format=yuv420p,setsar=1" % (w, h, w, h, fps),
+                "-c:v", "libx264", "-preset", "veryfast", "-profile:v", "high",
+                "-b:v", "%dk" % kbps, "-maxrate", "%dk" % kbps, "-bufsize", "%dk" % (kbps * 2),
+                "-g", gop, "-keyint_min", gop, "-sc_threshold", "0",
+                "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2"]
+        if not sound:
+            cmd += ["-shortest"]
+        cmd += ["-movflags", "+faststart", "-f", "mp4", out + ".tmp"]
+        p = self._spawn(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, bufsize=1)
+        for line in p.stdout:
+            key, _, val = line.strip().partition("=")
+            if key == "out_time_us" and dur > 0:
+                try:
+                    self.speed = "prep %d/%d %d%%" % (i, n, min(99, int(val) / 1e6 * 100 / dur))
+                except ValueError:
+                    pass
+        code = p.wait()
+        if self.stopping:
+            return None
+        if code != 0 or not os.path.exists(out + ".tmp"):
+            err = (p.stderr.read() or "").strip().splitlines()[-1:] if p.stderr else []
+            raise RuntimeError("Could not get \u201c%s\u201d ready for live (%s)" % (v.get("name", ""), redact(err[0])[:150] if err else "ffmpeg %s" % code))
+        os.replace(out + ".tmp", out)
+        return out
+
+    def _run_video(self):
+        c = self.cfg
+        vids = [v for v in c.get("videos", []) if v.get("url")]
+        try:
+            if not vids:
+                return self._fail("No videos for this Video Live (tick videos and press Save)")
+            os.makedirs(VL_DIR, exist_ok=True)
+            # old copies not used for 14 days: free the disk
+            for f in os.listdir(VL_DIR):
+                fp = os.path.join(VL_DIR, f)
+                try:
+                    if os.path.isfile(fp) and time.time() - os.path.getmtime(fp) > 14 * 86400:
+                        os.remove(fp)
+                except OSError:
+                    pass
+            ready = []
+            for i, v in enumerate(vids, 1):
+                src = self._vl_download(v, i, len(vids))
+                if src is None:
+                    return
+                out = self._vl_prepare(src, v, i, len(vids))
+                if out is None:
+                    return
+                ready.append((out, self._vl_probe(out)[0]))
+            self.speed = None
+            # the playlist: once, or (🔁) rounds for about 3 days — the worker starts it again after that
+            import random
+            files, total = [], 0.0
+            while True:
+                rnd = list(ready)
+                if c.get("shuffle"):
+                    random.shuffle(rnd)
+                for f, d in rnd:
+                    files.append(f)
+                    total += max(1.0, d)
+                if not c.get("loop") or total > 72 * 3600 or len(files) > 5000:
+                    break
+            lst = os.path.join(VL_DIR, "list_%d.txt" % self.id)
+            with open(lst, "w") as fh:
+                fh.write("ffconcat version 1.0\n" + "".join("file '%s'\n" % f.replace("'", "'\\''") for f in files))
+            log("[stream %d] video live: %d video(s), %d in the list%s" % (self.id, len(ready), len(files), " (loop)" if c.get("loop") else ""))
+            cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1",
+                   "-re", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", "-flvflags", "no_duration_filesize",
+                   "-f", "flv", c["rtmp"]]
+            self.ffmpeg = self._spawn(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, bufsize=1)
+            threading.Thread(target=self._read_stderr, daemon=True).start()
+            frames = 0
+            for line in self.ffmpeg.stdout:
+                key, _, val = line.strip().partition("=")
+                if key in ("frame", "out_time_us"):   # (with -c copy only the time moves)
+                    try:
+                        frames = max(frames, int(val))
+                    except ValueError:
+                        pass
+                elif key == "fps":
+                    try:
+                        self.fps = float(val)
+                    except ValueError:
+                        pass
+                elif key == "speed":
+                    self.speed = val.strip() or None
+                elif key == "progress":
+                    if frames > 0 and self.status != "live":
+                        self.status = "live"
+                        self.error = None
+                        self.started_at = int(time.time())
+                        log("[stream %d] LIVE (video)" % self.id)
+                    if val == "end":
+                        break
+            code = self.ffmpeg.wait()
+            if not self.stopping:
+                if code == 0 and not c.get("loop"):
+                    self.ended = True
+                    self.status = "stopped"
+                    log("[stream %d] video live played its last video" % self.id)
+                elif code == 0:
+                    self._fail("The video list came to its end - starting it again")
+                else:
+                    msg = self.last_err_line or ("FFmpeg stopped (exit code %s)" % code)
+                    if "Input/output error" in msg or "Connection refused" in msg:
+                        msg += " - check the stream key and that YouTube Live is enabled"
+                    self._fail(msg)
+        except Exception as ex:
+            self._fail(str(ex)[:280])
+        finally:
+            self.fps = None
+            if self.status != "starting":
+                self.speed = None
+            self._kill_all()
+            if self.stopping:
+                self.status = "stopped"
+
     def _read_stderr(self):
         p = self.ffmpeg
         for line in p.stderr:
@@ -603,9 +803,10 @@ class Stream:
             "id": self.id,
             "status": self.status,
             "fps": self.fps if self.status == "live" else None,
-            "speed": self.speed if self.status == "live" else None,
+            "speed": self.speed if self.status in ("live", "starting") else None,   # (starting: 🎞 "dl 1/2 40%" / "prep 1/2 40%")
             "started_at": self.started_at if self.status == "live" else None,
             "error": self.error if self.status == "error" else None,
+            "ended": self.ended,
         }
 
 
@@ -1282,6 +1483,8 @@ def main():
                     streams[sid] = Stream(cfg)
                     streams[sid].start()
                 elif s.finished():
+                    if s.ended:
+                        continue  # 🎞 the Video Live is over: the panel turns it off
                     if not cfg.get("auto_restart"):
                         continue  # stays in "error" until the admin presses Stop/Start
                     if sid not in retry_at:
