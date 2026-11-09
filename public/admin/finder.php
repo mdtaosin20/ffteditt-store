@@ -6,6 +6,17 @@ $admin = require_login();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     check_csrf();
     $do = (string) ($_POST['do'] ?? '');
+    if ($do === 'apify') {
+        $t = trim((string) ($_POST['apify_token'] ?? ''));
+        if (isset($_POST['remove'])) { setting_set('apify_token', ''); flash('Apify token removed.'); }
+        elseif ($t !== '') {
+            if (!preg_match('/^[A-Za-z0-9_\-]{20,80}$/', $t)) { flash('That does not look like an Apify token (it starts with apify_api_…). Copy it again.', 'error'); redirect('finder.php#apify'); }
+            setting_set('apify_token', $t); flash('Apify token saved ✓');
+        }
+        $a = trim((string) ($_POST['apify_actor'] ?? ''));
+        if ($a !== '' && preg_match('#^[A-Za-z0-9_.\-]+[~/][A-Za-z0-9_.\-]+$#', $a)) setting_set('apify_actor', str_replace('/', '~', $a));
+        redirect('finder.php#apify');
+    }
     if ($do === 'key') {
         $k = trim((string) ($_POST['vision_key'] ?? ''));
         if (isset($_POST['remove'])) { setting_set('vision_key', ''); flash('Vision API key removed.'); }
@@ -23,14 +34,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (strlen($sid) < 6 || !preg_match('#^data:image/jpeg;base64,([A-Za-z0-9+/=]+)$#', $data, $m) || ($jpg = base64_decode($m[1], true)) === false || strlen($jpg) > 2500000) { echo json_encode(['error' => 'bad picture']); exit; }
         $name = substr($sid, 0, 30) . '_' . $i . '.jpg';
         file_put_contents(vf_dir() . '/' . $name, $jpg);
-        $out = ['lens' => 'https://lens.google.com/uploadbyurl?url=' . rawurlencode(vf_url($name))];
+        $out = ['name' => $name, 'lens' => 'https://lens.google.com/uploadbyurl?url=' . rawurlencode(vf_url($name))];
         if (!empty($_POST['vision']) && vf_key() !== '') { @set_time_limit(60); $out['vision'] = vf_vision($jpg); }
         echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit;
     }
+    $names = array_values(array_filter(array_map(fn ($x) => preg_match('/^[a-z0-9_]{6,60}\.jpg$/', (string) $x) ? (string) $x : '', (array) ($_POST['names'] ?? []))));
+    if ($do === 'apify_start') { echo json_encode(vf_apify_start(array_map('vf_url', $names)), JSON_UNESCAPED_UNICODE); exit; }
+    if ($do === 'apify_poll') { @set_time_limit(60); echo json_encode(vf_apify_poll(preg_replace('/[^A-Za-z0-9]/', '', (string) ($_POST['run'] ?? '')), $names), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit; }
     echo json_encode(['error' => 'unknown']); exit;
 }
 
-$key = vf_key(); $used = vf_used();
+$key = vf_key(); $used = vf_used(); $ap = vf_apify_token(); $apUsed = (int) (setting_get('apify_used_' . date('Ym')) ?? 0);
 page_start('Video Finder', 'finder', $admin);
 ?>
 <div class="page-head">
@@ -45,8 +59,9 @@ page_start('Video Finder', 'finder', $admin);
   <div class="row2">
     <label class="field"><span>📸 Pictures to take</span><select id="vn"><option value="4">4</option><option value="8" selected>8 (spread over the video)</option><option value="12">12</option></select></label>
     <label class="field"><span>How</span><select id="vmode">
-      <option value="vision" <?= $key !== '' ? 'selected' : '' ?> <?= $key === '' ? 'disabled' : '' ?>>🤖 Automatic (Google Vision)<?= $key === '' ? ' — add the key below' : '' ?></option>
-      <option value="lens" <?= $key === '' ? 'selected' : '' ?>>🔍 Google Lens buttons only (free, you look yourself)</option></select></label>
+      <option value="apify" <?= $ap !== '' ? 'selected' : '' ?> <?= $ap === '' ? 'disabled' : '' ?>>🤖 Automatic (Apify · Google Lens)<?= $ap === '' ? ' — add the token below' : '' ?></option>
+      <option value="vision" <?= $key !== '' && $ap === '' ? 'selected' : '' ?> <?= $key === '' ? 'disabled' : '' ?>>🤖 Automatic (Google Vision)<?= $key === '' ? ' — add the key below' : '' ?></option>
+      <option value="lens" <?= $key === '' && $ap === '' ? 'selected' : '' ?>>🔍 Google Lens buttons only (free, you look yourself)</option></select></label>
   </div>
   <button class="btn btn-blue vf-go" id="vgo" type="button">🔎 Find where it is</button>
   <div class="vf-msg" id="vmsg"></div>
@@ -57,6 +72,22 @@ page_start('Video Finder', 'finder', $admin);
   <div class="vf-sum" id="vsum"></div>
   <div id="vplat"></div>
   <p class="muted small">“Not found” means Google has no matching picture — the video can still be there (TikTok and Instagram videos are often not in Google). Use the 🔍 Lens buttons on the pictures to look more.</p>
+</section>
+
+<section class="card" id="apify">
+  <h2>🤖 Apify token (Google Lens, no Google billing)</h2>
+  <p class="muted">Apify gives a small <b>free credit every month</b> (no card needed). It runs a Google Lens “Actor” for the pictures — the same results you see in Lens. Pictures searched this month: <b><?= $apUsed ?></b>. When the free credit is used up, Apify stops until next month (it never charges you without a card).</p>
+  <ol class="muted small vf-steps">
+    <li>console.apify.com → left menu <b>Settings → API &amp; Integrations</b> (or <b>Integrations</b>).</li>
+    <li>Copy the <b>Personal API token</b> (starts with <b>apify_api_</b>).</li>
+    <li>Paste it here — never in a chat.</li>
+  </ol>
+  <form method="post" class="vf-key"><?= csrf_field() ?><input type="hidden" name="do" value="apify">
+    <input name="apify_token" type="password" autocomplete="off" placeholder="<?= $ap !== '' ? 'Saved (' . e(mask_key($ap)) . ') — paste a new one to change' : 'apify_api_…' ?>">
+    <input name="apify_actor" value="<?= e(vf_apify_actor()) ?>" title="The Google Lens Actor on Apify" style="flex:1 1 200px">
+    <button class="btn btn-green" type="submit">Save</button>
+    <?php if ($ap !== ''): ?><button class="btn btn-ghost" name="remove" value="1" type="submit">Remove</button><?php endif; ?>
+  </form>
 </section>
 
 <section class="card" id="key">
@@ -132,11 +163,11 @@ page_start('Video Finder', 'finder', $admin);
 
   $('vgo').addEventListener('click', async () => {
     const file = $('vfile').files[0]; if (!file) { $('vmsg').textContent = 'Choose a video first.'; return; }
-    const n = Number($('vn').value), vision = $('vmode').value === 'vision', sid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+    const n = Number($('vn').value), mode = $('vmode').value, vision = mode === 'vision', apify = mode === 'apify', sid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
     $('vgo').disabled = true; $('vframes').innerHTML = ''; $('vres').hidden = true; $('vmsg').textContent = '📸 Taking pictures…';
     const pics = [];
     try { await grab(file, n, (i, t, img) => pics.push({ i, t, img })); } catch (e) { $('vmsg').textContent = '⚠️ ' + e.message; $('vgo').disabled = false; return; }
-    const res = [];   // per picture: Vision answer
+    const res = [], fnames = [];   // per picture: Vision answer · the pictures' names on the panel (Apify)
     for (const p of pics) {
       const box = document.createElement('div'); box.className = 'vf-fr';
       box.innerHTML = `<img src="${p.img}" alt="Picture at ${Math.floor(p.t / 60)}:${String(Math.floor(p.t % 60)).padStart(2, '0')}"><span class="t">${Math.floor(p.t / 60)}:${String(Math.floor(p.t % 60)).padStart(2, '0')}</span><a href="#" aria-disabled="true">…</a>`;
@@ -147,14 +178,35 @@ page_start('Video Finder', 'finder', $admin);
       const f = new FormData(); f.append('csrf', csrf); f.append('do', 'frame'); f.append('sid', sid); f.append('i', String(p.i)); f.append('img', p.img); if (vision) f.append('vision', '1');
       let j = {};
       try { j = await (await fetch('finder.php', { method: 'POST', body: f, credentials: 'same-origin' })).json(); } catch (e) { j = { error: 'The website did not answer' }; }
+      if (j.name) fnames[p.i] = j.name;
       const box = $('vframes').children[p.i], a = box.querySelector('a');
       if (j.lens) { a.href = j.lens; a.target = '_blank'; a.rel = 'noopener'; a.textContent = '🔍 Google Lens'; a.removeAttribute('aria-disabled'); } else a.textContent = '—';
       if (j.vision && j.vision.error) { $('vmsg').textContent = '⚠️ ' + j.vision.error; res.push(null); continue; }
       res.push(j.vision || null);
       if (j.vision) { const hits = (j.vision.pages || []).length + (j.vision.images || []).filter((x) => x.kind === 'full').length; if (hits) box.insertAdjacentHTML('beforeend', `<span class="m">✓ ${hits}</span>`); }
     }
+    if (apify) {   // one Apify run for all the pictures, then ask every 5 seconds until it is done
+      const fd = (d) => { const f = new FormData(); f.append('csrf', csrf); Object.entries(d).forEach(([k, v]) => f.append(k, v)); fnames.filter(Boolean).forEach((x) => f.append('names[]', x)); return f; };
+      const call = async (d) => { try { return await (await fetch('finder.php', { method: 'POST', body: fd(d), credentials: 'same-origin' })).json(); } catch (e) { return { error: 'The website did not answer' }; } };
+      $('vmsg').textContent = '🔎 Google Lens (Apify) is looking… this takes about a minute';
+      const st = await call({ do: 'apify_start' });
+      if (st.error || !st.run) { $('vmsg').textContent = '⚠️ ' + (st.error || 'Apify did not start'); $('vgo').disabled = false; return; }
+      let done = null;
+      for (let k = 0; k < 72 && !done; k++) {
+        await new Promise((z) => setTimeout(z, 5000));
+        const r = await call({ do: 'apify_poll', run: st.run });
+        if (r.error) { $('vmsg').textContent = '⚠️ ' + r.error; $('vgo').disabled = false; return; }
+        if (r.status === 'done') done = r; else $('vmsg').textContent = `🔎 Google Lens (Apify) is looking… ${(k + 1) * 5} s`;
+      }
+      if (!done) { $('vmsg').textContent = '⚠️ Apify took too long — try again later, or use the 🔍 Lens buttons.'; $('vgo').disabled = false; return; }
+      for (let i = 0; i < pics.length; i++) res[i] = { pages: [] };
+      res.unknown = { pages: [] };
+      done.pages.forEach((pg) => (pg.f >= 0 && res[pg.f] ? res[pg.f] : res.unknown).pages.push({ url: pg.url, title: pg.title, full: true }));
+      res.forEach((r, i) => { const hits = r.pages.length; if (hits) $('vframes').children[i].insertAdjacentHTML('beforeend', `<span class="m">✓ ${hits}</span>`); });
+      if (res.unknown.pages.length) res.push(res.unknown);
+    }
     $('vgo').disabled = false;
-    if (!vision) { $('vmsg').textContent = '✅ Done — press 🔍 Google Lens under a picture to see where it is on the web.'; return; }
+    if (!vision && !apify) { $('vmsg').textContent = '✅ Done — press 🔍 Google Lens under a picture to see where it is on the web.'; return; }
     if (res.every((r) => !r)) return;
     $('vmsg').textContent = '✅ Done';
     // sort everything by platform
@@ -170,8 +222,8 @@ page_start('Video Finder', 'finder', $admin);
       (r.pages || []).forEach((pg) => add(platOf(pg.url), i, pg.url, pg.title, pg.full));
       (r.images || []).forEach((im) => { const pl = platOf(im.url); if (pl && pl !== 'Other websites') add(pl, i, im.url, '', im.kind === 'full'); });
       if (r.guess) guesses[r.guess] = (guesses[r.guess] || 0) + 1; });
-    const asked = res.filter(Boolean).length, rank = (x) => x.frames.size / Math.max(1, asked);
-    const level = (x) => !x ? 0 : (rank(x) >= 0.35 || (x.frames.size >= 2 && x.full >= 2)) ? 2 : 1;
+    const asked = apify ? pics.length : res.filter(Boolean).length, rank = (x) => x.frames.size / Math.max(1, asked);
+    const level = (x) => !x ? 0 : (rank(x) >= 0.35 || (x.frames.size >= 2 && x.full >= 2) || x.links.size >= 3) ? 2 : 1;
     const names = PLAT.map((p) => p[0]).concat(['Other websites']);
     const very = names.filter((n) => level(P[n]) === 2 && n !== 'Other websites'), maybe = names.filter((n) => level(P[n]) === 1 && n !== 'Other websites'), none = ['YouTube', 'TikTok', 'Facebook', 'Instagram', 'X (Twitter)'].filter((n) => !P[n]);
     const g = Object.entries(guesses).sort((a, b) => b[1] - a[1])[0];
